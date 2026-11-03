@@ -1,0 +1,217 @@
+{
+  "name": "@omnisurge/dsh-suite",
+  "version": "0.2.2",
+  "private": true,
+  "description": "Independent extensions for DeepSeek Harness. Includes web search.",
+  "type": "module",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json",
+    "./locale/*": "./locale/*",
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./typert": {
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
+    "./types": {
+      "types": "./lib/types.d.ts",
+      "default": "./lib/types.js"
+    },
+    "./searxng": {
+      "types": "./lib/searxng.d.ts",
+      "default": "./lib/searxng.js"
+    },
+    "./mcp-dual": {
+      "types": "./lib/mcp-dual.d.ts",
+      "default": "./lib/mcp-dual.js"
+    },
+    "./mcp-oauth": {
+      "types": "./lib/mcp-oauth.d.ts",
+      "default": "./lib/mcp-oauth.js"
+    },
+    "./login-gateway": {
+      "types": "./lib/login-gateway.d.ts",
+      "default": "./lib/login-gateway.js"
+    },
+    "./agent-teams": {
+      "types": "./lib/agent-teams.d.ts",
+      "default": "./lib/agent-teams.js"
+    },
+    "./ocr-types": {
+      "types": "./lib/ocr-types.d.ts",
+      "default": "./lib/ocr-types.js"
+    }
+  },
+  "files": [
+    "components",
+    "cordis.patch.yml",
+    "lib/agent-teams.d.ts",
+    "lib/agent-teams.js",
+    "lib/ambient.d.ts",
+    "lib/ambient.js",
+    "lib/build-protocol.d.ts",
+    "lib/build-protocol.js",
+    "lib/client.js",
+    "lib/components.d.ts",
+    "lib/components.js",
+    "lib/config.d.ts",
+    "lib/config.js",
+    "lib/development.d.ts",
+    "lib/development.js",
+    "lib/dsh-home.d.ts",
+    "lib/dsh-home.js",
+    "lib/environment-notes.d.ts",
+    "lib/environment-notes.js",
+    "lib/github-release.d.ts",
+    "lib/github-release.js",
+    "lib/heal.d.ts",
+    "lib/heal.js",
+    "lib/host.d.ts",
+    "lib/host.js",
+    "lib/index.d.ts",
+    "lib/index.js",
+    "lib/limit-mode.d.ts",
+    "lib/limit-mode.js",
+    "lib/limits.json",
+    "lib/login-gateway.d.ts",
+    "lib/login-gateway.js",
+    "lib/loopback-origin.d.ts",
+    "lib/loopback-origin.js",
+    "lib/mcp-dual.d.ts",
+    "lib/mcp-dual.js",
+    "lib/mcp-oauth.d.ts",
+    "lib/mcp-oauth.js",
+    "lib/mcp-purpose.d.ts",
+    "lib/mcp-purpose.js",
+    "lib/mcp-servers.d.ts",
+    "lib/mcp-servers.js",
+    "lib/ocr-baidu.d.ts",
+    "lib/ocr-baidu.js",
+    "lib/ocr-contract.d.ts",
+    "lib/ocr-contract.js",
+    "lib/ocr-core.d.ts",
+    "lib/ocr-core.js",
+    "lib/ocr-raster.d.ts",
+    "lib/ocr-raster.js",
+    "lib/ocr-reconcile.d.ts",
+    "lib/ocr-reconcile.js",
+    "lib/ocr-service.d.ts",
+    "lib/ocr-service.js",
+    "lib/ocr-tencent.d.ts",
+    "lib/ocr-tencent.js",
+    "lib/ocr-types.d.ts",
+    "lib/ocr-types.js",
+    "lib/ocr-usage.d.ts",
+    "lib/ocr-usage.js",
+    "lib/recovery.d.ts",
+    "lib/recovery.js",
+    "lib/runtime-guard.d.ts",
+    "lib/runtime-guard.js",
+    "lib/searxng.d.ts",
+    "lib/searxng.js",
+    "lib/skills-catalog.d.ts",
+    "lib/skills-catalog.js",
+    "lib/skills-local.d.ts",
+    "lib/skills-local.js",
+    "lib/skills-manage.d.ts",
+    "lib/skills-manage.js",
+    "lib/tar.d.ts",
+    "lib/tar.js",
+    "lib/team-config.d.ts",
+    "lib/team-config.js",
+    "lib/teams.d.ts",
+    "lib/teams.js",
+    "lib/tool.d.ts",
+    "lib/tool.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.host.js",
+    "lib/typert.remote-client.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/types.d.ts",
+    "lib/types.js",
+    "lib/upgrade.d.ts",
+    "lib/upgrade.js",
+    "locale",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-plugin-manager",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ]
+    }
+  },
+  "omnisurge": {
+    "verifiedRuntimes": [
+      {
+        "version": "0.2.0-rc.2",
+        "gateScope": "G1-G4"
+      },
+      {
+        "version": "0.2.1-rc.2",
+        "gateScope": "G1-G5"
+      },
+      {
+        "version": "0.2.1-rc.3",
+        "gateScope": "G1-G5"
+      },
+      {
+        "version": "0.2.1-rc.3",
+        "platform": "win32",
+        "gateScope": "G6"
+      },
+      {
+        "version": "0.2.1-rc.5",
+        "gateScope": "G1-G5"
+      }
+    ],
+    "note": "Runtimes this generation was actually exercised on. The Client compares the official boot manifest's release version against this list and reports anything else as unverified. Admission to load is a separate decision owned by engines.dsh (ADR-015, this repository's own decision log).",
+    "platforms": {
+      "verified": [
+        "darwin",
+        "win32"
+      ],
+      "unverified": [
+        "linux"
+      ],
+      "note": "macOS verified by this repository gates (G1-G5). Windows verified by G6 on an installed desktop runtime (install+load+three cards+save); it is not a full in-repo G1-G5 gate run. Linux never run."
+    }
+  },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/dsh-api-gateway": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-app-boot": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-plugin-manager": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/dsh-web": ">=0.2.0-rc.2 <1.0.0",
+    "@deepseek-ai/schemastery": "^3.18.5"
+  },
+  "engines": {
+    "dsh": ">=0.2.0-rc.2 <1.0.0"
+  },
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0"
+  }
+}

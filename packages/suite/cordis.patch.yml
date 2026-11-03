@@ -1,0 +1,22 @@
+- insert:
+    - id: omnisurge-suite-development
+      name: '@omnisurge/dsh-suite'
+      config: {}
+    # ADR-062: 这张设置卡有自己的行，所以它自己的配置（极限模式）有权威 owner，用户也能单独关掉这张卡。
+    # 该行不带运行时能力：业务读取仍在套件 Host 上，行只提供设置命名空间与卡片生命周期。
+    - id: omnisurge-agent-teams
+      name: '@omnisurge/dsh-suite/agent-teams'
+      disabled: true
+      config: {}
+    - id: omnisurge-web-search-searxng
+      name: '@omnisurge/dsh-suite/searxng'
+      disabled: true
+      config: {}
+    # ADR-033 D1: the two per-server MCP clients are row-loaded modules, not declaration rows. The page and the
+    # migration write their subpath as a row `name` together with a real config (serverName/url); a declaration
+    # row with `config: {}` would make the official switch fail with `$.serverName missing required value`.
+    # Only the login gateway declares a row: it has no per-server config and can be active on its own.
+    - id: omnisurge-login-gateway
+      name: '@omnisurge/dsh-suite/login-gateway'
+      disabled: true
+      config: {}

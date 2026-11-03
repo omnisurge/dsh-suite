@@ -1,0 +1,42 @@
+[
+  {
+    "id": "web-search-searxng",
+    "source": "packages/suite/src/search",
+    "rowId": "omnisurge-web-search-searxng",
+    "display": {
+      "en": "SearXNG web search",
+      "zh": "联网搜索（SearXNG）"
+    },
+    "runtime": {
+      "service": "omnisurgeSearxngHostBuild",
+      "versionField": "version",
+      "dispatch": {
+        "namespace": "omnisurgeSearxngSetup",
+        "method": "inspect"
+      }
+    },
+    "export": "./searxng"
+  },
+  {
+    "id": "login-gateway",
+    "source": "packages/suite/src/clients/login-gateway",
+    "rowId": "omnisurge-login-gateway",
+    "display": {
+      "en": "MCP login gateway",
+      "zh": "MCP 登录网关"
+    },
+    "runtime": null,
+    "export": "./login-gateway"
+  },
+  {
+    "id": "agent-teams",
+    "source": "packages/suite/src/clients/agent-teams",
+    "rowId": "omnisurge-agent-teams",
+    "display": {
+      "en": "Agent Teams & environment",
+      "zh": "Agent Teams 与环境"
+    },
+    "runtime": null,
+    "export": "./agent-teams"
+  }
+]

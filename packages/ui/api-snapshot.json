@@ -1,0 +1,760 @@
+{
+  "schema": 1,
+  "entry_points": [
+    "lib/index.d.ts",
+    "lib/intercept-method.d.ts"
+  ],
+  "symbol_count": 125,
+  "symbols": {
+    "ActionGroup": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export declare function ActionGroup({ children, danger, className, ...rest }: ActionGroupProps): import(\"react\").JSX.Element;"
+    },
+    "ActionGroupProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export interface ActionGroupProps extends HTMLAttributes<HTMLDivElement> { danger?: ReactNode; }"
+    },
+    "BUSY_SCRIM_CLASS": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./busy.js",
+      "declaration": "export declare const BUSY_SCRIM_CLASS = \"omni-ui-busyScrim\";"
+    },
+    "Badge": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Badge.js",
+      "declaration": "export declare function Badge(props: BadgeProps): import(\"react\").JSX.Element;"
+    },
+    "BadgeProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Badge.js",
+      "declaration": "export interface BadgeProps { readonly tone?: BadgeTone; readonly children: ReactNode; }"
+    },
+    "BadgeTone": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Badge.js",
+      "declaration": "export type BadgeTone = \"ok\" | \"warn\" | \"err\" | \"muted\";"
+    },
+    "Banner": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./StatusLine.js",
+      "declaration": "export declare function Banner(props: BannerProps): ReactNode;"
+    },
+    "BannerProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./StatusLine.js",
+      "declaration": "export interface BannerProps { readonly children: ReactNode; }"
+    },
+    "BusyOverlayHandle": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./busy.js",
+      "declaration": "export interface BusyOverlayHandle { readonly closed: boolean; close(): void; }"
+    },
+    "BusyOverlaySpec": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./busy.js",
+      "declaration": "export interface BusyOverlaySpec { readonly text: string; }"
+    },
+    "Button": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Button.js",
+      "declaration": "export declare function Button(props: ButtonProps): import(\"react\").JSX.Element;"
+    },
+    "ButtonProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Button.js",
+      "declaration": "export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { readonly variant?: ButtonVariant; readonly children: ReactNode; readonly busy?: boolean; }"
+    },
+    "ButtonVariant": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Button.js",
+      "declaration": "export type ButtonVariant = \"default\" | \"primary\" | \"danger\" | \"ghost\" | \"danger-ghost\";"
+    },
+    "CONFIRM_SCRIM_CLASS": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export declare const CONFIRM_SCRIM_CLASS = \"omni-ui-confirmScrim\";"
+    },
+    "CapsuleOption": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./CapsuleSwitch.js",
+      "declaration": "export interface CapsuleOption { readonly id: string; readonly label: string; readonly disabled?: boolean; }"
+    },
+    "CapsuleSwitch": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./CapsuleSwitch.js",
+      "declaration": "export declare function CapsuleSwitch(props: CapsuleSwitchProps): ReactNode;"
+    },
+    "CapsuleSwitchProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./CapsuleSwitch.js",
+      "declaration": "export interface CapsuleSwitchProps { readonly options: readonly CapsuleOption[]; readonly value: string; readonly onChange: (id: string) => void; readonly disabled?: boolean; readonly \"aria-label\"?: string; /** When set, selecting this option reveals a free-form field. */ readonly customOptionId?: string; readonly customValue?: string; readonly onCustomChange?: (value: string) => void; readonly customPlaceholder?: string; readonly customLabel?: string; readonly customHint?: string; }"
+    },
+    "CatalogEvents": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./catalog-refresh.js",
+      "declaration": "export interface CatalogEvents { $on(event: \"llm/adapters-updated\", listener: () => void): () => void; }"
+    },
+    "CheckControlProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export interface CheckControlProps extends Omit<InputHTMLAttributes<HTMLInputElement>, \"type\" | \"size\"> { label: ReactNode; description?: string; }"
+    },
+    "Checkbox": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function Checkbox({ label, description, indeterminate, className, ...rest }: CheckboxProps): import(\"react\").JSX.Element;"
+    },
+    "CheckboxProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export interface CheckboxProps extends CheckControlProps { indeterminate?: boolean; }"
+    },
+    "ConfigPage": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ConfigPage.js",
+      "declaration": "export declare function ConfigPage(props: ConfigPageProps): import(\"react\").JSX.Element;"
+    },
+    "ConfigPageLabels": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./ConfigPage.js",
+      "declaration": "export interface ConfigPageLabels { /** namespace 没被服务时的那行提示。 */ unavailable: string; /** 只读部署的提示。 */ readOnly: string; /** 保存失败（服务端没接受）的提示。 */ saveFailed: string; /** 保存按钮：保存中。 */ saving: string; /** 保存按钮：常态。 */ save: string; }"
+    },
+    "ConfigPageProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./ConfigPage.js",
+      "declaration": "export interface ConfigPageProps { readonly available: boolean; readonly writable: boolean; /** * 整页是否有未保存改动。**即时生效的卡不用传** —— 它没有「保存」这回事， * 传不传都不影响渲染（只有画保存按钮时才用到它）。 */ readonly dirty?: boolean; readonly invalid?: boolean; readonly saving?: boolean; readonly failed?: boolean; readonly labels: ConfigPageLabels; /** * 保存动作。**即时生效的卡不传** —— 那样就不画保存按钮。 * * 有些卡（如 ptc-envelope 的开关）点一下就已经存了，没有「整页脏了就保存」 * 这回事；给它们画一个保存按钮是错的。 */ readonly onSave?: () => void; /** 离开页面时调用（官方行为）。 */ readonly onDiscard?: () => void; /** 卡内正文（字段、列表…）。 */ readonly children?: ReactNode; /** 页脚左侧的补充内容（如观测徽标）。 */ readonly footerLead?: ReactNode; }"
+    },
+    "ConfirmHandle": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export interface ConfirmHandle { readonly closed: boolean; /** Silent teardown — no onCancel/onConfirm (for React effect cleanup). */ close(): void; }"
+    },
+    "ConfirmListItem": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export interface ConfirmListItem { readonly primary: string; readonly secondary?: string; readonly meta?: string; }"
+    },
+    "ConfirmSpec": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export interface ConfirmSpec { readonly title: string; /** Optional paragraph under the title. */ readonly text?: string; /** Optional detail list rendered between text and actions. */ readonly items?: readonly ConfirmListItem[]; readonly cancelLabel: string; readonly confirmLabel: string; /** `danger` styles the primary action as destructive. */ readonly tone?: ConfirmTone; /** Esc / scrim click / cancel button / replaced by a newer confirm. */ readonly onCancel?: () => void; readonly onConfirm?: () => void; }"
+    },
+    "ConfirmTone": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export type ConfirmTone = \"default\" | \"danger\";"
+    },
+    "DialOption": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./DialPicker.js",
+      "declaration": "export interface DialOption { readonly id: string; readonly label: string; }"
+    },
+    "DialPicker": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./DialPicker.js",
+      "declaration": "export declare function DialPicker(props: DialPickerProps): ReactNode;"
+    },
+    "DialPickerProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./DialPicker.js",
+      "declaration": "export interface DialPickerProps { readonly options: readonly DialOption[]; readonly value: string; readonly onChange: (id: string) => void; readonly disabled?: boolean; readonly \"aria-label\"?: string; /** * Fixed visible columns (odd). When omitted, count follows container width. */ readonly visibleCount?: number; /** Minimum column width used for elastic layout; default 88. */ readonly minItemWidth?: number; }"
+    },
+    "Disclosure": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export declare function Disclosure({ title, children, className, ...rest }: DisclosureProps): import(\"react\").JSX.Element;"
+    },
+    "DisclosureProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export interface DisclosureProps extends Omit<DetailsHTMLAttributes<HTMLDetailsElement>, \"title\"> { title: ReactNode; }"
+    },
+    "EmptyState": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./EmptyState.js",
+      "declaration": "export declare function EmptyState(props: EmptyStateProps): import(\"react\").JSX.Element;"
+    },
+    "EmptyStateProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./EmptyState.js",
+      "declaration": "export interface EmptyStateProps { readonly title: string; readonly description?: string; readonly action?: ReactNode; }"
+    },
+    "Field": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export declare function Field(props: FieldProps): import(\"react\").JSX.Element;"
+    },
+    "FieldProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export interface FieldProps { readonly id?: string; readonly label: string; readonly hint?: string; readonly required?: boolean; readonly error?: string; /** Extra control on the label row (manual/catalog toggle, clear, …). */ readonly action?: ReactNode; readonly children?: ReactNode; }"
+    },
+    "FormGrid": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export declare function FormGrid({ className, ...props }: HTMLAttributes<HTMLDivElement>): import(\"react\").JSX.Element;"
+    },
+    "HOST_TOKEN_NAMES": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./tokens.js",
+      "declaration": "export declare const HOST_TOKEN_NAMES: readonly [\"--dsw-alias-label-primary\", \"--dsw-alias-label-secondary\", \"--dsw-alias-label-tertiary\", \"--dsw-alias-label-error\", \"--dsw-alias-border-l2\", \"--dsw-alias-label-dimmed\", \"--dsw-alias-bg-layer-3\", \"--dsw-alias-brand-primary\", \"--dsw-alias-state-error-primary\", \"--dsw-alias-state-warn-primary\", \"--dsw-shadow-lv2\", \"--dsw-alias-fill-tertiary\", \"--dsw-alias-interactive-bg-hover\", \"--dsw-alias-fill-quaternary\", \"--dsw-alias-bg-module-platform\", \"--dsw-alias-bg-layer-2\", \"--dsw-alias-bg-elevated\", \"--dsw-alias-stroke-secondary\"];"
+    },
+    "IconButton": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./IconButton.js",
+      "declaration": "export declare function IconButton(props: IconButtonProps): import(\"react\").JSX.Element;"
+    },
+    "IconButtonProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./IconButton.js",
+      "declaration": "export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> { readonly size?: IconButtonSize; }"
+    },
+    "IconButtonSize": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./IconButton.js",
+      "declaration": "export type IconButtonSize = \"composer\" | \"rail\";"
+    },
+    "LightboxHandle": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./lightbox.js",
+      "declaration": "export interface LightboxHandle { close(): void; }"
+    },
+    "LightboxLabels": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./lightbox.js",
+      "declaration": "export interface LightboxLabels { readonly dialog: string; readonly close: string; readonly zoomIn: string; readonly zoomOut: string; readonly fit: string; readonly actual: string; }"
+    },
+    "LightboxSpec": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./lightbox.js",
+      "declaration": "export interface LightboxSpec { /** 已净化的 SVG 标记（`sanitizeSvg` 的产物）。 */ readonly markup: string; /** viewBox 的固有尺寸 —— 「原始大小（1:1）」的基准：viewBox 一个单位 = 一个 CSS 像素。 */ readonly intrinsic: { readonly width: number; readonly height: number; }; readonly labels: LightboxLabels; }"
+    },
+    "ListRow": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export declare function ListRow({ title, description, badge, actions, children, className, ...rest }: ListRowProps): import(\"react\").JSX.Element;"
+    },
+    "ListRowProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Layout.js",
+      "declaration": "export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, \"title\"> { title: ReactNode; description?: ReactNode; badge?: ReactNode; actions?: ReactNode; }"
+    },
+    "NotesPad": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./NotesPad.js",
+      "declaration": "export declare function NotesPad(props: NotesPadProps): import(\"react\").JSX.Element;"
+    },
+    "NotesPadProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./NotesPad.js",
+      "declaration": "export interface NotesPadProps extends Omit<TextAreaProps, \"variant\"> { /** Left of the pad: live / empty badge or a short status phrase. */ readonly status?: ReactNode; /** Override counted length; defaults to `value.length` when value is a string. */ readonly usedChars?: number; readonly maxChars?: number; }"
+    },
+    "NumberInput": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function NumberInput(props: NumberInputProps): import(\"react\").JSX.Element;"
+    },
+    "NumberInputProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export type NumberInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, \"type\">;"
+    },
+    "ORDERED_GRIP_CANCEL_DISTANCE": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare const ORDERED_GRIP_CANCEL_DISTANCE = 6;"
+    },
+    "ORDERED_GRIP_LONG_PRESS_MS": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare const ORDERED_GRIP_LONG_PRESS_MS = 320;"
+    },
+    "OrderedGrip": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./OrderedGrip.js",
+      "declaration": "export declare function OrderedGrip(props: OrderedGripProps): import(\"react\").JSX.Element;"
+    },
+    "OrderedGripMove": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export interface OrderedGripMove { readonly from: number; readonly to: number; }"
+    },
+    "OrderedGripPress": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export interface OrderedGripPress { readonly pointerId: number; readonly from: number; readonly target: number; readonly originX: number; readonly originY: number; readonly clientX: number; readonly clientY: number; readonly dragging: boolean; readonly width?: number; readonly grabX?: number; readonly grabY?: number; }"
+    },
+    "OrderedGripProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./OrderedGrip.js",
+      "declaration": "export interface OrderedGripProps { readonly index: number; readonly count: number; readonly label: string; readonly activeLabel?: string; readonly onMove: (from: number, to: number) => void; /** Live drag target. Null when the gesture ends or never activated. Keyboard skips this. */ readonly onPreview?: (press: OrderedGripPress | null) => void; }"
+    },
+    "PageHead": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./PageHead.js",
+      "declaration": "export declare function PageHead(props: PageHeadProps): import(\"react\").JSX.Element;"
+    },
+    "PageHeadProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./PageHead.js",
+      "declaration": "export interface PageHeadProps { readonly title: string; readonly description?: string; readonly titleId?: string; /** Optional product mark. Default empty — do not reserve space. */ readonly mark?: ReactNode; /** Optional page-level actions. Default empty — keep save/refresh in card footers and toolbars. */ readonly actions?: ReactNode; }"
+    },
+    "Progress": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Progress.js",
+      "declaration": "export declare function Progress({ label, value, max }: ProgressProps): import(\"react\").JSX.Element;"
+    },
+    "ProgressProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Progress.js",
+      "declaration": "export interface ProgressProps { label: string; value?: number; max?: number; }"
+    },
+    "RadioGroup": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function RadioGroup({ label, name, value, options, onChange, disabled }: RadioGroupProps): import(\"react\").JSX.Element;"
+    },
+    "RadioGroupProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export interface RadioGroupProps { label: string; name?: string; value: string; options: readonly { value: string; label: string; disabled?: boolean; }[]; onChange: (value: string) => void; disabled?: boolean; }"
+    },
+    "SETTINGS_PLUGIN_CARD_SLOT": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./settings-slot.js",
+      "declaration": "export declare const SETTINGS_PLUGIN_CARD_SLOT = \"plugins.item\";"
+    },
+    "SearchInput": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function SearchInput(props: SearchInputProps): import(\"react\").JSX.Element;"
+    },
+    "SearchInputProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export type SearchInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, \"type\">;"
+    },
+    "SectionTabOption": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SectionTabs.js",
+      "declaration": "export interface SectionTabOption { readonly id: string; readonly label: string; }"
+    },
+    "SectionTabs": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./SectionTabs.js",
+      "declaration": "export declare function SectionTabs(props: SectionTabsProps): import(\"react\").JSX.Element;"
+    },
+    "SectionTabsProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SectionTabs.js",
+      "declaration": "export interface SectionTabsProps { readonly value: string; readonly options: readonly SectionTabOption[]; readonly ariaLabel?: string; readonly onChange: (id: string) => void; }"
+    },
+    "SegmentBar": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./SegmentBar.js",
+      "declaration": "export declare function SegmentBar(props: SegmentBarProps): ReactNode;"
+    },
+    "SegmentBarProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SegmentBar.js",
+      "declaration": "export interface SegmentBarProps { readonly options: readonly SegmentOption[]; readonly value: string; readonly onChange: (id: string) => void; readonly \"aria-label\"?: string; }"
+    },
+    "SegmentOption": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SegmentBar.js",
+      "declaration": "export interface SegmentOption { readonly id: string; readonly label: string; }"
+    },
+    "Select": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Select.js",
+      "declaration": "export declare function Select(props: SelectProps): import(\"react\").JSX.Element;"
+    },
+    "SelectProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Select.js",
+      "declaration": "export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & { /** `field` fills a settings row; `inline` is a tool-row chip (composer). */ variant?: \"field\" | \"inline\"; };"
+    },
+    "SettingsCard": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./SettingsCard.js",
+      "declaration": "export declare function SettingsCard(props: SettingsCardProps): import(\"react\").JSX.Element;"
+    },
+    "SettingsCardProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SettingsCard.js",
+      "declaration": "export interface SettingsCardProps { readonly title: string; readonly description?: string; readonly children?: ReactNode; readonly footer?: ReactNode; /** Shown in the collapsible header (e.g. connection badge). */ readonly badge?: ReactNode; /** Match suite plugin cards: header toggles body. Default false. */ readonly collapsible?: boolean; /** Only used when collapsible. Default true. */ readonly defaultOpen?: boolean; /** Official `settings.plugin.item` list is a `<ul>`; use `li` there. */ readonly as?: \"section\" | \"li\"; /** Fires after the header toggles. Use to refresh catalogs on expand. */ readonly onToggle?: (open: boolean) => void; }"
+    },
+    "SettingsPluginCardSpec": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./settings-slot.js",
+      "declaration": "export interface SettingsPluginCardSpec { /** 卡片身份。沿用原 `key` 的值（设置命名空间），它唯一且稳定。 */ id: string; /** 列表内排序，照官方用 10 / 20 / 30 … 留间隔。 */ order?: number; /** * 列表里显示的卡片名。**0.1.6 必需**，缺了卡片不渲染。 * * 之所以是函数不是字符串：宿主渲染晚于词典注册，取值要晚绑定。 * 调用点用 `ctx.locale.bind(LOCALE_NS)` 造（helper 拿不到 ctx.locale）。 */ label: () => string; /** 词典命名空间（可选）。 */ locale?: string; /** * 提供卡片 props 的注入函数。 * * 返回类型是 `unknown` 而非 `Record<string, unknown>`：各个插件的 `controller.inject()` * 返回的是**自己的** CardFace 接口（EmailCardFace / SearxngCardFace …），带具名属性的接口 * 不能赋给带索引签名的 Record。放宽到 unknown 与 dsh 槽位本身的松散契约一致。 */ inject: () => unknown; }"
+    },
+    "SheetHead": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./SheetHead.js",
+      "declaration": "export declare function SheetHead(props: SheetHeadProps): import(\"react\").JSX.Element;"
+    },
+    "SheetHeadProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./SheetHead.js",
+      "declaration": "export interface SheetHeadProps { readonly title: string; readonly titleId?: string; readonly dismissLabel: string; readonly onDismiss: () => void; readonly dismissDisabled?: boolean; }"
+    },
+    "Skeleton": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Progress.js",
+      "declaration": "export declare function Skeleton({ lines }: SkeletonProps): import(\"react\").JSX.Element;"
+    },
+    "SkeletonProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Progress.js",
+      "declaration": "export interface SkeletonProps { lines?: number; }"
+    },
+    "Slider": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function Slider({ label, value, valueText, id, className, ...rest }: SliderProps): import(\"react\").JSX.Element;"
+    },
+    "SliderProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export interface SliderProps extends Omit<InputHTMLAttributes<HTMLInputElement>, \"type\" | \"value\" | \"defaultValue\"> { label: string; value: number; valueText?: string; }"
+    },
+    "StatusLine": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./StatusLine.js",
+      "declaration": "export declare function StatusLine(props: StatusLineProps): ReactNode;"
+    },
+    "StatusLineProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./StatusLine.js",
+      "declaration": "export interface StatusLineProps { readonly tone?: StatusLineTone; readonly children: ReactNode; }"
+    },
+    "StatusLineTone": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./StatusLine.js",
+      "declaration": "export type StatusLineTone = \"ok\" | \"warn\";"
+    },
+    "Switch": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./FormControls.js",
+      "declaration": "export declare function Switch({ label, description, className, ...rest }: CheckControlProps): import(\"react\").JSX.Element;"
+    },
+    "TOAST_HOST_CLASS": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export declare const TOAST_HOST_CLASS = \"omni-ui-toastHost\";"
+    },
+    "TOAST_STACK_LIMIT": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./notify-core.js",
+      "declaration": "export declare const TOAST_STACK_LIMIT = 3;"
+    },
+    "TOKEN_SHEET": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./tokens.js",
+      "declaration": "export declare const TOKEN_SHEET = \"\\n.omni-ui,\\n.omni-ui-tokens,\\n.omni-ui-pageHead,\\n.omni-ui-card,\\n .omni-ui-configPage,\\n .omni-ui-notesPad,\\n .omni-ui-lightbox,\\n.omni-ui-itemCard,\\n.omni-ui-listRow,\\n.omni-ui-dial,\\n.omni-ui-select,\\n.omni-ui-toastHost,\\n.omni-ui-confirmScrim,\\n.omni-ui-busyScrim,\\n.omni-ui-iconBtn,\\n.omni-ui-railBtn,\\n.omni-ui-segments,\\n.omni-ui-chip,\\n.omni-ui-dock,\\n.omni-ui-attachRail,\\n.omni-ui-attachTile,\\n.omni-ui-gallery,\\n.omni-ui-galleryWrap,\\n.omni-ui-galleryThumb,\\n.omni-ui-galleryThumbSvg,\\n.omni-ui-statusLine,\\n.omni-ui-banner,\\n.omni-ui-heroChip{\\n --omni-label-primary: var(--dsw-alias-label-primary);\\n --omni-label-secondary: var(--dsw-alias-label-secondary);\\n --omni-label-tertiary: var(--dsw-alias-label-tertiary);\\n --omni-label-error: var(--dsw-alias-label-error);\\n --omni-border: var(--dsw-alias-border-l2);\\n --omni-border-strong: var(--dsw-alias-label-dimmed);\\n --omni-bg: var(--dsw-alias-bg-layer-3);\\n --omni-brand: var(--dsw-alias-brand-primary, var(--dsw-alias-label-primary));\\n --omni-danger: var(--dsw-alias-state-error-primary, #d33);\\n --omni-warn: var(--dsw-alias-state-warn-primary, #d89a1a);\\n --omni-shadow: var(--dsw-shadow-lv2, 0 8px 24px color-mix(in srgb, #000 16%, transparent));\\n --omni-scrim: rgba(0, 0, 0, .35);\\n --omni-radius: 12px;\\n --omni-radius-control: 8px;\\n --omni-control-height: 34px;\\n --omni-gap-tight: 8px;\\n --omni-gap: 12px;\\n --omni-gap-section: 16px;\\n --omni-fill: var(--dsw-alias-fill-tertiary, var(--dsw-alias-interactive-bg-hover, color-mix(in srgb, var(--omni-border) 55%, transparent)));\\n --omni-fill-strong: var(--dsw-alias-fill-quaternary, color-mix(in srgb, var(--omni-label-tertiary) 40%, transparent));\\n --omni-bg-muted: var(--dsw-alias-bg-module-platform, var(--dsw-alias-bg-layer-2, color-mix(in srgb, var(--omni-label-tertiary) 12%, transparent)));\\n --omni-bg-elevated: var(--dsw-alias-bg-elevated, var(--dsw-alias-bg-layer-3));\\n --omni-stroke: var(--dsw-alias-stroke-secondary, var(--dsw-alias-border-l2));\\n --omni-danger-soft: color-mix(in srgb, var(--omni-danger) 10%, transparent);\\n --omni-warn-soft: color-mix(in srgb, var(--omni-warn) 10%, transparent);\\n --omni-composer-size: 28px;\\n --omni-rail-size: 36px;\\n}\\n\";"
+    },
+    "TOKEN_SHEET_ID": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./styles.js",
+      "declaration": "export declare const TOKEN_SHEET_ID = \"@omnisurge/dsh-ui/controls.css\";"
+    },
+    "TextArea": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export declare function TextArea(props: TextAreaProps): import(\"react\").JSX.Element;"
+    },
+    "TextAreaProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export type TextAreaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & { /** `notes` = long pad (environment notes). Default is a form field. */ readonly variant?: \"field\" | \"notes\"; };"
+    },
+    "TextInput": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export declare function TextInput(props: TextInputProps): import(\"react\").JSX.Element;"
+    },
+    "TextInputProps": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./Field.js",
+      "declaration": "export type TextInputProps = InputHTMLAttributes<HTMLInputElement>;"
+    },
+    "ToastAction": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export interface ToastAction { readonly label: string; readonly run: () => void; }"
+    },
+    "ToastCloseReason": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export type ToastCloseReason = \"timeout\" | \"close\" | \"action\" | \"replaced\" | \"evicted\" | \"code\";"
+    },
+    "ToastHandle": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export interface ToastHandle { readonly closed: boolean; close(): void; }"
+    },
+    "ToastSpec": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export interface ToastSpec { readonly text: string; /** Same-kind toasts replace each other in place (合并同类). */ readonly kind?: string; readonly tone?: ToastTone; /** Auto-dismiss ms; `null` (or `<= 0`) = sticky until × / code. Default 6000. */ readonly durationMs?: number | null; /** Optional secondary action (Snackbar 感), closes the toast after running. */ readonly action?: ToastAction; /** aria-label for the × button — pass localized copy. */ readonly closeLabel?: string; /** Hide the × button (ignored for sticky toasts, which always keep it). */ readonly showClose?: boolean; readonly onClose?: (reason: ToastCloseReason) => void; }"
+    },
+    "ToastTone": {
+      "kind": "type",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export type ToastTone = \"neutral\" | \"warn\" | \"danger\";"
+    },
+    "UI_SHEET_VERSION": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./sheet-version.js",
+      "declaration": "export declare const UI_SHEET_VERSION = \"0.1.48\";"
+    },
+    "activateOrderedGripPress": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function activateOrderedGripPress(press: OrderedGripPress, float?: { readonly width: number; readonly grabX: number; readonly grabY: number; }): OrderedGripPress;"
+    },
+    "beginOrderedGripPress": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function beginOrderedGripPress(pointerId: number, index: number, clientX: number, clientY: number): OrderedGripPress;"
+    },
+    "closeAllToasts": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export declare function closeAllToasts(): void;"
+    },
+    "closeBusyOverlay": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./busy.js",
+      "declaration": "export declare function closeBusyOverlay(): void;"
+    },
+    "finishOrderedGripPress": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function finishOrderedGripPress(press: OrderedGripPress | null, pointerId: number): OrderedGripMove | null;"
+    },
+    "injectStyles": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./styles.js",
+      "declaration": "export declare function injectStyles(): void;"
+    },
+    "interceptMethod": {
+      "kind": "value",
+      "entry": "lib/intercept-method.d.ts",
+      "from": "lib/intercept-method.d.ts",
+      "declaration": "export declare function interceptMethod<F extends Method>(holder: object | undefined, key: string, wrap: (next: F, active: () => boolean) => F): () => void;"
+    },
+    "latestRefresh": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./catalog-refresh.js",
+      "declaration": "export declare function latestRefresh<T>(read: () => Promise<T>, accept: (value: T) => void, fail: () => void): { request(): Promise<void>; dispose(): void; };"
+    },
+    "orderedGripGhostStyle": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function orderedGripGhostStyle(press: OrderedGripPress): { left: number; top: number; width: number; } | undefined;"
+    },
+    "orderedGripKeyboardTarget": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function orderedGripKeyboardTarget(index: number, count: number, key: string): number | null;"
+    },
+    "registerSettingsPluginCard": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./settings-slot.js",
+      "declaration": "export declare function registerSettingsPluginCard(ctx: { slots: SettingsPluginSlotsLike; }, spec: SettingsPluginCardSpec, component: unknown): () => void;"
+    },
+    "showBusyOverlay": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./busy.js",
+      "declaration": "export declare function showBusyOverlay(spec: BusyOverlaySpec): BusyOverlayHandle;"
+    },
+    "showConfirm": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./confirm.js",
+      "declaration": "export declare function showConfirm(spec: ConfirmSpec): ConfirmHandle;"
+    },
+    "showSvgLightbox": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./lightbox.js",
+      "declaration": "export declare function showSvgLightbox(spec: LightboxSpec): LightboxHandle;"
+    },
+    "showToast": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./toast.js",
+      "declaration": "export declare function showToast(spec: ToastSpec): ToastHandle;"
+    },
+    "toastDurationMs": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./notify-core.js",
+      "declaration": "export declare function toastDurationMs(duration: number | null | undefined, fallback?: number): number | null;"
+    },
+    "toastEvictCount": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./notify-core.js",
+      "declaration": "export declare function toastEvictCount(count: number, limit?: number): number;"
+    },
+    "toastReplaceIndex": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./notify-core.js",
+      "declaration": "export declare function toastReplaceIndex(kinds: readonly (string | undefined)[], kind: string | undefined): number;"
+    },
+    "trackOrderedGripPress": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./ordered-grip.js",
+      "declaration": "export declare function trackOrderedGripPress(press: OrderedGripPress, pointerId: number, clientX: number, clientY: number, target: number | undefined, count: number): OrderedGripPress | null;"
+    },
+    "trapNextIndex": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./notify-core.js",
+      "declaration": "export declare function trapNextIndex(count: number, current: number, backwards: boolean): number;"
+    },
+    "uiSheetWins": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./sheet-version.js",
+      "declaration": "export declare function uiSheetWins(existingVersion: string | undefined, incomingVersion: string): boolean;"
+    },
+    "visibleCountForWidth": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./DialPicker.js",
+      "declaration": "<未在 ./DialPicker.js 中找到声明>"
+    },
+    "watchCatalog": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./catalog-refresh.js",
+      "declaration": "export declare function watchCatalog(events: CatalogEvents | undefined, refresh: () => unknown): () => void;"
+    },
+    "wrapIndex": {
+      "kind": "value",
+      "entry": "lib/index.d.ts",
+      "from": "./DialPicker.js",
+      "declaration": "<未在 ./DialPicker.js 中找到声明>"
+    }
+  }
+}
