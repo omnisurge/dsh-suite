@@ -1,8 +1,8 @@
 {
   "generator": "@deepseek-ai/dsh-typert-generator",
-  "generatedFor": "0.2.2-rc.1",
+  "generatedFor": "0.2.2-rc.2",
   "compatibilityRange": ">=0.2.0-rc.2 <1.0.0",
-  "at": "2026-11-07T02:28:03.121Z",
+  "at": "2026-11-13T08:38:29.039Z",
   "regenerate": "pnpm run generate:typert-artifacts (scripts/build/generate-typert-artifacts.mjs -> scripts/build/build-management-remote.mjs)",
-  "note": "Generated, not hand-maintained. The analysis face copies the installed protocol declarations into a registered packages/protocol-types project, routes the root and ./types specifiers to that copy, and analyzes only @omnisurge/dsh-suite through WorkspaceAnalyzer; installed SDK packages keep their own protocol instance, so their augmentations stay out of the face. scripts/gates/verify-typert-artifacts.mjs compares the result with the declared @Remote surface. Determinism: the same sources and the same verified runtime produce identical bytes across two runs. Earlier hand extensions (listSkills, the MCP tool wall) are retired."
+  "note": "Generated, not hand-maintained. The analysis face copies the installed protocol declarations into a registered packages/protocol-types project, routes the root and ./types specifiers to that copy, and analyzes only @omnisurge/dsh-suite through WorkspaceAnalyzer; installed SDK packages keep their own protocol instance, so their augmentations stay out of the face. The artifact verifier compares the result with the declared @Remote surface. Determinism: the same sources and the same verified runtime produce identical bytes across two runs. Earlier hand extensions (listSkills, the MCP tool wall) are retired."
 }

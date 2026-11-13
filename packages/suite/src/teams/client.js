@@ -1,14 +1,13 @@
 import * as React from 'react';
 import {
-  ActionGroup, Badge, Button, Field, FormGrid, NotesPad, NumberInput,
+  ActionGroup, Badge, Button, NotesPad,
   SettingsCard, StatusLine, Switch, injectStyles, registerSettingsPluginCard,
 } from '@omnisurge/dsh-ui';
-// 上限只有一处声明（limits.json）：Client 侧就地校验与 Host 侧 schema/写入闸门读同一份数据。
+// 卡片用的常量只有一处声明（limits.json）：Client 侧就地校验与 Host 侧 schema/写入闸门读同一份数据。
 import limits from '../limits.json' with { type: 'json' };
 
 /**
- * Agent Teams 设置：拆成三张独立设置卡（ADR-065）。
- * - MembersCard  团队成员：只设“成员上限”（写 profile patch，需重启）。
+ * Agent Teams 设置：两张独立设置卡（ADR-093 退役成员上限卡后）。
  * - ExtremeCard  极限模式：只一个开关（规则 deepseek+flash 与提示词内置），configForms 即时生效。
  * - NotesCard    环境笔记：profile 级、所有会话注入的一段系统提示。
  *
@@ -31,7 +30,6 @@ const READ_TIMEOUT_MS = 15000;
 const EXTREME_MODELS = [...limits.defaultModels];
 const EXTREME_TEXT = limits.extremePromptText;
 const NOTES_MAX_BYTES = limits.maxNotesBytes;
-const TEAM_MAX_MEMBERS = limits.maxTeamMembers;
 
 const utf8Bytes = (text) => {
   if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).length;
@@ -66,15 +64,7 @@ const budget = (promise, method) => new Promise((resolve, reject) => {
 });
 
 const en = {
-  membersTitle: 'Team members',
-  membersSummary: 'How many teammates this team may create',
-  membersDesc: 'Set the most teammates this team may create (failed ones count). Applies when spawning new members.',
-  maxLabel: 'Member limit',
-  maxHint: 'Default 8, min 1. Saved to the team config; needs a restart.',
-  maxInvalid: 'Member limit must be an integer between 1 and {max}.',
-  maxUnavailable: "This app does not provide team configuration.",
-  maxUnavailableEnable: 'Enable the official "Agent Teams" experimental plugin first (Plugins → Experimental plugins → Agent Teams); then this page can set the member limit.',
-  save: 'Save', savedRestart: 'Saved. The runner needs a restart before this takes effect.',
+  save: 'Save',
   unchanged: 'No change.', refused: 'The save was refused',
   extremeTitle: 'Extreme mode',
   extremeSummary: 'Extreme mode for DeepSeek Flash',
@@ -99,15 +89,7 @@ const en = {
 };
 
 const zh = {
-  membersTitle: '团队成员',
-  membersSummary: '这个团队最多可创建多少名队友',
-  membersDesc: '设置这个团队最多可创建多少名队友（含创建失败的）。只在新建队友时生效。',
-  maxLabel: '成员上限',
-  maxHint: '默认 8，最小 1。保存后写入团队配置，需重启生效。',
-  maxInvalid: '成员上限必须是 1–{max} 之间的整数。',
-  maxUnavailable: "当前应用不提供团队配置。",
-  maxUnavailableEnable: '请先在 Plugins → Experimental plugins 里启用官方「Agent Teams」实验插件；启用后本页即可设置成员上限。',
-  save: '保存', savedRestart: '已保存。运行器需要重启才生效。',
+  save: '保存',
   unchanged: '没有变化。', refused: '保存被拒绝',
   extremeTitle: '极限模式',
   extremeSummary: 'DeepSeek Flash 的极限模式开关',
@@ -149,64 +131,6 @@ function LoadFailed({t, label, issue, onRetry}){
     h(ActionGroup, null, h(Button, { variant: 'ghost', onClick: onRetry }, t('reload'))));
 }
 function Loading({t}){ return h('p', { className: 'omni-ui-hint', 'data-testid': 'teams-loading' }, t('loading')); }
-
-function MembersCard({ t, wire, view }){
-  const call = React.useMemo(() => makeCall(wire), [wire]);
-  const st = loadState();
-  const [config,setConfig]=React.useState(null);
-  const [draft,setDraft]=React.useState('');
-  const [baseline,setBaseline]=React.useState('');
-  const [draftError,setDraftError]=React.useState(null);
-  const [save,setSave]=React.useState(null);
-  const load = React.useCallback(async () => {
-    st.setPhase('loading');
-    try {
-      const value = await budget(call('teamConfig'), 'teamConfig');
-      if (!st.alive.current) return;
-      setConfig(value); st.setPhase('ready');
-      const v = value && typeof value.maxMembers === 'number' ? String(value.maxMembers) : '';
-      setDraft(v); setBaseline(v);
-    } catch (failure) { if (!st.alive.current) return; st.setIssue(REASON(failure)); st.setPhase('failed'); }
-  }, [call]);
-  React.useEffect(() => { void load(); }, [load]);
-  const limit = config && typeof config.maxMembersLimit === 'number' ? config.maxMembersLimit : TEAM_MAX_MEMBERS;
-  const saveMax = async () => {
-    const parsed = Number(draft);
-    if (draft !== '' && (!Number.isInteger(parsed) || parsed < 1 || parsed > limit)) { setDraftError(fill(t('maxInvalid'), { max: limit })); return; }
-    setDraftError(null);
-    const patch = (draft === '' || draft === baseline) ? {} : { maxMembers: parsed };
-    if (Object.keys(patch).length === 0) { setSave({ state: 'unchanged' }); return; }
-    setSave({ state: 'saving' });
-    try {
-      const written = await call('saveTeamConfig', patch);
-      if (!st.alive.current) return;
-      if (written && written.code) { setSave({ state: 'refused', code: written.code }); return; }
-      const nv = written && typeof written.maxMembers === 'number' ? String(written.maxMembers) : draft;
-      setDraft(nv); setBaseline(nv);
-      setConfig((c) => ({ ...(c || {}), maxMembers: written && typeof written.maxMembers === 'number' ? written.maxMembers : (c ? c.maxMembers : null) }));
-      setSave({ state: written && written.changed ? 'saved' : 'unchanged' });
-    } catch (failure) { if (st.alive.current) setSave({ state: 'refused', code: REASON(failure) }); }
-  };
-  if (st.phase === 'loading') return h(Shell, { t, view, summary: t('membersSummary') }, h(Loading, { t }));
-  if (st.phase === 'failed') return h(Shell, { t, view, summary: t('membersSummary') }, h(LoadFailed, { t, issue: st.issue, onRetry: () => void load() }));
-  const available = config && config.available === true;
-  const receipt = save === null ? null
-    : save.state === 'saved' ? h(StatusLine, { tone: 'warn', 'data-testid': 'team-max-receipt' }, t('savedRestart'))
-    : save.state === 'unchanged' ? h('p', { className: 'omni-ui-hint' }, t('unchanged'))
-    : save.state === 'refused' ? h(StatusLine, { tone: 'warn', role: 'alert' }, t('refused') + ' (' + save.code + ')') : null;
-  return h(Shell, { t, view, summary: t('membersSummary') },
-    h(SettingsCard, { title: t('membersTitle'), description: t('membersDesc') },
-      available
-        ? h(FormGrid, null,
-            h(Field, { label: t('maxLabel'), hint: fill(t('maxHint'), {}), error: draftError || undefined },
-              h(NumberInput, { value: draft, min: 1, max: limit, 'data-testid': 'team-max', onChange: (event) => { setDraftError(null); setDraft(event.target.value); } })),
-            h(ActionGroup, null,
-              h(Button, { variant: 'primary', 'data-testid': 'team-max-save', busy: save !== null && save.state === 'saving', onClick: () => void saveMax() }, t('save'))))
-        : h('div', { 'data-testid': 'team-max-unavailable' },
-            h('p', { className: 'omni-ui-hint' }, t('maxUnavailable')),
-            config && config.code === 'TEAM_CONFIG_ROW_NOT_FOUND' ? h('p', { className: 'omni-ui-hint', 'data-testid': 'team-max-unavailable-enable' }, t('maxUnavailableEnable')) : null),
-      receipt));
-}
 
 function ExtremeCard({ t, wire, limitForm, view }){
   const call = React.useMemo(() => makeCall(wire), [wire]);
@@ -335,10 +259,9 @@ export function apply(ctx) {
     const t = inner.locale.bind(NS);
     const limitForm = inner.configForms.get(NS);
     return inner.configForms.whileServed([NS], () => {
-      const a = registerSettingsPluginCard(inner, { id: NS, order: 30, label: () => t('membersTitle'), locale: NS, inject: () => ({ t, wire }) }, MembersCard);
       const b = registerSettingsPluginCard(inner, { id: NS + '-limit', order: 31, label: () => t('extremeTitle'), locale: NS, inject: () => ({ t, wire, limitForm }) }, ExtremeCard);
       const c = registerSettingsPluginCard(inner, { id: NS + '-notes', order: 32, label: () => t('notesTitle'), locale: NS, inject: () => ({ t, wire }) }, NotesCard);
-      return () => { a(); b(); c(); };
+      return () => { b(); c(); };
     });
-  }), 'omnisurge: three settings cards for members / extreme mode / notes');
+  }), 'omnisurge: two settings cards for extreme mode / notes (ADR-093 retired the members card)');
 }

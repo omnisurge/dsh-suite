@@ -109,6 +109,13 @@ const en={
   mcpTimeoutHintEdit:'Optional; empty keeps the existing value.',
   mcpFailOnStartup:'Abort when startup fails',
   mcpFailOnStartupHint:"When on, a startup failure is an error instead of leaving a degraded server.",
+  mcpGroupOfficial:'Servers managed by the app',
+  mcpGroupOfficialHint:'Same configuration as the official plugin page; changes here are visible there.',
+  mcpGroupSuite:"This suite's MCP clients",
+  mcpGroupSuiteHint:'OAuth sign-in and connection handling, maintained by this suite.',
+  mcpEnabled:'Enabled',
+  mcpEnabledHint:'A disabled server stays listed but does not start.',
+  mcpManagedUnavailable:"The app's MCP manager is not available here, so servers cannot be changed on this page.",
   mcpHeaders:'HTTP headers',
   mcpEnv:'Environment variables',
   mcpConfiguredCount:'{count} configured',
@@ -337,6 +344,13 @@ const zh={
   mcpTimeoutHintEdit:'可选；留空 = 保留原值。',
   mcpFailOnStartup:'启动失败时中止',
   mcpFailOnStartupHint:"开启后，启动失败会报错，不会降级运行。",
+  mcpGroupOfficial:'由应用管理的服务器',
+  mcpGroupOfficialHint:'与官方插件页使用同一份配置；这里改的服务器，官方页面也看得到。',
+  mcpGroupSuite:'本套件自带的 MCP 客户端',
+  mcpGroupSuiteHint:'这些客户端提供 OAuth 登录与连接方式适配，由本套件维护。',
+  mcpEnabled:'启用',
+  mcpEnabledHint:'停用的服务器仍会列出，但不会启动。',
+  mcpManagedUnavailable:'当前环境没有可用的 MCP 管理器，这里暂时不能改服务器。',
   mcpHeaders:'HTTP 头',
   mcpEnv:'环境变量',
   mcpConfiguredCount:'已配置 {count} 项',
@@ -660,6 +674,8 @@ const MCP_MUTATION_ERRORS=new Map([
   ['mcp/probe-unavailable','mcpProbeUnavailable'],
   ['mcp/row-missing','mcpServerMissing'],
   ['mcp/migration-unavailable','mcpMigrationUnavailable'],
+  ['mcp/managed-unavailable','mcpManagedUnavailable'],
+  ['mcp/managed-write-failed','mcpWriteFailed'],
 ]);
 /** ADR-032 purpose refusals: conflict and key-unknown are refreshable, the rest are sentences; the machine code
  * still only ever reaches the technical disclosure. */
@@ -1213,6 +1229,11 @@ function McpTab(props){
   const busy=slot.phase==='loading';
   const catalog=slot.data;
   const servers=catalog!==null&&catalog!==undefined&&Array.isArray(catalog.servers)?catalog.servers:[];
+  // ADR-094 D4：官方 manager 在场时，托管行与套件自有客户端是两类事实，列表按来源分开；
+  // 没有官方 manager（rc.1）时保持原来的单列表，页面不凭空多出两个分区。
+  const authority=catalog!==null&&catalog!==undefined&&catalog.authority==='official'?'official':'rows';
+  const officialRows=servers.filter(server=>server.managed===true);
+  const ownRows=servers.filter(server=>server.managed!==true);
   const sentence=mcpSentence(t,slot.issue);
   const summary=catalog===null?t('summaryPending'):fill(t('mcpServersSummary'),{
     servers:servers.length,
@@ -1321,6 +1342,8 @@ function McpTab(props){
       // ADR-055: a fresh row starts with `failOnStartupError` on — a server that cannot start should say so on
       // the row instead of looking healthy with no tools.
       failOnStartupError:true,failDirty:false,
+      // 新增的官方条目默认启用；编辑时才显示并只在改动后提交。
+      enabled:true,enabledDirty:false,
       // ADR-055 tri-state: 'keep' sends nothing, 'clear' sends an empty list, 'replace' sends the typed rows.
       headersMode:'keep',envMode:'keep',headers:[{key:'',value:''}],env:[{key:'',value:''}],
     });
@@ -1346,6 +1369,7 @@ function McpTab(props){
       // A stdio row arrives with its launch line already filled in, so the section opens where the values are.
       endpointOpen:false,
       failOnStartupError:typeof server.failOnStartupError==='boolean'?server.failOnStartupError:false,failDirty:false,
+      enabled:server.enabled!==false,enabledDirty:false,
       headersMode:'keep',envMode:'keep',headers:[{key:'',value:''}],env:[{key:'',value:''}],
     });
     setForm({mode:'edit',server});
@@ -1377,7 +1401,13 @@ function McpTab(props){
       if(Number.isFinite(timeout)&&timeout>0)draft.toolCallTimeoutMs=timeout;
     }
     // An untouched switch must not overwrite a value this page cannot see; only a known or user-set value is sent.
-    if(form.mode==='add'||values.failDirty||typeof form.server?.failOnStartupError==='boolean')draft.failOnStartupError=values.failOnStartupError;
+    // 官方目标（新增 static 落 config.servers，或编辑 managed 行）没有该字段，连草稿都不命名。
+    const officialTarget=form.mode==='add'
+      ?(authority==='official'&&values.kind!=='oauth')
+      :form.server!==null&&form.server.managed===true;
+    if(!officialTarget&&(form.mode==='add'||values.failDirty||typeof form.server?.failOnStartupError==='boolean'))draft.failOnStartupError=values.failOnStartupError;
+    // 官方条目的 durable enabled：只在用户动过开关时命名，避免把未见的并发改动写回去。
+    if(form.mode==='edit'&&form.server!==null&&form.server.managed===true&&values.enabledDirty)draft.enabled=values.enabled;
     // ADR-055 tri-state, one rule for both fields: 'keep' names nothing (the Host leaves the stored object
     // alone), 'clear' names an empty list (the Host writes `{}`), 'replace' names exactly the typed rows.
     // A named empty list means *clear*, so 'replace' with every row blank is the same request as 'clear'.
@@ -1904,11 +1934,14 @@ function McpTab(props){
     // been migrated yet) can never be a stdio row, and the Host refuses that switch: the page must not offer a path
     // that is guaranteed to be rejected. The hint is the readable reason.
     const httpOnlyClient=!add&&server!==null&&(server.clientSource==='suite'||server.clientSource==='external-legacy'||values.kind==='oauth');
+    // ADR-094 D4：官方 manager 托管的条目与套件自有客户端共用一张表单，但官方 schema 没有的字段不出现。
+    const managed=!add&&server!==null&&server.managed===true;
+    const officialTarget=add?(authority==='official'&&values.kind!=='oauth'):managed;
     return h('section',{className:'omni-ui-stack','data-testid':'mcp-form-section'},
       h(SheetHead,{title:add?t('mcpAddTitle'):t('mcpEditTitle'),dismissLabel:t('back'),onDismiss:closeForm}),
       h('div',{className:'omni-ui-stack','data-testid':'mcp-form'},
         h(Field,{label:t('mcpServerName'),hint:t('mcpServerNameHint'),required:true},
-          h(TextInput,{name:'serverName',autoComplete:'off',value:values.name,onChange:event=>setValue('name',event.target.value),'data-testid':'mcp-form-name'})),
+          h(TextInput,{name:'serverName',autoComplete:'off',value:values.name,readOnly:managed,onChange:event=>setValue('name',event.target.value),'data-testid':'mcp-form-name'})),
         add?h('div',{'data-testid':'mcp-form-kind'},h(Field,{label:t('mcpKind')},
           // Both arms are real now (ADR-033 D1): CapsuleSwitch is this library's segmented control that lets the
           // page switch the carried client; OAuth rows are HTTP-only, so that arm fixes the transport.
@@ -1945,7 +1978,8 @@ function McpTab(props){
           :null,
         h(Field,{label:t('mcpTimeout'),hint:add?t('mcpTimeoutHint'):t('mcpTimeoutHintEdit')},
           h(NumberInput,{name:'toolCallTimeoutMs',min:1,step:1,value:values.timeoutMs,onChange:event=>setValue('timeoutMs',event.target.value),'data-testid':'mcp-form-timeout'})),
-        h(Switch,{label:t('mcpFailOnStartup'),description:add?t('mcpFailOnStartupHint'):t('mcpKeepUnlessChanged'),checked:values.failOnStartupError,onChange:event=>setValues(current=>({...current,failOnStartupError:event.target.checked,failDirty:true})),'data-testid':'mcp-form-fail-on-startup'}),
+        managed?h(Switch,{label:t('mcpEnabled'),description:t('mcpEnabledHint'),checked:values.enabled,onChange:event=>setValues(current=>({...current,enabled:event.target.checked,enabledDirty:true})),'data-testid':'mcp-form-enabled'}):null,
+        officialTarget?null:h(Switch,{label:t('mcpFailOnStartup'),description:add?t('mcpFailOnStartupHint'):t('mcpKeepUnlessChanged'),checked:values.failOnStartupError,onChange:event=>setValues(current=>({...current,failOnStartupError:event.target.checked,failDirty:true})),'data-testid':'mcp-form-fail-on-startup'}),
         values.transport==='streamable-http'&&values.kind!=='oauth'?pairBlock('headers',t('mcpHeaders'),server?server.headerCount:0,add):null,
         // ADR-034/0.2.0-5: the OAuth client's Config carries neither headers nor env; the Host refuses that
         // combination, so the page never offers it.
@@ -2007,7 +2041,17 @@ function McpTab(props){
     legacyCount>0&&catalog!==null?h('div',{className:'omni-ui-stack','data-testid':'mcp-legacy-notice'},
       h(StatusLine,{tone:'warn'},fill(t('mcpLegacyNotice'),{count:legacyCount,names:legacyRows.map(server=>String(server.name)).join(', ')})),
       h(ActionGroup,null,h(Button,{busy:migratingClients,onClick:askMigrateClients,'data-testid':'mcp-migrate-clients'},migratingClients?t('mcpMigratingClients'):t('mcpMigrateClients')))):null,
-    servers.length===0?null:h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list'},servers.map(row)),
+    servers.length===0?null:authority==='official'
+      ?h(React.Fragment,null,
+        officialRows.length===0?null:h('section',{className:'omni-ui-stack','data-testid':'mcp-group-official'},
+          h('h3',{className:'omni-ui-itemCardTitle','data-testid':'mcp-group-official-title'},t('mcpGroupOfficial')),
+          h('p',{className:'omni-ui-hint','data-testid':'mcp-group-official-hint'},t('mcpGroupOfficialHint')),
+          h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list-official'},officialRows.map(row))),
+        ownRows.length===0?null:h('section',{className:'omni-ui-stack','data-testid':'mcp-group-suite'},
+          h('h3',{className:'omni-ui-itemCardTitle','data-testid':'mcp-group-suite-title'},t('mcpGroupSuite')),
+          h('p',{className:'omni-ui-hint','data-testid':'mcp-group-suite-hint'},t('mcpGroupSuiteHint')),
+          h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list-suite'},ownRows.map(row))))
+      :h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list'},servers.map(row)),
     catalog!==null&&servers.length===0&&sentence===null?h('div',{'data-testid':'mcp-empty'},
       h(EmptyState,{title:t('mcpEmptyTitle'),description:t('mcpEmptyDescription'),action:h(Button,{onClick:openAdd,'data-testid':'mcp-empty-add'},t('mcpAdd'))})):null);
 }
@@ -2102,7 +2146,7 @@ export function applyToolsPanel(ctx,options={}){
   const readMcpServers=async()=>{
     const value=await call(MCP_METHOD);
     if(!value||typeof value!=='object'||!Array.isArray(value.servers))throw failure('answer','SUITE_RESULT_INVALID '+MCP_METHOD+' answered without a servers array');
-    return {servers:value.servers,reload:value.reload==='live'?'live':'manual'};
+    return {servers:value.servers,reload:value.reload==='live'?'live':'manual',authority:value.authority==='official'?'official':'rows'};
   };
   const readMcpPurposes=async()=>{
     const value=await call(MCP_PURPOSES_METHOD);
@@ -2139,7 +2183,7 @@ export function applyToolsPanel(ctx,options={}){
       if(disposed||controller.signal.aborted)return;
       if(tab==='skills'){slot.data={skills:value.skills,roots:value.roots};slot.complete=value.complete;}
       else{
-        slot.data={servers:value.servers.servers,reload:value.servers.reload};
+        slot.data={servers:value.servers.servers,reload:value.servers.reload,authority:value.servers.authority};
         slot.purposes=value.purposes;
         slot.purposesIssue=value.purposesIssue;
       }

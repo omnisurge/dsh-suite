@@ -1,4 +1,5 @@
 type Method = (this: any, ...args: any[]) => any;
+// Legacy compatibility namespace: changing this key would orphan existing method layers.
 const LAYER = Symbol.for("omnidsh.client.method-layer.v1");
 
 interface Layer {

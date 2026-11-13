@@ -13,7 +13,7 @@ import {SUITE_PACKAGE,compareVersions,parseSums} from './upgrade.js';
  * code, and a failed attempt leaves no version directory behind.
  *
  * Why the fetched root is separate from the release directory (AGENTS 5.9): candidates reach the release
- * shelf only through \`scripts/release/publish-release.mjs\`. This fetcher writes bytes nobody published, so
+ * shelf only through the release publisher. This fetcher writes bytes nobody published, so
  * it writes where the shelf cannot see them, and discovery treats that root as one more candidate root.
  * It is not a temporary directory either: the official installer pins a profile dependency to
  * \`file:<that directory>/<tgz>\`, so a landed version directory is never moved or deleted here.

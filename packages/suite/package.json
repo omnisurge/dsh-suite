@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -55,6 +55,7 @@
     }
   },
   "files": [
+    "ATTRIBUTION-effort-slider.md",
     "components",
     "cordis.patch.yml",
     "lib/agent-teams.d.ts",
@@ -66,6 +67,8 @@
     "lib/client.js",
     "lib/components.d.ts",
     "lib/components.js",
+    "lib/document-parse-presence.d.ts",
+    "lib/document-parse-presence.js",
     "lib/document-parse-types.d.ts",
     "lib/document-parse-types.js",
     "lib/document-parse-mineru.d.ts",
@@ -139,10 +142,10 @@
     "lib/skills-manage.js",
     "lib/tar.d.ts",
     "lib/tar.js",
-    "lib/team-config.d.ts",
-    "lib/team-config.js",
-    "lib/teams.d.ts",
-    "lib/teams.js",
+    "lib/agent-teams-row.d.ts",
+    "lib/agent-teams-row.js",
+    "lib/mcp-managed.d.ts",
+    "lib/mcp-managed.js",
     "lib/tool.d.ts",
     "lib/tool.js",
     "lib/typert.host.d.ts",
@@ -206,6 +209,10 @@
         "version": "0.2.2-rc.1",
         "platform": "linux",
         "gateScope": "G6"
+      },
+      {
+        "version": "0.2.2-rc.2",
+        "gateScope": "G1-G5"
       }
     ],
     "note": "Runtimes this generation was actually exercised on. The Client compares the official boot manifest's release version against this list and reports anything else as unverified. Admission to load is a separate decision owned by engines.dsh (ADR-015, this repository's own decision log).",

@@ -5,7 +5,7 @@ export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   variant?: "field" | "inline";
 };
 
-/** Native select with omnidsh control chrome (height/radius/chevron). */
+/** Native select with the existing product control chrome (height/radius/chevron). */
 export function Select(props: SelectProps) {
   const { className, children, variant = "field", ...rest } = props;
   const extra = className !== undefined && className !== "" ? ` ${className}` : "";

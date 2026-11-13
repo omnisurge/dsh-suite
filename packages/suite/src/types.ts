@@ -12,21 +12,7 @@ export interface LimitModeStatus {
  text:string;
 }
 
-/** ADR-054 D1/D6：Agent Teams 诊断。字段白名单就是这些字段（specs/agent-teams-card.md）。 */
-export type TeamMemberPhase='provisioning'|'active'|'failed';
-export interface TeamMemberRow {id:string;name:string;description:string;provider:string;context:string;phase:TeamMemberPhase;error:string|null;}
-export interface TeamRow {rootId:string;members:TeamMemberRow[];failed:number;code:string|null;}
-export interface TeamPrecheck {state:'ok'|'warn'|'unknown';provider:string|null;model:string|null;failedMembers:number;code:string|null;providerVerified:boolean;}
-export interface TeamStatus {available:boolean;code:string|null;maxMembers:number|null;teams:TeamRow[];precheck:TeamPrecheck;}
-
-/** ADR-054 D1/D4：Agent Teams 的配置读/写。写入口是 profile patch（官方 applyEntryPatches 非 insert 补丁按键覆盖），
- * 不是官方 service——所以结果里必须带 \`restartRequired\`，不能假装热更新。 */
-export interface TeamConfigRowView {rowId:string;name:string;maxMembers:number|null;freshProvider:string|null;otherKeys:string[];}
-/** 字段值直接给到客户端（来源是各自那一行）；客户端不猜「第几行」，行序不是事实来源。 */
-export interface TeamConfigState {available:boolean;code:string|null;profileKnown:boolean;rows:TeamConfigRowView[];maxMembersLimit:number;maxMembers:number|null;freshProvider:string|null;}
-/** 只允许这两个声明键；Remote 边界不接受自由形状的 unknown 数据（typert 会拒绝）。 */
-export interface TeamConfigPatch {maxMembers?:number;freshProvider?:string;}
-export interface TeamConfigWrite {changed:boolean;backupPath:string|null;restartRequired:boolean;code:string|null;changedKeys:string[];maxMembers:number|null;freshProvider:string|null;}
+/** ADR-093: the Agent Teams member-cap card is retired (the official Subagent page owns depth, capacity and model selection); no member diagnostics or team-config types live here. Limit mode and environment notes keep their own types. */
 /** 极限模式的写入补丁（本插件自己那一行的 `config.limitMode`）；三个键都可选。 */
 /** ADR-061：环境笔记（本插件自己的笔记文件 + 一段系统提示）。文本由用户负责，套件不校验内容。 */
 export interface EnvironmentNotesState {available:boolean;code:string|null;text:string;bytes:number;}
@@ -105,8 +91,12 @@ export interface McpServerEntry {
  toolCount:number;
  /** 行的稳定 id（profile patch 里 `insert` 行的 id），编辑/删除的定位键。 */
  rowId:string;
- /** 'profile' = 行来自本 profile 的 patch；'loaded' = 行来自某个 bundle，删除时改写 disabled 覆盖。 */
+ /** 'profile' = 用户可编辑的配置（本 profile 的 patch 行，或 rc.2+ 官方 config.servers 条目）；'loaded' = 行来自某个 bundle，删除时改写 disabled 覆盖。 */
  origin:'profile'|'loaded';
+ /** 该行由官方 MCP manager 托管（ADR-094）：写走 config.servers；表单据此隐藏官方没有的字段。 */
+ managed:boolean;
+ /** 官方条目的 durable enabled（仅 managed 行带；其余行省略，不是一个默认值）。 */
+ enabled?:boolean;
  /** 是否可编辑：只有 profile 行的 config 归本页面所有。 */
  editable:boolean;
  /** headers/env 的条目数，仅计数；值永不出 Host。 */
@@ -138,8 +128,10 @@ export interface McpServerEntry {
   * `unknown` = 不认识的客户端包——不猜它能谈什么，页面因此不显示协议徽标（ADR-030 D4）。 */
  protocolSupport:'v1-only'|'negotiable'|'unknown';
 }
-/** 'live' = profile 的 patchReload 是 live，写入后由运行时重载；'manual' = 需要重启才生效。 */
-export interface McpServerCatalog {servers:McpServerEntry[];reload:'live'|'manual';}
+/** 'live' = profile 的 patchReload 是 live，写入后由运行时重载；'manual' = 需要重启才生效。
+ * authority 是目录的数据源事实（ADR-094 D5）：'official' = 官方 manager 在场，通用服务器归 config.servers；
+ * 'rows' = 没有官方 manager，旧 patch 路径仍是唯一写目标。 */
+export interface McpServerCatalog {servers:McpServerEntry[];reload:'live'|'manual';authority:'official'|'rows';}
 /** 用户触发的实时探测结果（ADR-030 D3）：runtime 为客户端插件当场报告的事实。 */
 export interface McpProbeResult {rowId:string;name:string;runtime:McpRuntimeStatus|null;}
 /** 旧静态 HTTP 行改走 v2 客户端的结果（ADR-030 D5）：生效需要重启进程。 */
@@ -166,6 +158,8 @@ export interface McpServerDraft {
  staticClientId?:string;
  /** How long the browser/callback wait may last, in ms (OAuth rows only). Validated before it is written. */
  authorizationTimeoutMs?:number;
+ /** Official entries only (ADR-094 D4): durable enable flag; an edit that omits it keeps the stored value. */
+ enabled?:boolean;
 }
 /** 写入结果：'live' 表示重载后已在 loader 里看到该行；'pending' 表示已写盘但运行时尚未重载。 */
 export interface McpServerMutation {mode:'added'|'updated'|'removed';rowId:string;name:string;applied:'live'|'pending';}

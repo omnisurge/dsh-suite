@@ -7,7 +7,7 @@ import type {
 import type { DocumentParseCapabilities, DocumentParseRequest, DocumentParseResult } from '@omnisurge/dsh-suite/document-parse-types'
 import type { OcrCapabilities, OcrImageAttachment, OcrRecognizeResult, OcrRenderResult } from '@omnisurge/dsh-suite/ocr-types'
 import type { SetupCheck, SetupInspection } from '@omnisurge/dsh-suite/searxng'
-import type { ComponentSetStatus, DevelopmentStatus, EnvironmentNotesState, HealRecord, LimitModeStatus, McpMigrationResult, McpProbeResult, McpPurposeSnapshot, McpPurposeWriteResult, McpServerCatalog, McpServerDraft, McpServerMutation, SetupExpectedConfiguration, SetupSettingsOwner, SkillDocument, SkillDraft, SkillMutation, SkillsCatalog, SkillScope, TeamConfigPatch, TeamConfigState, TeamConfigWrite, TeamStatus, UpgradeResult, UpgradeStatus } from '@omnisurge/dsh-suite/types'
+import type { ComponentSetStatus, DevelopmentStatus, EnvironmentNotesState, HealRecord, LimitModeStatus, McpMigrationResult, McpProbeResult, McpPurposeSnapshot, McpPurposeWriteResult, McpServerCatalog, McpServerDraft, McpServerMutation, SetupExpectedConfiguration, SetupSettingsOwner, SkillDocument, SkillDraft, SkillMutation, SkillsCatalog, SkillScope, UpgradeResult, UpgradeStatus } from '@omnisurge/dsh-suite/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$6f6d6e69737572676553656172786e675365747570 {
@@ -45,11 +45,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     removeMcpServer: (rowId: string) => Promise<RemoteResult<McpServerMutation>>
     removeSkill: (name: string, scope?: SkillScope) => Promise<RemoteResult<SkillMutation>>
     saveEnvironmentNotes: (text: string) => Promise<RemoteResult<EnvironmentNotesState>>
-    saveTeamConfig: (patch: TeamConfigPatch) => Promise<RemoteResult<TeamConfigWrite>>
     setMcpRouting: (input: { routing: boolean; expectedRevision: number; }) => Promise<RemoteResult<McpPurposeWriteResult>>
     status: () => Promise<RemoteResult<DevelopmentStatus>>
-    teamConfig: () => Promise<RemoteResult<TeamConfigState>>
-    teamStatus: () => Promise<RemoteResult<TeamStatus>>
     updateMcpServer: (rowId: string, draft: McpServerDraft) => Promise<RemoteResult<McpServerMutation>>
     updateSkill: (name: string, draft: SkillDraft) => Promise<RemoteResult<SkillMutation>>
     upgradeStatus: (runtimeVersion?: string) => Promise<RemoteResult<UpgradeStatus>>
@@ -89,11 +86,8 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'omnisurgeSuiteDev/removeMcpServer': (rowId: string) => Promise<RemoteResult<McpServerMutation>>
     'omnisurgeSuiteDev/removeSkill': (name: string, scope?: SkillScope) => Promise<RemoteResult<SkillMutation>>
     'omnisurgeSuiteDev/saveEnvironmentNotes': (text: string) => Promise<RemoteResult<EnvironmentNotesState>>
-    'omnisurgeSuiteDev/saveTeamConfig': (patch: TeamConfigPatch) => Promise<RemoteResult<TeamConfigWrite>>
     'omnisurgeSuiteDev/setMcpRouting': (input: { routing: boolean; expectedRevision: number; }) => Promise<RemoteResult<McpPurposeWriteResult>>
     'omnisurgeSuiteDev/status': () => Promise<RemoteResult<DevelopmentStatus>>
-    'omnisurgeSuiteDev/teamConfig': () => Promise<RemoteResult<TeamConfigState>>
-    'omnisurgeSuiteDev/teamStatus': () => Promise<RemoteResult<TeamStatus>>
     'omnisurgeSuiteDev/updateMcpServer': (rowId: string, draft: McpServerDraft) => Promise<RemoteResult<McpServerMutation>>
     'omnisurgeSuiteDev/updateSkill': (name: string, draft: SkillDraft) => Promise<RemoteResult<SkillMutation>>
     'omnisurgeSuiteDev/upgradeStatus': (runtimeVersion?: string) => Promise<RemoteResult<UpgradeStatus>>
@@ -139,11 +133,8 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'omnisurgeSuiteDev/removeMcpServer': TypertRemoteMethod<{ readonly 'rowId': string }, McpServerMutation>
   readonly 'omnisurgeSuiteDev/removeSkill': TypertRemoteMethod<{ readonly 'name': string; readonly 'scope'?: SkillScope }, SkillMutation>
   readonly 'omnisurgeSuiteDev/saveEnvironmentNotes': TypertRemoteMethod<{ readonly 'text': string }, EnvironmentNotesState>
-  readonly 'omnisurgeSuiteDev/saveTeamConfig': TypertRemoteMethod<{ readonly 'patch': TeamConfigPatch }, TeamConfigWrite>
   readonly 'omnisurgeSuiteDev/setMcpRouting': TypertRemoteMethod<{ readonly 'input': { routing: boolean; expectedRevision: number; } }, McpPurposeWriteResult>
   readonly 'omnisurgeSuiteDev/status': TypertRemoteMethod<{  }, DevelopmentStatus>
-  readonly 'omnisurgeSuiteDev/teamConfig': TypertRemoteMethod<{  }, TeamConfigState>
-  readonly 'omnisurgeSuiteDev/teamStatus': TypertRemoteMethod<{  }, TeamStatus>
   readonly 'omnisurgeSuiteDev/updateMcpServer': TypertRemoteMethod<{ readonly 'rowId': string; readonly 'draft': McpServerDraft }, McpServerMutation>
   readonly 'omnisurgeSuiteDev/updateSkill': TypertRemoteMethod<{ readonly 'name': string; readonly 'draft': SkillDraft }, SkillMutation>
   readonly 'omnisurgeSuiteDev/upgradeStatus': TypertRemoteMethod<{ readonly 'runtimeVersion'?: string }, UpgradeStatus>

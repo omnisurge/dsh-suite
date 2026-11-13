@@ -11,7 +11,7 @@ export interface PageHeadProps {
 }
 
 /**
- * Owned `settings.section` chrome. Match official 插件 / omnidsh:
+ * Owned `settings.section` chrome. Match the official 插件 page / existing product skin:
  * 18px semibold title + 13px tertiary description. Not for plugin tabs or plugin.item cards.
  */
 export function PageHead(props: PageHeadProps) {

@@ -9,6 +9,12 @@ import type {ComponentDefinition,UpgradeCandidate,UpgradeInstallRecord,UpgradeRe
 import type {ReleaseFetchOutcome,ReleaseInspection} from './github-release.js';
 
 export const SUITE_PACKAGE='@omnisurge/dsh-suite';
+/** Official pnpm refuses a profile whose node_modules was linked from another store major. The code is
+ * stable in pnpm's output; the sentence is the fallback when the log is translated. This is a profile
+ * fact, not a Suite failure: the bytes never changed, and only the official installer may repair them
+ * (AGENTS 1.7), so the page names the fact and the next step instead of pretending it can rewrite them. */
+const PROFILE_STORE_MISMATCH=/ERR_PNPM_UNEXPECTED_STORE|Unexpected store location/;
+const installFailureCode=(installed:{code:string|null;diagnostic:string|null}):string=>PROFILE_STORE_MISMATCH.test([installed.code,installed.diagnostic].filter(Boolean).join('\n'))?'UPGRADE_PROFILE_STORE_MISMATCH':'UPGRADE_SUITE_INCOMPLETE';
 export interface UpgradeDeps {
  /** Configured release directory, or an empty string when the profile must not self-upgrade. */
  releaseDirectory:()=>string;
@@ -381,7 +387,7 @@ export class SuiteUpgrade {
    const modules=candidate.components.map(component=>component.definition.module);
    if(installed.application!=='applied'&&installed.application!=='restart-required'){
     const onDisk=await readOnDisk();
-    if(onDisk!==candidate.version)return finish('UPGRADE_SUITE_INCOMPLETE',[installed.diagnostic??installed.code,onDisk===null?null:'on disk: '+onDisk].filter(Boolean).join('; '),candidate.version);
+    if(onDisk!==candidate.version)return finish(installFailureCode(installed),[installed.diagnostic??installed.code,onDisk===null?null:'on disk: '+onDisk].filter(Boolean).join('; '),candidate.version);
     this.logger('SUITE_UPGRADE_RESTART_REQUIRED',{target:candidate.version,modules,activationUnconfirmed:true,application:installed.application,code:installed.code});
     return finish('SUITE_UPGRADE_RESTART_REQUIRED',[installed.diagnostic,installed.code===null?null:'install transaction reported '+installed.code].filter(Boolean).join('; ')||null,candidate.version,{activationUnconfirmed:true});
    }

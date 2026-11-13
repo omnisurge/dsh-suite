@@ -17,8 +17,13 @@ export const GROUP={
   'ocr/client.js':'client',
   // ADR-086：文档解析设置卡。Client 只走官方 remote 与库组件，不碰 node:*。
   'document-parse/client.js':'client',
-  // ADR-064：字段→补丁的纯函数（无 node:*、无副作用），Client 与单测共用。
-  'teams/team-config-patch.js':'client',
+  // ADR-088：思考强度滑块的 Client 产品皮；canvas/chibi/轨道沿用既有产品皮肤，
+  // 按 ADR-028 对会话域皮肤的裁定不走通用 dsh-ui 控件集。
+  'effort-slider/shared.ts':'client',
+  'effort-slider/directory-bind.ts':'client',
+  'effort-slider/client/index.tsx':'client',
+  'effort-slider/client/styles.ts':'client',
+  'effort-slider/client/assets.ts':'client',
 
   'ambient.ts':'shared',
   'build-protocol.d.ts':'shared',
@@ -55,6 +60,8 @@ export const GROUP={
   'document-parse-paddle.ts':'host',
   'document-parse-service.ts':'host',
   'document-parse-tool.ts':'host',
+  // ADR-091：文档解析的产品文案（工具描述 + 常驻提示词段）。纯常量、无 import，所以测试能直接取源。
+  'document-parse-presence.ts':'host',
   // 只有类型与联合，无副作用、无 node:*：Client 与 Host 共用。
   'document-parse-types.ts':'shared',
   'ocr-types.ts':'shared',
@@ -66,10 +73,13 @@ export const GROUP={
   // 但它们的 Remote 边界类型在 types.ts 里，跨线缆时才类型化。
   'limit-mode.ts':'host',
   // profile patch 的读写是 Host-only（node:fs + yaml），与 MCP 行的 patch 写入器同一条纪律。
-  'team-config.ts':'host',
+  // ADR-093：团队成员卡退役后，这条自定义行的唯一 Host 读入口（极限模式配置）。
+  'agent-teams-row.ts':'shared',
+  // ADR-094：官方 MCP manager 的 Host 适配层（Settings 修订栅栏 + 状态映射），只被 host 使用。
+  'mcp-managed.ts':'host',
   // 环境笔记的读写是 Host-only（node:fs），提示段与 mcp-purpose 同款注册纪律。
   'environment-notes.ts':'host',
-  'teams.ts':'host',
+
   'development.ts':'host',
   // ADR-068: the release fetcher is Host-only (node:fs/node:crypto, network, the credentials seam); the
   // Client never downloads anything and only renders the machine codes it reports.

@@ -6,6 +6,5 @@
   "maxModels": 8,
   "maxText": 4000,
   "maxNotesBytes": 32768,
-  "maxTeamMembers": 32,
   "extremePromptText": "You have an unlimited token budget and must not economize. Think thoroughly, explore alternatives, and do not stop early to save tokens. Be exhaustive in analysis and verification."
 }

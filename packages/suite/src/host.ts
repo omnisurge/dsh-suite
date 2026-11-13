@@ -31,6 +31,7 @@ import {createDocumentParseService} from './document-parse-service.js';
 import type {DocumentParseCapabilities,DocumentParseRequest,DocumentParseResult,DocumentParseService,DocumentParseState} from './document-parse-types.js';
 import {registerComponentTool,registerEnvironmentTool,registerOcrTool,registerUpgradeTool} from './tool.js';
 import {registerDocumentParseTool} from './document-parse-tool.js';
+import {DOCUMENT_PARSE_PRESENCE_TEXT,DOCUMENT_PARSE_SECTION,DOCUMENT_PARSE_SECTION_ORDER} from './document-parse-presence.js';
 import {BootGuard} from './recovery.js';
 import {StartupHealer} from './heal.js';
 import {SuiteUpgrade} from './upgrade.js';
@@ -39,17 +40,16 @@ import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,migrateLegacyClien
 import {PURPOSE_SECTION_NAME,PURPOSE_SECTION_ORDER,createPurposeStore,purposeUnavailable} from './mcp-purpose.js';
 import {LIMIT_MODE_ORDER,LIMIT_MODE_SECTION,firstReadableSelection,limitModeSectionText,matchesLimitModels,normalizeLimitMode,selectionOf} from './limit-mode.js';
 import type {LimitModeConfig} from './limit-mode.js';
-import {readTeamStatus} from './teams.js';
 import {ENVIRONMENT_NOTES_ORDER,ENVIRONMENT_NOTES_SECTION,appendEnvironmentEntry,notesPathOf,notesSectionTextSync,readNotes,writeNotes} from './environment-notes.js';
-import {AGENT_TEAMS_ROW_NAME,TEAM_CONFIG_MAX_MEMBERS_LIMIT,agentTeamsRowOf,planTeamConfig,teamConfigFields,teamRowsOf,writeTeamConfigs} from './team-config.js';
-import type {TeamConfigRow} from './team-config.js';
+import {agentTeamsRowOf} from './agent-teams-row.js';
+import {MANAGED_ROW_PREFIX,discoverManagedAuthority,managedCatalog} from './mcp-managed.js';
 import type {PurposeStore} from './mcp-purpose.js';
 import type {LoaderLike,ToolsLike} from './mcp-servers.js';
 import {createSkill,readSkill,removeSkill,updateSkill} from './skills-manage.js';
 import type {SkillContext,SkillRegistryLike} from './skills-manage.js';
 import type {SkillsCatalog,McpMigrationResult,McpProbeResult,McpPurposeServer,McpPurposeSnapshot,McpPurposeWriteResult,McpServerCatalog,McpServerDraft,McpServerMutation,SkillDocument,SkillDraft,SkillMutation,SkillScope} from './types.js';
 import type {OcrCapabilities,OcrImageAttachment,OcrRecognizeResult,OcrRenderResult} from './ocr-types.js';
-import type {ComponentDefinition,ComponentSetStatus,DevelopmentOperation,DevelopmentStatus,EnvironmentNotesState,HealRecord,HostRuntimeBuild,LimitModeStatus,TeamConfigPatch,TeamConfigState,TeamConfigWrite,TeamStatus,UpgradeResult,UpgradeStatus} from './types.js';
+import type {ComponentDefinition,ComponentSetStatus,DevelopmentOperation,DevelopmentStatus,EnvironmentNotesState,HealRecord,HostRuntimeBuild,LimitModeStatus,UpgradeResult,UpgradeStatus} from './types.js';
 export type {ComponentDefinition,ComponentStatus,ComponentSetStatus,RecoveryReceipt,UpgradeStatus,UpgradeResult,BuildCapabilities,BuildResult,ClientRuntimeBuild,DevelopmentOperation,DevelopmentStatus,HostRuntimeBuild} from './types.js';
 /**
  * Everything that touches the plugin API lives here on purpose: this module is imported dynamically by the
@@ -269,7 +269,12 @@ export class SuiteDevelopment extends TypertRemoteService {
    },
    loader:()=>ctx.get('loader'),
    // One row-identification rule for the whole plugin: the catalog's own, never a second table (D3).
-   rowsOf:loader=>mcpRowsOf(loader as LoaderLike|undefined),
+   rowsOf:loader=>{
+    const rows=mcpRowsOf(loader as LoaderLike|undefined);
+    const authority=this.managedAuthority();
+    if(authority)for(const row of managedCatalog(authority))rows.push({rowId:MANAGED_ROW_PREFIX+row.name,serverName:row.name,enabled:row.entry.enabled!==false});
+    return rows;
+   },
   });
   // The read belongs to the plugin's effect scope, not to the constructor body: no IO at construction, and a
   // construction torn down before the read resolves disposes with the plugin. Still exactly one read.
@@ -280,6 +285,7 @@ export class SuiteDevelopment extends TypertRemoteService {
   this.registerPurposeSection(ctx);
   this.registerLimitModeSection(ctx);
   this.registerEnvironmentNotesSection(ctx);
+  this.registerDocumentParseSection(ctx);
   registerComponentTool(ctx,{componentsStatus:()=>this.componentsStatusCore()});
   registerUpgradeTool(ctx,{
    upgradeStatus:()=>this.upgradeStatusCore(),
@@ -534,6 +540,28 @@ export class SuiteDevelopment extends TypertRemoteService {
    },'omnisurge:environment-notes');
   });
  }
+ /** ADR-091: the document-parsing presence line. Same discipline as ADR-032/058/061: a section that cannot
+  * register degrades to "no section" and the session still starts. The text is product-owned, so unlike the
+  * MCP purpose section it reads no file and has no switch of its own. */
+ private registerDocumentParseSection(ctx:Context):void{
+  type PromptSectionHost={section(input:{name:string;order:number;text:()=>string;interpolate:boolean}):()=>void;};
+  const injectable=ctx as unknown as {inject(keys:string[],callback:(promptCtx:{effect:(fn:()=>unknown,name?:string)=>unknown;systemPrompt:PromptSectionHost})=>void):void;};
+  injectable.inject(['systemPrompt'],promptCtx=>{
+   promptCtx.effect(()=>{
+    try{
+     return promptCtx.systemPrompt.section({
+      name:DOCUMENT_PARSE_SECTION,
+      order:DOCUMENT_PARSE_SECTION_ORDER,
+      interpolate:false,
+      text:()=>DOCUMENT_PARSE_PRESENCE_TEXT,
+     });
+    }catch(error){
+     ctx.logger?.warn?.('SUITE_DOCUMENT_PARSE_SECTION_UNAVAILABLE',{message:String((error as Error)?.message??error)});
+     return ()=>{};
+    }
+   },'omnisurge:document-parse');
+  });
+ }
  /** 环境笔记的读：文件是权威，读失败如实报不可用。 */
  @Remote
  async environmentNotes():Promise<EnvironmentNotesState>{
@@ -571,43 +599,13 @@ export class SuiteDevelopment extends TypertRemoteService {
   const selection=firstReadableSelection({get:(name:string)=>this.lookup(name)},agents);
   return {available,code:available?null:'LIMIT_MODE_UNAVAILABLE',enabled:config.enabled,models:config.models,textLength:config.text.trim().length,text:config.text,selection,matched:matchesLimitModels(config.models,selection)};
  }
- @Remote
- async teamStatus():Promise<TeamStatus>{
-  return readTeamStatus({get:name=>this.lookup(name)},agent=>selectionOf({get:name=>this.lookup(name)},agent));
- }
- /** ADR-054 D1/D4 的配置读：只报官方行里当前生效的事实，外加能不能写的独立判据。 */
- @Remote
- async teamConfig():Promise<TeamConfigState>{
-  // ADR-064：两个配置键分属两个官方行。字段值按各自归属行解析；客户端不再猜 rows[0]。
-  const officialRows=this.teamRows();
-  const rows=officialRows.map(row=>({rowId:row.rowId,name:row.name,maxMembers:typeof row.config.maxMembers==='number'?row.config.maxMembers:null,freshProvider:typeof row.config.freshProvider==='string'?row.config.freshProvider:null,otherKeys:Object.keys(row.config).filter(key=>key!=='maxMembers'&&key!=='freshProvider')}));
-  const fields=teamConfigFields(officialRows);
-  return {available:rows.length>0,code:rows.length>0?null:'TEAM_CONFIG_ROW_NOT_FOUND',profileKnown:this.profileDir()!==null,rows,maxMembersLimit:TEAM_CONFIG_MAX_MEMBERS_LIMIT,maxMembers:fields.maxMembers,freshProvider:fields.freshProvider};
- }
- /** 写入口是 profile patch 文件（见 team-config.ts 抬头），写前备份、只改声明键、结果明示需要重启。
-  *  ADR-064：调用方只给字段，Host 按字段路由到各自归属的官方行，多行一次写盘、一份备份。 */
- @Remote
- async saveTeamConfig(patch:TeamConfigPatch):Promise<TeamConfigWrite>{
-  const officialRows=this.teamRows();
-  const planned=planTeamConfig(officialRows,{...(patch??{})});
-  if(planned.code!==null)return {changed:false,backupPath:null,restartRequired:false,code:planned.code,changedKeys:[],maxMembers:null,freshProvider:null};
-  if(planned.plans.length===0)return {changed:false,backupPath:null,restartRequired:false,code:null,changedKeys:[],maxMembers:teamConfigFields(officialRows).maxMembers,freshProvider:teamConfigFields(officialRows).freshProvider};
-  const stamp=new Date().toISOString().replace(/[:.]/gu,'-');
-  return writeTeamConfigs(this.profileDir(),planned.plans,officialRows,stamp,planned.changedKeys);
- }
- /** 极限模式配置的宿主行（ADR-062）：按模块名发现，找不到就是找不到。 */
+ /** 极限模式配置的宿主行（ADR-062）：按模块名发现，找不到就是找不到。团队成员卡退役后（ADR-093），
+  *  这条行只剩极限模式配置与两张设置卡（极限模式 / 环境笔记）。 */
  private agentTeamsRow(){
   const loader=this.lookup('loader') as {entries?:()=>Iterable<{options?:{id?:unknown;name?:unknown;config?:unknown}}>}|undefined;
   if(typeof loader?.entries!=='function')return null;
   const entries=[...loader.entries()].map(entry=>{const options=entry?.options??{};return {id:options.id,name:options.name,config:options.config};});
   return agentTeamsRowOf(entries as unknown as {id?:unknown;name?:unknown;config?:unknown}[]);
- }
- /** 官方 Agent Teams 行：按模块名发现，不猜 row id；条目只能来自 loader，不自己造表。 */
- private teamRows():TeamConfigRow[]{
-  const loader=this.lookup('loader') as {entries?:()=>Iterable<{options?:{id?:unknown;name?:unknown;config?:unknown}}>}|undefined;
-  if(typeof loader?.entries!=='function')return [];
-  const entries=[...loader.entries()].map(entry=>{const options=entry?.options??{};return {id:options.id,name:options.name,config:options.config};});
-  return teamRowsOf(entries as unknown as {id?:unknown;name?:unknown;config?:unknown}[]);
  }
  /** 运行进程的 profile 目录；没有就是没有，不猜固定路径。 */
  /** The one owner of the user switch. It is read on every operation, so flipping it needs no restart. */
@@ -697,7 +695,16 @@ export class SuiteDevelopment extends TypertRemoteService {
    // With no loopback origin there is nothing to ask, so the reader is absent: the page must not offer a probe
    // that can only come back empty (ADR-030 D3).
    runtime:loopbackOrigin(this.webServerOrigin())===null?undefined:(clientPackage:string,serverName:string,action:'status'|'probe')=>this.readMcpRuntime(clientPackage,serverName,action),
+   // ADR-094 D5：按服务存在性判定，同一运行时只允许一条写路径（有官方 manager 时旧 patch 路径不再接管通用服务器）。
+   managed:this.managedAuthority()??undefined,
   };
+ }
+ /** 官方 MCP manager 的权威句柄：行按模块名发现（entry id 由 profile 决定），服务缺一即视为不可用。 */
+ private managedAuthority(){
+  const loader=this.ctx.get('loader') as {entries?:()=>Iterable<{options?:{id?:unknown;name?:unknown}}>}|undefined;
+  if(typeof loader?.entries!=='function')return null;
+  const entries=[...loader.entries()].map(entry=>{const options=entry?.options??{};return {id:options.id,name:options.name};});
+  return discoverManagedAuthority(entries,name=>this.lookup(name));
  }
  /** The official web server's own origin (bound listener). Reading it keeps the loopback status query off any
   * guessed port: no web server, or one that has not bound yet, simply means "no status to read". */

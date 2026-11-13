@@ -1,6 +1,7 @@
 import type {Context} from '@deepseek-ai/cordis';
 import {defineTool} from '@deepseek-ai/dsh-tools';
 import {DocumentParseRefusal} from './document-parse-types.js';
+import {DOCUMENT_PARSE_TOOL_DESCRIPTION} from './document-parse-presence.js';
 import type {DocumentParseOptions,DocumentParseService} from './document-parse-types.js';
 
 export interface DocumentParseToolOwner {
@@ -13,7 +14,7 @@ export interface DocumentParseToolOwner {
 export function registerDocumentParseTool(ctx:Context,owner:DocumentParseToolOwner):void{
  ctx.tools.register(defineTool({
   name:'document_parse',
-  description:'Parse a PDF or image document into Markdown, JSON or artifacts (ADR-086). capabilities: list providers, modes, credential state and local usage. parse: choose provider and mode explicitly when more than one combination is available; the service auto-selects only a unique available combination and returns DOCUMENT_PARSE_SELECTION_REQUIRED otherwise. MinerU modes: mineru-agent (public token-free queue, may wait) and mineru-api (API key; prefer this when a key is configured). PaddleOCR modes: paddleocr-vl-1.6-async, paddleocr-pp-ocrv6-async and paddleocr-pp-structurev3-async (token). If a provider reports quota/rate exhaustion, use alternatives and retry explicitly; this tool never switches providers itself.',
+  description:DOCUMENT_PARSE_TOOL_DESCRIPTION,
   parameters:{
    action:{type:'string',enum:['capabilities','parse'],required:true,description:'capabilities is read-only; parse spends one provider task.'},
    path:{type:'string',description:'Absolute local PDF/image path for parse.'},

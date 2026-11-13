@@ -1,7 +1,8 @@
-/** MCP server management: read the live server rows, and write the profile patch that owns them.
+/** MCP server management: read the live server rows, and route writes to the owner of the runtime.
  *
- * Two facts decide the design. (1) The running app registers no `configEditor`, and that service has no
- * insert/remove API anyway, so add/edit/delete are ours: the profile patch file is the single write target.
+ * Two facts decide the design. (1) The write target depends on the runtime: rc.2+ delegates generic static
+ * servers to the official `mcp-manager` (`mcp-managed.ts`), while rc.1 and the Suite's own OAuth/dual clients
+ * still write the profile patch. The capability check picks exactly one owner; there is no second write path.
  * (2) The Loader and the tool table know `running`/`failed`/`disabled`/`pending` plus a tool count. Client
  * plugins that DO publish a loopback control plane (the dual v2 client and the OAuth client) add the kind and
  * the negotiated protocol era, read from their own `status`/`probe` endpoints (ADR-030).
@@ -13,6 +14,8 @@ import type {} from '@deepseek-ai/dsh-typert-protocol/types';
 import {copyFile,mkdir,open,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import {dirname,join} from 'node:path';
 import {isMap,isSeq,parseDocument} from 'yaml';
+import {MANAGED_ROW_PREFIX,managedCatalog,managedEntryFromDraft,managedProbe,managedStatusOf,managedWrite} from './mcp-managed.js';
+import type {ManagedAuthority} from './mcp-managed.js';
 import {failureOf,fileStateOf} from './mcp-purpose.js';
 import type {PurposeRemoval,PurposeStoreLike} from './mcp-purpose.js';
 import type {McpDraftInvalidDetail,McpMigrationResult,McpProbeResult,McpPurposePartialDetail,McpPurposeWriteFailureDetail,McpRuntimeState,McpRuntimeStatus,McpServerCatalog,McpServerDraft,McpServerEntry,McpServerKind,McpServerMutation,McpServerState,McpServerTransport,McpWriteFailureDetail} from './types.js';
@@ -28,6 +31,8 @@ declare module '@deepseek-ai/dsh-typert-protocol/types'{
   'mcp/server-not-editable':{};
   'mcp/client-package-unknown':{};
   'mcp/write-locked':{};
+  'mcp/managed-unavailable':{};
+  'mcp/managed-write-failed':{reason:'refused';detail?:string};
   'mcp/write-failed':McpWriteFailureDetail;
   'mcp/row-missing':{};
   'mcp/probe-unavailable':{};
@@ -157,6 +162,9 @@ export interface McpServerContext {
  /** ADR-032 D5: the purpose bypass file, so a row deletion cleans its key inside the same lock. Absent means
   * this caller owns no purposes (tests and older callers) and the deletion stays patch-only. */
  purposes?:PurposeStoreLike;
+ /** ADR-094: the official MCP manager is the authority when this runtime provides it. Absent means the
+  * runtime predates it and the profile-patch path below stays the only write target. */
+ managed?:ManagedAuthority;
 }
 
 const unreadable=()=>new RemoteError('mcp/profile-patch-unreadable','MCP_PROFILE_PATCH_UNREADABLE: the profile patch is not a YAML sequence this build can edit',{});
@@ -356,6 +364,7 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    toolCount:toolCountOf(toolNames,name),
    rowId:entry.options.id,
    origin:profileRowIds.has(entry.options.id)?'profile':'loaded',
+   managed:false,
    editable:profileRowIds.has(entry.options.id),
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
@@ -389,6 +398,7 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    toolCount:row.serverName===null?0:toolCountOf(toolNames,row.serverName),
    rowId:row.rowId,
    origin:'profile',
+   managed:false,
    editable:true,
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
@@ -403,14 +413,47 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    protocolSupport:protocolSupportOf(clientPackage,transportOf(row.config)??'streamable-http'),
   });
  }
+ // ADR-094：官方 manager 的条目与状态是权威；rowId 用 managed:<name> 与 profile 行区分，写操作据此路由。
+ if(ctx.managed){
+  for(const row of managedCatalog(ctx.managed)){
+   const transport=transportOf(row.entry)??'streamable-http';
+   const status=managedStatusOf(row.view);
+   const headers=row.entry.headers;
+   const env=row.entry.env;
+   servers.push({
+    name:row.name,
+    transport,
+    state:status.state,
+    toolCount:toolCountOf(toolNames,row.name),
+    rowId:MANAGED_ROW_PREFIX+row.name,
+    origin:'profile',
+    managed:true,
+    enabled:row.entry.enabled!==false,
+    editable:true,
+    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
+    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
+    ...stdioFactsOf(transport,row.entry),
+    clientPackage:OFFICIAL_CLIENT,
+    clientSource:'official',
+    kind:'static',
+    // The official manager's diagnostic is a client report like any other: mask endpoints and truncate it at
+    // the same boundary the legacy path uses (ADR-030 D2), instead of passing raw text through.
+    runtime:status.runtime===null?null:{...status.runtime,...(typeof status.runtime.error==='string'?{error:sanitizeDiagnostic(status.runtime.error)}:{})},
+    upgradable:false,
+    probeAvailable:true,
+    protocolSupport:protocolSupportOf(OFFICIAL_CLIENT,transport),
+   });
+  }
+ }
  servers.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);
  // The v2 migration is offered only where it can work: an official static-HTTP row in a profile that
  // already carries the v2-capable client package (ADR-030 D5).
  for(const server of servers){
-  server.upgradable=dualAvailable&&server.transport==='streamable-http'&&server.clientPackage===OFFICIAL_CLIENT;
+  // 官方 manager 托管的行不参与 v2 迁移：迁移动作只改 profile 行，托管行的权威是 config.servers（ADR-094）。
+  server.upgradable=dualAvailable&&server.transport==='streamable-http'&&server.clientPackage===OFFICIAL_CLIENT&&!server.rowId.startsWith(MANAGED_ROW_PREFIX);
  }
  await readRuntimes(ctx,servers);
- return {servers,reload};
+ return {servers,reload,authority:ctx.managed?'official':'rows'};
 }
 
 /** The one availability predicate for the v2 client: profile dependency/bundle, a stored row, or a loaded row.
@@ -497,6 +540,12 @@ export function normalizeRuntime(body:unknown):McpRuntimeStatus|null{
 /** User-triggered live probe of one row (ADR-030 D3): reads the client plugin's `probe` endpoint, which is a
  * real round trip; the page shows a busy state and a receipt, and never presents it as a background poll. */
 export async function probeMcpServer(ctx:McpServerContext,rowId:string):Promise<McpProbeResult>{
+ const managedName=managedNameOf(rowId);
+ if(managedName!==null){
+  if(!ctx.managed)throw managedMissing();
+  const runtime=await managedProbe(ctx.managed,managedName);
+  return {rowId,name:managedName,runtime:runtime===null?null:{...runtime,...(typeof runtime.error==='string'?{error:sanitizeDiagnostic(runtime.error)}:{})}};
+ }
  if(!ctx.patchPath)throw unavailable();
  const rows=insertRows(parsePatch(await readPatchText(ctx.patchPath)));
  const entry=loadedEntries(ctx.loader).find(item=>item.options.id===rowId);
@@ -860,10 +909,53 @@ async function waitFor(loader:LoaderLike|undefined,predicate:(entries:LoaderEntr
  }
 }
 
+const managedNameOf=(rowId:string):string|null=>rowId.startsWith(MANAGED_ROW_PREFIX)?rowId.slice(MANAGED_ROW_PREFIX.length):null;
+
+function managedMissing():RemoteError{
+ return new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this server is managed by the official MCP manager',{});
+}
+
+/** ADR-094: the official manager owns generic servers. The draft keeps its existing shape; only the storage
+ *  (config.servers via the Settings revision fence) differs from the legacy profile-patch path. */
+async function addManagedServer(ctx:McpServerContext,draft:McpServerDraft):Promise<McpServerMutation>{
+ const authority=ctx.managed;
+ if(!authority)throw unavailable();
+ const {name,transport}=createConfig(draft);
+ if(managedCatalog(authority).some(row=>row.name===name)||loadedEntries(ctx.loader).some(entry=>serverNameOf(entry)===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: a server with this name already exists',{});
+ await managedWrite(authority,name,managedEntryFromDraft(null,draft,transport));
+ return {mode:'added',rowId:MANAGED_ROW_PREFIX+name,name,applied:'live'};
+}
+
+async function updateManagedServer(ctx:McpServerContext,name:string,rowId:string,draft:McpServerDraft):Promise<McpServerMutation>{
+ const authority=ctx.managed;
+ if(!authority)throw managedMissing();
+ const row=managedCatalog(authority).find(item=>item.name===name);
+ if(!row)throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such managed server exists',{});
+ if(typeof draft?.name==='string'&&draft.name.trim().length>0&&draft.name.trim()!==name)throw invalid('renaming a managed server is not supported; delete it and add the new name',{field:'name',reason:'not-editable'});
+ // ADR-094: a managed row is a static server. An edit that names another kind is the same conflict the
+ // patch path refuses; it must not be silently accepted as a static update.
+ if(draftNames(draft.kind)&&draft.kind!=='static')throw invalid('kind is a new-row fact: a managed server is static',{field:'kind',reason:'kind-conflict'});
+ assertDraftShape(draft,'static');
+ if(draft.transport!==undefined&&draft.transport!==null&&draft.transport!=='stdio'&&draft.transport!=='streamable-http')throw invalid('transport must be stdio or streamable-http',{field:'transport',reason:'invalid-value'});
+ const transport=draft.transport==='stdio'||draft.transport==='streamable-http'?draft.transport:transportOf(row.entry)??'streamable-http';
+ const command=typeof draft.command==='string'&&draft.command.trim().length>0?draft.command:row.entry.command;
+ const url=typeof draft.url==='string'&&draft.url.trim().length>0?draft.url:row.entry.url;
+ // The official schema rejects an empty endpoint; name the missing field here instead of letting the write
+ // fail as a generic managed-write-failed (the patch path already reports draft-invalid for the same fact).
+ if(transport==='stdio'&&(typeof command!=='string'||command.trim().length===0))throw invalid('the stdio transport needs a command',{field:'command',reason:'required'});
+ if(transport==='streamable-http'&&(typeof url!=='string'||url.trim().length===0))throw invalid('the HTTP transport needs a URL',{field:'url',reason:'required'});
+ await managedWrite(authority,name,managedEntryFromDraft(row.entry,draft,transport));
+ return {mode:'updated',rowId,name,applied:'live'};
+}
+
 export async function addMcpServer(ctx:McpServerContext,draft:McpServerDraft):Promise<McpServerMutation> {
+ if(ctx.managed&&draft?.kind!=='oauth')return addManagedServer(ctx,draft);
  const path=ctx.patchPath;
  if(!path)throw unavailable();
  const {name,config}=createConfig(draft);
+ // ADR-094: an OAuth row still lives in the profile patch, but its name must not shadow an official
+ // managed entry — the two would register the same serverName and collide at the tool table.
+ if(ctx.managed&&managedCatalog(ctx.managed).some(row=>row.name===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: the official MCP manager already has this name',{});
  return withPatchLock(path,async()=>{
   const text=await readPatchText(path);
   const doc=parsePatch(text);
@@ -886,6 +978,8 @@ export async function addMcpServer(ctx:McpServerContext,draft:McpServerDraft):Pr
 }
 
 export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:McpServerDraft):Promise<McpServerMutation> {
+ const managedName=managedNameOf(rowId);
+ if(managedName!==null)return updateManagedServer(ctx,managedName,rowId,draft);
  const path=ctx.patchPath;
  if(!path)throw unavailable();
  return withPatchLock(path,async()=>{
@@ -924,6 +1018,25 @@ export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:Mc
 }
 
 export async function removeMcpServer(ctx:McpServerContext,rowId:string):Promise<McpServerMutation> {
+ const managedName=managedNameOf(rowId);
+ if(managedName!==null){
+  if(!ctx.managed)throw managedMissing();
+  // ADR-032 D5：旁路文件里的用途键随条目一起删。官方条目与旁路文件不是同一份存储，先提交旁路、
+  // 再删条目；条目删除失败就把旁路回滚（服务器仍在，用途也仍在），不留“服务器没了、用途还在”的半态。
+  const removal=ctx.purposes?await ctx.purposes.removal(rowId):null;
+  if(removal)await removal.commit();
+  try{
+   await managedWrite(ctx.managed,managedName,null);
+  }catch(error){
+   if(removal){
+    const rollback=await removal.rollback();
+    if(!rollback.ok)throw new RemoteError('mcp/managed-write-failed','MCP_MANAGED_WRITE_FAILED: the official MCP manager refused this change and the purpose file could not be restored',{reason:'refused',detail:'purpose rollback failed'});
+   }
+   throw error;
+  }
+  if(removal){removal.settle();await removal.cleanup();}
+  return {mode:'removed',rowId,name:managedName,applied:'live'};
+ }
  const path=ctx.patchPath;
  if(!path)throw unavailable();
  return withPatchLock(path,async()=>{

@@ -1,4 +1,4 @@
-/** In-section page tabs (Chat assistant 运行/角色, omnidsh 更新中心/关于). */
+/** In-section page tabs (Chat assistant 运行/角色, the existing update/about pages). */
 
 export interface SectionTabOption {
   readonly id: string;

@@ -184,6 +184,8 @@ async function apply(ctx: Context, config: Config): Promise<void> {
     credentialKey: (scope, id) => localCredentialKey(scope, id),
     scopeName: name,
     credentialId: credentialIdOf(config),
+    // Legacy OAuth client identity: kept so existing authorizations keep their client identity.
+    // Do not rename without a migration.
     clientName: `omnidsh:${config.serverName}`,
     authorizationTimeoutMs: config.authorizationTimeoutMs,
     gateway,

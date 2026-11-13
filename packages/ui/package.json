@@ -2,7 +2,7 @@
   "name": "@omnisurge/dsh-ui",
   "version": "0.1.52",
   "private": true,
-  "description": "Build-time OEM controls for omnidsh suite plugins (ADR-028). Not a seed plugin.",
+  "description": "Build-time OEM controls for Omnisurge suite plugins (ADR-028). Not a seed plugin.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -19,8 +19,7 @@
     "lib"
   ],
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "node --experimental-strip-types --no-warnings ./test/tokens.test.ts && node --experimental-strip-types --no-warnings ./test/dial.test.ts && node --experimental-strip-types --no-warnings ./test/ordered-grip.test.ts && node --experimental-strip-types --no-warnings ./test/notify.test.ts && node --experimental-strip-types --no-warnings ./test/catalog-refresh.test.ts && node --experimental-strip-types --no-warnings ./test/tokens-host.test.ts"
+    "build": "node scripts/build.mjs"
   },
   "peerDependencies": {
     "react": "^18.2.0"

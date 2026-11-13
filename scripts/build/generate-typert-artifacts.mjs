@@ -28,7 +28,7 @@ try{
   compatibilityRange,
   at:new Date().toISOString(),
   regenerate:'pnpm run generate:typert-artifacts (scripts/build/generate-typert-artifacts.mjs -> scripts/build/build-management-remote.mjs)',
-  note:'Generated, not hand-maintained. The analysis face copies the installed protocol declarations into a registered packages/protocol-types project, routes the root and ./types specifiers to that copy, and analyzes only @omnisurge/dsh-suite through WorkspaceAnalyzer; installed SDK packages keep their own protocol instance, so their augmentations stay out of the face. scripts/gates/verify-typert-artifacts.mjs compares the result with the declared @Remote surface. Determinism: the same sources and the same verified runtime produce identical bytes across two runs. Earlier hand extensions (listSkills, the MCP tool wall) are retired.',
+  note:'Generated, not hand-maintained. The analysis face copies the installed protocol declarations into a registered packages/protocol-types project, routes the root and ./types specifiers to that copy, and analyzes only @omnisurge/dsh-suite through WorkspaceAnalyzer; installed SDK packages keep their own protocol instance, so their augmentations stay out of the face. The artifact verifier compares the result with the declared @Remote surface. Determinism: the same sources and the same verified runtime produce identical bytes across two runs. Earlier hand extensions (listSkills, the MCP tool wall) are retired.',
  },null,2)+'\n');
  console.log('typert artifacts promoted for '+verifiedRuntime+': '+TYPERT_ARTIFACTS.join(', '));
 }catch(error){failure=error;throw error;}
