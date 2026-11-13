@@ -95,7 +95,7 @@ const en = {
   notesHint: "Applies from the next step without a restart; your text is added verbatim.",
   notesTooLarge: "Too large: use at most {max} UTF-8 bytes.",
   notesUnavailable: "Notes unreadable; reload to retry.",
-  saved: 'Saved.', loadFailed: "This section could not be read", reload: 'Retry', loading: 'Loading…',
+  saved: 'Saved.', loadFailed: "This section could not be read", loadFailedNamespace: "The page is not connected to the background service. Reopen the plugin settings and try again.", loadFailedCarrier: "The background service is unavailable; no settings were changed. Reopen the plugin settings and try again.", loadFailedRefused: "The background service refused this read; no settings were changed. Reload and try again.", reload: 'Retry', loading: 'Loading…',
 };
 
 const zh = {
@@ -128,7 +128,7 @@ const zh = {
   notesHint: "保存后从下一步生效，无需重启；你的原文会原样添加，不改写。",
   notesTooLarge: '太长了：请控制在 {max} 字节（UTF-8）以内。',
   notesUnavailable: "无法读取笔记，请重新载入。",
-  saved: '已保存。', loadFailed: "此分区无法读取", reload: '重试', loading: '加载中…',
+  saved: '已保存。', loadFailed: "此分区无法读取", loadFailedNamespace: "页面没有连接到后台，未读取任何设置；请重新打开插件设置后再试。", loadFailedCarrier: "后台暂时不可用，未修改任何设置；请重新打开插件设置后再试。", loadFailedRefused: "后台拒绝了这次读取，未修改任何设置；请重新载入后再试。", reload: '重试', loading: '加载中…',
 };
 
 function loadState(){
@@ -143,8 +143,9 @@ function Shell({t, view, summary, children}){
   return h('section', { className: ROOT, 'data-testid': 'teams-card' }, children);
 }
 function LoadFailed({t, label, issue, onRetry}){
+  const sentence=typeof issue==='string'&&issue.startsWith('SUITE_NAMESPACE_MISSING')?t('loadFailedNamespace'):typeof issue==='string'&&issue.startsWith('SUITE_CARRIER_FAILED')?t('loadFailedCarrier'):typeof issue==='string'&&issue.startsWith('SUITE_HOST_REFUSED')?t('loadFailedRefused'):t('loadFailed');
   return h(React.Fragment, null,
-    h(StatusLine, { tone: 'warn', role: 'alert', 'data-testid': 'teams-load-failed' }, t('loadFailed') + ': ' + issue),
+    h(StatusLine, { tone: 'warn', role: 'alert', 'data-testid': 'teams-load-failed' }, sentence),
     h(ActionGroup, null, h(Button, { variant: 'ghost', onClick: onRetry }, t('reload'))));
 }
 function Loading({t}){ return h('p', { className: 'omni-ui-hint', 'data-testid': 'teams-loading' }, t('loading')); }

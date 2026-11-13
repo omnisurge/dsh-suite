@@ -44,7 +44,7 @@ const en={
  statusTestFailed:'The status test did not complete: {code}. Check the credentials, then try again.',
  channelAccurate:'High precision',channelHandwriting:'Handwriting',
  switchLabel:'Turn this capability on',switchHint:'Off by default: recognition sends the page to the supplier and spends your quota. Turn it on only when you need it.',switchFailed:'Could not change the switch.',
- loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',
+ loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',loadFailedNamespace:'The page is not connected to the Host service ({code}). Reopen the settings panel and try again.',
  summaryReady:'Ready {ready} · Not configured {missing}',
  summaryOn:'On (ready {ready} · not configured {missing})',summaryOff:'Switched off',
  caveat:'Handwriting recognition is limited by loose or joined strokes and cannot reproduce the page exactly. The assistant in the conversation recovers most unclear passages from context, but for names, numbers and acceptance conclusions, check the page image yourself.',
@@ -79,7 +79,7 @@ const zh={
  statusTestFailed:'状态测试没有完成：{code}。请检查凭据后重试。',
  channelAccurate:'高精度',channelHandwriting:'手写体',
  switchLabel:'启用这项能力',switchHint:'默认关闭：识别会把页面发到供应商并消耗你的额度。需要时再打开。',switchFailed:'开关没有改成功。',
- loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',
+ loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',loadFailedNamespace:'页面没有连接到后台服务（{code}），请重新打开设置面板后再试。',
  summaryReady:'可用 {ready} · 未配置 {missing}',
  summaryOn:'已启用（可用 {ready} · 未配置 {missing}）',summaryOff:'开关已关闭',
  caveat:'手写识别受书写潦草与连笔限制，无法百分百还原原文。对话中的助手能凭上下文补回大部分读不通的地方，但人名、数字、验收结论这类关键内容，仍建议你对着原图确认。',
@@ -128,7 +128,8 @@ function OcrCard({t,wire,view}){
   const states=caps&&caps.providerStates?Object.values(caps.providerStates):[];
   const ready=states.length>0?states.filter(state=>state.configured===true).length:(caps?.configured===true?1:0);
   const missing=states.length>0?states.length-ready:(caps?.configured===true?0:1);
-  const line=caps===null?(loadCode===null?t('loadFailed'):fill(t('loadFailedCode'),{code:loadCode})):caps.enabled===true?fill(t('summaryOn'),{ready,missing}):t('summaryOff');
+  const loadText=()=>loadCode==='OCR_NAMESPACE_UNAVAILABLE'?fill(t('loadFailedNamespace'),{code:loadCode}):loadCode===null?t('loadFailed'):fill(t('loadFailedCode'),{code:loadCode});
+  const line=caps===null?loadText():caps.enabled===true?fill(t('summaryOn'),{ready,missing}):t('summaryOff');
   return React.createElement('p',{className:'omni-ui-hint','data-testid':'ocr-summary'},line);
  }
  const providers=caps&&Array.isArray(caps.providers)&&caps.providers.length>0?caps.providers:[{id:caps?.provider??'tencent',displayKey:'providerTencent',channels:['accurate','handwriting']}];
@@ -211,7 +212,8 @@ function OcrCard({t,wire,view}){
     open&&state!==null?credentialForm(option,state):null));
  });
  const setEnabled=async next=>{setToggling(true);try{const nextCaps=await wire.setEnabled(next);setCaps(nextCaps);setIssue(null);}catch{setIssue('switchFailed');}finally{setToggling(false);}};
- const issueLine=issue===null?null:React.createElement(StatusLine,{tone:'warn',role:'alert','data-testid':'ocr-issue'},issue==='loadFailed'&&loadCode!==null?fill(t('loadFailedCode'),{code:loadCode}):t(issue));
+ const loadText=()=>loadCode==='OCR_NAMESPACE_UNAVAILABLE'?fill(t('loadFailedNamespace'),{code:loadCode}):loadCode===null?t('loadFailed'):fill(t('loadFailedCode'),{code:loadCode});
+ const issueLine=issue===null?null:React.createElement(StatusLine,{tone:'warn',role:'alert','data-testid':'ocr-issue'},issue==='loadFailed'?loadText():t(issue));
  const configuredStates=caps?.providerStates?Object.values(caps.providerStates):[];
  const ready=caps?.enabled===true&&(configuredStates.length>0?configuredStates.some(state=>state.configured===true):caps?.configured===true);
  const card=React.createElement(SettingsCard,{collapsible:true,defaultOpen:true,'data-testid':'ocr-capability-card',title:t('handwritingTitle'),description:t('handwritingSubtitle'),badge:React.createElement(Badge,{tone:ready?'ok':'warn','data-testid':'ocr-status'},ready?t('capabilityAvailable'):t('providerNotConfigured'))},

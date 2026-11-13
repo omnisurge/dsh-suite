@@ -144,18 +144,33 @@ export class SuiteUpgrade {
  private async statusCore(fetchRefusal:UpgradeStatus['refusals'][number]|null):Promise<UpgradeStatus>{
   // The mode is derived from a filesystem fact, so it can only be answered asynchronously; reading it
   // without awaiting a promise is how a release install was misreported as a source checkout.
-  const mode=await this.mode(),directory=this.deps.releaseDirectory(),currentVersion=(await this.deps.currentManifest()).version;
+  let mode:'release'|'source'='release';
+  try{mode=await this.mode();}catch{}
+  const directory=this.deps.releaseDirectory();
+  // The loaded package may have been replaced on disk while this Host is still the old generation. Its
+  // packageRoot can briefly point at bytes the installer has already moved; that must not hide the durable
+  // install record. Fall back to the profile's installed version, which is exactly the fact the record
+  // reconciles against.
+  let currentVersion:string|null=null;
+  try{currentVersion=(await this.deps.currentManifest()).version;}catch{}
+  const onDisk=await this.readOnDisk();
   // ADR-079: reading status is also the reconciliation point. An `installing` record left behind by a
   // process that died mid-transaction is settled against the disk here, so no reader ever sees a forever-
   // pending attempt. The write only happens on a phase transition, so polling status is not a write path.
-  const lastInstall=await this.reconcileRecord(await this.readOnDisk());
-  const base={mode,currentVersion,releaseDirectory:directory,lastInstall};
+  const lastInstall=await this.reconcileRecord(onDisk);
+  // currentVersion stays the *running* version. An unreadable old package means "running version unknown",
+  // not "runs the bytes now on disk": the Client decides "installed, restart required" from lastInstall,
+  // and conflating the two would make the restart banner disappear before the app actually restarts.
+  const base={mode,currentVersion:currentVersion??'',releaseDirectory:directory,lastInstall};
+  if(currentVersion===null&&onDisk===null)return {...base,latest:null,refusals:[{directory,code:'UPGRADE_CURRENT_UNREADABLE',diagnostic:'the current Suite manifest and the profile-installed version are both unreadable'}],canUpgrade:false};
+  // Candidate discovery compares against what the profile will load, so the disk is the right proxy here.
+  const effectiveVersion=currentVersion??onDisk!;
   // A source-linked Host installs nothing from the release directory, but an empty answer hides the reason:
   // the page must be able to say why no candidate is in play, including when the Host and the page disagree
   // about whether a source is linked at all.
   if(mode!=='release')return {...base,latest:null,refusals:[{directory,code:'UPGRADE_SOURCE_MODE',diagnostic:'this Host reports a linked source tree, so release candidates are not installable from here'}],canUpgrade:false};
   if(!directory||!isAbsolute(directory))return {...base,latest:null,refusals:[{directory,code:'UPGRADE_DIRECTORY_INVALID',diagnostic:'the release directory must be an absolute path'}],canUpgrade:false};
-  const {candidates,refusals,unreadable}=await this.discover(directory,currentVersion,this.deps.sourceKind?.()??'local');
+  const {candidates,refusals,unreadable}=await this.discover(directory,effectiveVersion,this.deps.sourceKind?.()??'local');
   const listed=fetchRefusal===null?refusals:[...refusals,fetchRefusal];
   if(unreadable!==null)return {...base,latest:null,refusals:fetchRefusal===null?[unreadable]:[unreadable,fetchRefusal],canUpgrade:false};
   const latest=candidates[0]??null;

@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",

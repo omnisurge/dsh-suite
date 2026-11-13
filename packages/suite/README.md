@@ -1,6 +1,6 @@
 # 万物生腾套件组（Omnisurge Suite）
 
-面向官方 the agent harness 的扩展套件。当前版本：**0.2.3**；已验证运行时：**the agent harness 0.2.2-rc.1**。
+面向官方 the agent harness 的扩展套件。当前版本：**0.2.4**；已验证运行时：**the agent harness 0.2.2-rc.1**。
 
 平台验证：macOS 通过本仓 G1–G5；Windows/Linux 通过官方 CLI web 宿主 G6（不是 Electron 桌面验收）。
 

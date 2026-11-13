@@ -54,15 +54,15 @@ const isFetchCode=code=>typeof code==='string'&&Object.prototype.hasOwnProperty.
   noticeHostProtocolOld:'当前 Host 由旧构建协议产物启动（SETUP_BUILD_UNSUPPORTED）：请从源码完整构建套件并重载一次，本按钮无法升级正在运行的 manager 自身。',
   retryNote:'本页每 0.75 秒自动重试；读取失败无需重新提交。',modeReleaseHint:'由发行目录安装：在本页升级，不在本页构建源码。',modeSourceHint:'由本仓源码链接：构建与热更新按 Host 的 HMR 覆盖范围生效。',noHmr:'当前profile未启用Host源码HMR，本页不会重启应用。',retry:'修复源码后刷新状态再重试。',technicalDetails:'原始技术诊断',operationError:'操作未完成，请展开下方原始诊断。若提示需要恢复（PARTIAL/RECOVERY_REQUIRED），请勿重试，应先恢复本轮生成目录。'};
   Object.assign(en,{
-   upgradeAmbient:'A newer Suite version is available: {version} (running {current}).',upgradeAmbientAction:'Update',upgradeConfirmTitle:'Install Suite {version}?',upgradeConfirmBody:'It is installed now and takes effect the next time the application starts. Your settings and configuration are not touched.',upgradeConfirmRun:'Install now',upgradeCancel:'Not now',upgradeInstalling:'Installing Suite {version}\u2026',upgradeInstalled:'Suite {version} is installed and already active (source hot reload).',upgradeInstalledRestart:'Suite {version} is installed. Quit the app (⌘Q) and open it again to load it.',upgradeInstallFailed:'The update did not finish ({code}).',upgradeInstallUnconfirmed:'The update result is unconfirmed ({code}). Restart the app, then check again to confirm what is installed.',upgradeRowUnconfirmed:'Install unconfirmed',upgradeDetailUnconfirmed:'The reply was lost while the plugin tree reloaded. Restart the app, then check again: the installed version is what the check reads, not what the reply said.',
+   upgradeAmbient:'A newer Suite version is available: {version} (running {current}).',upgradeAmbientAction:'Update',upgradeConfirmTitle:'Install Suite {version}?',upgradeConfirmBody:'It is installed now and takes effect the next time the application starts. Your settings and configuration are not touched.',upgradeConfirmRun:'Install now',upgradeCancel:'Not now',upgradeInstalling:'Installing Suite {version}\u2026',upgradeInstalled:'Suite {version} is installed and already active (source hot reload).',upgradeInstalledRestart:'Suite {version} is installed. Quit the app (⌘Q) and open it again to load it.',upgradeInstallFailed:'The update did not finish ({code}).',upgradeInstallUnconfirmed:'The update result is unconfirmed ({code}). Restart the app, then check again to confirm what is installed.',upgradeInstallSubmitted:'The update was submitted ({code}). Restart the app to finish installing it, then check again to confirm the installed version.',upgradeRowSubmitted:'Update submitted',upgradeDetailSubmitted:'The install was handed to the app before the page reloaded. Restart the app, then check again: the installed version is what the check reads.',upgradeRowUnconfirmed:'Install unconfirmed',upgradeDetailUnconfirmed:'The reply was lost while the plugin tree reloaded. Restart the app, then check again: the installed version is what the check reads, not what the reply said.',
    runtimeUnverified:'This page stays open, but the running DSH {version} is not one this Suite was verified on. Check for updates below and install a verified version if one is available.',
    healTitle:'Start-up containment',needsRestartAfterUpdate:'The plugin was updated. Restart the app to use the new version, then check for updates again.',healDisabled:'{module} failed to load and was switched off for now; everything else keeps working.',healProtected:'{module} is an official package and was left as it is; the failure is reported, not hidden.',healRefused:'{module} failed to load and cannot be switched off automatically.',healPending:'{module} failed to load; the attempt to switch it off has not taken effect yet.',healDismiss:'Got it',closeLabel:'Close',healRescan:'Check again',healToast:'Start-up containment: {module} was switched off so the rest keeps working.',healScanFailed:'The check could not run: {code}',componentsSummary:'Suite carries {total} component(s)',componentsRunning:'All running',componentsAttention:'{count} need attention',componentsWhere:'Switch and status live on the official plugin page; each plugin configures itself in its own settings card.',componentLoaded:'Running',loadedUnknown:'not advertised',componentCarried:'Delivered',stateReady:'Ready',stateRestart:'Restart needed',stateUnconfirmed:'Unproven',refresh:'Refresh status',recoveryTitle:'Automatic boot recovery happened',recoveryBody:'The previous process never reached readiness, so the declared component rows it had enabled were disabled once. The receipt below is durable; re-enable a row from official plugin management when you have fixed the cause.',recoveryNone:'no rows disabled',recoveryAt:'at',recoveryPreviousPid:'previous process',upgradeTitle:'Suite self-upgrade',upgradeDirectory:'Release directory',upgradeInstalledLabel:'Installed',upgradeRunning:'Running',upgradeRunningHint:'takes effect after you quit and reopen the app',upgradeLatest:'Installable candidate','upgradeComponents':'Modules it carries',upgradeUpToDate:'Up to date',upgradeNoInstallable:'No update for this DSH release',copyValue:'Copy',copiedValue:'Copied',upgradeRefusals:'Refused candidate directories',upgradeRun:'Install / upgrade Suite',upgradeWorking:'Upgrading…','upgradeDone':'Installed. Quit the app (\u2318Q) and open it again to load the new Suite and its components; this page never restarts the app.',
-   upgradeDisabled:'No absolute release directory is configured, so self-upgrade is disabled for this profile.',upgradeSourceMode:'Self-upgrade is unavailable while the Suite runs from linked source; this page only reads a release directory.',upgradeCheck:'Check for updates',upgradeRowTitle:'Suite updates',developerHint:'Run mode, revisions, upgrade candidates and raw state. Nothing here is needed for normal use.',developerOptions:'Developer options',devActions:'Maintenance',upgradeRowCandidate:'Newer Suite available',upgradeAvailable:'Suite {version} is available (running {current}).',devIdentity:'Run information',devRaw:'Raw state',rowEnabled:'enabled',rowDisabledLabel:'disabled',attentionNextStep:'{count} item(s) need action: {steps}',next_none:'Ready: the running Suite already provides this module.',next_restart:'restart the application to finish','next_enable-row':'Turn the row on in the official plugin page; it is not enabled automatically here.','next_check-runtime':'The row is enabled, but the running Host has not proven its protocol yet; read that row log.','next_check-owner':'The Suite-owned row could not be located in the official list; the developer view carries the diagnostic code.',channelUnavailable:'Update channel unavailable',channelUnreadable:'the configured release directory cannot be read',refusalNotNewer:'not a newer version',refusalNotCandidate:'not a Suite candidate directory',refusalSumsMissing:'missing its SHA256SUMS record',refusalInvalid:'directory contents are not a valid candidate',refusalRuntimeUnverified:'verified only on another DSH release, so it is not installable here; update DSH first, or wait for a Suite built for your release',refusalRuntimeUndeclared:'does not state which DSH releases it was verified on, so it is not installed',refusalRuntimeUnknown:'this page could not report the running DSH release, so compatibility could not be confirmed and it is not installed',refusalOther:'refused \u00b7 code {code}'});
+   upgradeDisabled:'No absolute release directory is configured, so self-upgrade is disabled for this profile.',upgradeSourceMode:'Self-upgrade is unavailable while the Suite runs from linked source; this page only reads a release directory.',upgradeCheck:'Check for updates',upgradeRowTitle:'Suite updates',developerHint:'Run mode, revisions, upgrade candidates and raw state. Nothing here is needed for normal use.',developerOptions:'Developer options',devActions:'Maintenance',upgradeRowCandidate:'Newer Suite available',upgradeAvailable:'Suite {version} is available (running {current}).',devIdentity:'Run information',devRaw:'Raw state',rowEnabled:'enabled',rowDisabledLabel:'disabled',attentionNextStep:'{count} item(s) need action: {steps}',next_none:'Ready: the running Suite already provides this module.',next_restart:'restart the application to finish','next_enable-row':'Turn the row on in the official plugin page; it is not enabled automatically here.','next_check-runtime':'The row is enabled, but the running Host has not proven its protocol yet; read that row log.','next_check-owner':'The Suite-owned row could not be located in the official list; the developer view carries the diagnostic code.',channelUnavailable:'Update channel unavailable',channelUnreadable:'the configured release directory cannot be read',refusalNotNewer:'not a newer version',refusalNotCandidate:'not a Suite candidate directory',refusalSumsMissing:'missing its SHA256SUMS record',refusalInvalid:'directory contents are not a valid candidate',refusalRuntimeUnverified:'verified only on another DSH release, so it is not installable here; update DSH first, or wait for a Suite built for your release',refusalRuntimeUndeclared:'does not state which DSH releases it was verified on, so it is not installed',refusalRuntimeUnknown:'this page could not report the running DSH release, so compatibility could not be confirmed and it is not installed',refusalCurrentUnreadable:'the running Suite version and the profile-installed version are both unreadable',refusalOther:'refused \u00b7 code {code}'});
   Object.assign(zh,{
-   upgradeAmbient:'套件有新版本 {version}（当前运行 {current}）。',upgradeAmbientAction:'升级',upgradeConfirmTitle:'安装套件 {version}？',upgradeConfirmBody:'现在安装，下次启动应用时生效。你的设置与配置不会被改动。',upgradeConfirmRun:'现在安装',upgradeCancel:'稍后',upgradeInstalling:'正在安装套件 {version}\u2026',upgradeInstalled:'套件 {version} 已安装并已生效（源码热加载）。',upgradeInstalledRestart:'套件 {version} 已安装。退出应用（⌘Q 或菜单「退出」）后重新打开，新版本才会生效。',upgradeInstallFailed:'安装没有完成（{code}）。',upgradeInstallUnconfirmed:'安装结果未确认（{code}）。重启应用后再点「检查」，以盘上实际安装的版本为准。',upgradeRowUnconfirmed:'安装结果未确认',upgradeDetailUnconfirmed:'应答在插件重载中丢失。重启应用后再点「检查」：以盘上实际安装的版本为准，不以这次应答为准。',
+   upgradeAmbient:'套件有新版本 {version}（当前运行 {current}）。',upgradeAmbientAction:'升级',upgradeConfirmTitle:'安装套件 {version}？',upgradeConfirmBody:'现在安装，下次启动应用时生效。你的设置与配置不会被改动。',upgradeConfirmRun:'现在安装',upgradeCancel:'稍后',upgradeInstalling:'正在安装套件 {version}\u2026',upgradeInstalled:'套件 {version} 已安装并已生效（源码热加载）。',upgradeInstalledRestart:'套件 {version} 已安装。退出应用（⌘Q 或菜单「退出」）后重新打开，新版本才会生效。',upgradeInstallFailed:'安装没有完成（{code}）。',upgradeInstallUnconfirmed:'安装结果未确认（{code}）。重启应用后再点「检查」，以盘上实际安装的版本为准。',upgradeInstallSubmitted:'更新已提交（{code}）。重启应用后完成安装，再点「检查」确认实际安装的版本。',upgradeRowSubmitted:'更新已提交',upgradeDetailSubmitted:'页面重载前已把安装交给应用。重启应用后再点「检查」：以盘上实际安装的版本为准。',upgradeRowUnconfirmed:'安装结果未确认',upgradeDetailUnconfirmed:'应答在插件重载中丢失。重启应用后再点「检查」：以盘上实际安装的版本为准，不以这次应答为准。',
    runtimeUnverified:'本页仍可打开，但当前运行的 DSH {version} 不是本套件验证过的版本。请在下方检查更新，有已验证版本时装上。',
    healTitle:'启动自愈',needsRestartAfterUpdate:'插件已更新，需要重启应用后才会生效。重启后请再点一次「检查」。',healDisabled:'{module} 加载失败，已暂时关掉，其它功能还可以继续用。',healProtected:'{module} 是官方组件，没有动它；失败已如实报告，不隐藏。',healRefused:'{module} 加载失败，但无法自动关掉。',healPending:'{module} 加载失败；自动关掉还没有生效。',healDismiss:'知道了',closeLabel:'关闭',healRescan:'重新检查',healToast:'启动自愈：已暂时关掉 {module}，其它功能可继续用。',healScanFailed:'检查没能进行：{code}',componentsSummary:'随套件交付 {total} 个组件',componentsRunning:'全部运行中',componentsAttention:'{count} 个需要处理',componentsWhere:'开关与状态在官方插件页；配置在各插件自己的设置卡里。',next_none:'就绪：该模块由正在运行的套件提供。',next_restart:'重启应用完成更新','next_enable-row':'请到官方插件页手动启用对应开关。','next_check-runtime':'该行已启用，但正在运行的 Host 尚未确认协议；请查看该行日志。','next_check-owner':'未在官方插件列表中找到套件所属行；请查看开发者视图中的诊断码。',componentCarried:'随套件交付',stateReady:'就绪',stateRestart:'需重启',stateUnconfirmed:'未证实',componentLoaded:'运行中',loadedUnknown:'未自报',refresh:'刷新状态',recoveryTitle:'已发生自动启动自愈',recoveryBody:'上一个进程未达到就绪状态，因此它曾启用的已声明组件行已被停用一次。下方回执持久保留；修复原因后可在官方插件管理里重新启用。',recoveryNone:'没有停用任何行',recoveryAt:'时间',recoveryPreviousPid:'上一进程',upgradeTitle:'套件自升级',upgradeDirectory:'发行目录',upgradeInstalledLabel:'已安装版本',upgradeRunning:'运行中版本',upgradeRunningHint:'退出并重新打开后生效',upgradeLatest:'可安装候选',upgradeComponents:'携带组件',upgradeUpToDate:'已是最新',upgradeNoInstallable:'没有适用于当前 DSH 版本的更新',copyValue:'复制',copiedValue:'已复制',upgradeRefusals:'被拒绝的候选目录',upgradeRun:'安装／升级套件',upgradeWorking:'升级中…',upgradeDone:'已安装。退出应用（⌘Q 或菜单「退出」）后重新打开，才会加载新套件与组件；本页不会自动重启应用。',
-   upgradeDisabled:'未配置绝对发行目录：本 profile 的自升级已停用。',upgradeSourceMode:'源码模式下不提供自升级；本页只读发行目录。',upgradeCheck:'检查更新',upgradeRowTitle:'套件更新',developerHint:'这里显示运行方式、版本修订、更新候选与原始状态；日常使用不需要查看。',developerOptions:'开发者选项',devActions:'维护与构建',upgradeRowCandidate:'可安装新版本',upgradeAvailable:'套件可升级到 {version}（当前 {current}）。',devIdentity:'运行信息',devRaw:'原始状态',rowEnabled:'已启用',rowDisabledLabel:'已停用',attentionNextStep:'有 {count} 项需要处理：{steps}',channelUnavailable:'更新通道不可用',channelUnreadable:'配置的发行目录无法读取',refusalNotNewer:'不是更新版本',refusalNotCandidate:'不是套件候选目录',refusalSumsMissing:'缺少 SHA256SUMS 校验记录',refusalInvalid:'目录内容不是有效候选',refusalRuntimeUnverified:'只在别的 DSH 版本上验证过，当前运行时暂不安装；请先升级 DSH，或等我们为你的版本发布套件',refusalRuntimeUndeclared:'没有声明验证过哪些 DSH 版本，因此不安装',refusalRuntimeUnknown:'本页读不到当前 DSH 版本，无法确认兼容性，因此不安装',refusalOther:'以诊断码 {code} 被拒绝'});
+   upgradeDisabled:'未配置绝对发行目录：本 profile 的自升级已停用。',upgradeSourceMode:'源码模式下不提供自升级；本页只读发行目录。',upgradeCheck:'检查更新',upgradeRowTitle:'套件更新',developerHint:'这里显示运行方式、版本修订、更新候选与原始状态；日常使用不需要查看。',developerOptions:'开发者选项',devActions:'维护与构建',upgradeRowCandidate:'可安装新版本',upgradeAvailable:'套件可升级到 {version}（当前 {current}）。',devIdentity:'运行信息',devRaw:'原始状态',rowEnabled:'已启用',rowDisabledLabel:'已停用',attentionNextStep:'有 {count} 项需要处理：{steps}',channelUnavailable:'更新通道不可用',channelUnreadable:'配置的发行目录无法读取',refusalNotNewer:'不是更新版本',refusalNotCandidate:'不是套件候选目录',refusalSumsMissing:'缺少 SHA256SUMS 校验记录',refusalInvalid:'目录内容不是有效候选',refusalRuntimeUnverified:'只在别的 DSH 版本上验证过，当前运行时暂不安装；请先升级 DSH，或等我们为你的版本发布套件',refusalRuntimeUndeclared:'没有声明验证过哪些 DSH 版本，因此不安装',refusalRuntimeUnknown:'本页读不到当前 DSH 版本，无法确认兼容性，因此不安装',refusalCurrentUnreadable:'读不到当前套件版本，也无法确认 profile 里已安装的版本',refusalOther:'以诊断码 {code} 被拒绝'});
   // ADR-068 (2026-10-29): the update source is one row of the update card; choosing GitHub Release reveals
   // the three fields the fetcher reads. Nothing here is a second configuration store: every write goes
   // through the official settings form for this row (configForms -> remote.settings.mutate).
@@ -204,6 +204,9 @@ export default {
       // 不能把"没听到回答"当成"没装上"。
       const upgradeOutcome=async version=>{
        let receipt=null,failure=null;
+       // Whether the install was actually handed to the Host. When the namespace is already gone, the call
+       // never left the page: that is a real "Host unavailable" failure, never "submitted".
+       const couldDispatch=Boolean(wire.namespace&&typeof wire.namespace.upgradeSuite==='function');
        await callWithRuntime('upgradeSuite',version).then(value=>{receipt=value;},issue=>{failure=issue;});
        const transport=failure===null?null:String((failure&&failure.message)||failure);
        const refusalCode=failure&&typeof failure.code==='string'&&failure.code.length>0?failure.code:null;
@@ -213,20 +216,38 @@ export default {
        const onDisk=receipt&&typeof receipt.onDisk==='string'?receipt.onDisk:null;
        const unconfirmed=Boolean(receipt&&receipt.activationUnconfirmed);
        const receiptRecord=receipt&&receipt.lastInstall&&typeof receipt.lastInstall==='object'?receipt.lastInstall:null;
-       if(code==='SUITE_UPGRADE_RESTART_REQUIRED')return {state:'restart',code,operations,diagnostic,target:version,onDisk,activationUnconfirmed:unconfirmed,readback:false};
-       if(receiptRecord!==null&&receiptRecord.target===version&&receiptRecord.phase==='written')
-        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk:receiptRecord.onDisk??onDisk??version,activationUnconfirmed:true,readback:false,record:true};
        // ADR-079: 有些码不是对安装的判决，而是"这条通道没了"——安装套件正好替换承载这次调用的插件，
-       // 回执会随插件树重载一起消失（实测 gateway/cancelled）。这种码不能当失败：给它完整读回预算，
-       // 把两项独立事实读回来：盘上已装版本，以及宿主在 profile 里留下的持久安装记录（upgrade.json）。
+       // 回执会随插件树重载一起消失（实测 gateway/cancelled）。这种码不能当失败；显式宿主判决码仍是失败。
        const TRANSPORT_LOSS=new Set(['gateway/cancelled','SUITE_HOST_REFUSED']);
        const heardVerdict=(code!==null&&!TRANSPORT_LOSS.has(code))||(refusalCode!==null&&!TRANSPORT_LOSS.has(refusalCode));
+       if(code==='SUITE_UPGRADE_RESTART_REQUIRED')return {state:'restart',code,operations,diagnostic,target:version,onDisk,activationUnconfirmed:unconfirmed,readback:false};
+       // An explicit Host verdict is a failure no matter what the disk or a stale record says. Check it
+       // before any readback/restart convergence; otherwise a failed attempt can be relabelled as success.
+       if(heardVerdict&&code!==null)return {state:'failed',code,operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
+       if(heardVerdict&&refusalCode!==null)return {state:'failed',code:refusalCode,operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
+       if(receiptRecord!==null&&receiptRecord.target===version&&receiptRecord.phase==='written')
+        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk:receiptRecord.onDisk??onDisk??version,activationUnconfirmed:true,readback:false,record:true};
+       // A receipt can carry the on-disk fact even when its status read or result code was lost in the
+       // plugin-tree reload. Only a transport loss (no explicit Host verdict) may use it: a real refusal
+       // code (runtime gate, incomplete install, ...) must stay a failure even if the same version happens
+       // to exist on disk from an earlier attempt.
+       if(!heardVerdict&&onDisk!==null&&onDisk===version)
+        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk,activationUnconfirmed:true,readback:false};
+       if(!couldDispatch)return {state:'failed',code:'SUITE_NAMESPACE_MISSING',operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
+       // The Client plugin that hosts this function is replaced by the upgrade; the official client HMR tears
+       // its fiber down while the install reply is in flight. Its injected namespace handle is nulled on
+       // dispose, so no readback through it can ever succeed. Saying SUITE_UPGRADE_UNCONFIRMED here would
+       // blame the disk for a channel that is gone; the durable record is read by the new Client generation.
+       if(wire.namespace===null&&!heardVerdict)return {state:'submitted',code:'SUITE_UPGRADE_SUBMITTED',operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:true,readback:false};
        const readbackBudget=heardVerdict?1:UPGRADE_READBACK.attempts;
        const recordWrittenStatus=status=>status!==null&&typeof status==='object'&&status.lastInstall!==null&&typeof status.lastInstall==='object'?status.lastInstall:null;
-       let installed=null,record=null;
+       let installed=null,record=null,namespaceLost=false;
        for(let attempt=0;attempt<readbackBudget;attempt+=1){
         try{const status=await callWithRuntime('upgradeStatus');installed=status&&typeof status.currentVersion==='string'?status.currentVersion:null;record=recordWrittenStatus(status);}
-        catch{installed=null;record=null;}
+        catch(issue){
+         installed=null;record=null;
+         if(/^SUITE_NAMESPACE_MISSING/.test(String((issue&&issue.message)||issue))){namespaceLost=true;break;}
+        }
         if(installed!==null&&installed===version)break;
         if(record!==null&&record.target===version&&record.phase==='written')break;
         if(attempt<readbackBudget-1)await new Promise(resolve=>setTimeout(resolve,UPGRADE_READBACK.delayMs));
@@ -237,10 +258,9 @@ export default {
        // 记录说"已写入并需要重启"——那是宿主自己在官方交易之后、按盘上字节下的判决（ADR-047 D3）。
        // 即使回复丢了，这条事实还在 profile 里，所以它和盘上版本一样有资格判"已安装"。
        if(recordSaysWritten)return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic:settled,target:version,onDisk:record.onDisk??version,activationUnconfirmed:true,readback:true,record:true};
-       // 宿主给出了结构化的结果码 → 那是失败，如实报那个码。
-       if(heardVerdict&&code!==null)return {state:'failed',code,operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:false,readback:true};
-       // ok:false 信封里的宿主码同理——它才是"为什么没成"的唯一事实。
-       if(heardVerdict&&refusalCode!==null)return {state:'failed',code:refusalCode,operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:false,readback:true};
+       // The readback channel itself disappeared after the call was dispatched. This is neither a failed
+       // install nor a disk verdict: the result is pending until the app restarts.
+       if(namespaceLost&&!heardVerdict)return {state:'submitted',code:'SUITE_UPGRADE_SUBMITTED',operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:true,readback:true};
        // 既没有判决、也读不到盘上版本/记录 → 这是"未确认"，不是"没装上"：回执丢了不等于没装。
        return {state:'unknown',code:'SUITE_UPGRADE_UNCONFIRMED',operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:true,readback:true};
       };
@@ -268,6 +288,7 @@ export default {
           // leave the card saying "no action needed" and a failure cannot vanish with its toast.
           if(outcomeSink.current)outcomeSink.current(outcome,version);
          if(outcome.state==='restart')showToast({text:say('upgradeInstalledRestart',{version:outcome.target}),kind:'suite-upgrade-progress',tone:'ok',durationMs:20000,closeLabel:say('closeLabel')});
+         else if(outcome.state==='submitted')showToast({text:say('upgradeInstallSubmitted').replace('{code}',String(outcome.code??'SUITE_UPGRADE_SUBMITTED')),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
          else if(outcome.state==='unknown')showToast({text:say('upgradeInstallUnconfirmed').replace('{code}',String(outcome.code??'SUITE_UPGRADE_UNCONFIRMED')),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
          // 失败提示不再常驻：以前是 durationMs:null，一次早期失败会一直挂着，看起来像“这次也没装上”。
          else showToast({text:say('upgradeInstallFailed').replace('{code}',String(outcome.code??'UPGRADE_UNCONFIRMED')),kind:'suite-upgrade-progress',tone:'error',durationMs:30000,closeLabel:say('closeLabel')});
@@ -336,17 +357,29 @@ export default {
         // while it still describes the current attempt: bytes at the target turn it into "installed, restart
         // required"; a candidate no longer offered (or a profile that never reached the target) drops it. This
         // runs on every read -- including the silent poll -- so a stale failure can never outlive the fact.
+        // A written durable record is its own verdict even when the current Client generation has no receipt
+        // (the upgrade reloaded the Client before its old instance could receive the reply). Adopt it once per
+        // generation: after the app restarts, running===target and the record stops producing a banner.
         const convergeReceipt=(receipt,candidates)=>{
-         if(!receipt)return null;
-         const target=receipt.target??null;
-         const offered=candidates&&candidates.latest?String(candidates.latest.version):null;
-         if(offered===null)return null;
          const running=candidates&&typeof candidates.currentVersion==='string'?candidates.currentVersion:null;
          const record=candidates&&candidates.lastInstall&&typeof candidates.lastInstall==='object'?candidates.lastInstall:null;
-         const recordWritten=record!==null&&record.target===target&&record.phase==='written';
-         if(target!==null&&(receipt.onDisk===target||running===target||recordWritten))
-          return {...receipt,code:'SUITE_UPGRADE_RESTART_REQUIRED',target,onDisk:recordWritten?(record.onDisk??target):target,activationUnconfirmed:true};
-         return offered===target?receipt:null;
+         const recordWritten=record!==null&&record.phase==='written'&&typeof record.target==='string'&&record.onDisk===record.target;
+         if(receipt){
+          // A real failure receipt is terminal; disk presence from an older attempt must never turn it into
+          // installed/restart. Only restart/submitted/unconfirmed receipts may converge.
+          const terminalFailure=typeof receipt.code==='string'&&!['SUITE_UPGRADE_RESTART_REQUIRED','SUITE_UPGRADE_SUBMITTED','SUITE_UPGRADE_UNCONFIRMED'].includes(receipt.code);
+          if(terminalFailure)return receipt;
+          const target=receipt.target??null;
+          if(target!==null&&(receipt.onDisk===target||running===target||(recordWritten&&record.target===target))){
+           if(receipt.code==='SUITE_UPGRADE_RESTART_REQUIRED'&&receipt.target===target)return receipt;
+           return {...receipt,code:'SUITE_UPGRADE_RESTART_REQUIRED',target,onDisk:recordWritten&&record.target===target?record.onDisk:target,activationUnconfirmed:true};
+          }
+          const offered=candidates&&candidates.latest?String(candidates.latest.version):null;
+          return offered===target?receipt:null;
+         }
+         if(recordWritten&&running!==record.target)
+          return {code:'SUITE_UPGRADE_RESTART_REQUIRED',target:record.target,operations:[],diagnostic:null,onDisk:record.onDisk,activationUnconfirmed:true};
+         return null;
         };
         const receiptRef=React.useRef(null);
         React.useEffect(()=>{receiptRef.current=upgradeReceipt;});
@@ -432,7 +465,7 @@ export default {
          // ADR-047 D3/D4: the receipt is the record for every outcome -- the row reads 'installed, restart pending'
          // from it, and a failure keeps its machine reason in the one technical area.
          setUpgradeReceipt({code:outcome.code,target:outcome.target,operations:outcome.operations,diagnostic:outcome.diagnostic,readback:outcome.readback,onDisk:outcome.onDisk,activationUnconfirmed:outcome.activationUnconfirmed});
-         if(outcome.state!=='restart')setUpgradeError(outcome.code+(outcome.diagnostic?' · '+outcome.diagnostic:''));
+         if(outcome.state!=='restart'&&outcome.state!=='submitted')setUpgradeError(outcome.code+(outcome.diagnostic?' · '+outcome.diagnostic:''));
          await read();
          setUpgradeBusy(false);
         };
@@ -559,7 +592,7 @@ export default {
         // tells a user nothing. One line per reason instead: the collapsed title carries the categories, the
         // body carries one human sentence per reason with the directories behind it. An unmapped code is
         // still named rather than hidden.
-        const refusalWords=code=>isFetchCode(code)?translate(FETCH_KEYS[code]):code==='UPGRADE_NOT_NEWER'?translate('refusalNotNewer'):code==='UPGRADE_NOT_A_CANDIDATE'?translate('refusalNotCandidate'):code==='UPGRADE_SUMS_MISSING'?translate('refusalSumsMissing'):code==='UPGRADE_CANDIDATE_INVALID'?translate('refusalInvalid'):code==='UPGRADE_RUNTIME_UNVERIFIED'?translate('refusalRuntimeUnverified'):code==='UPGRADE_RUNTIME_UNDECLARED'?translate('refusalRuntimeUndeclared'):code==='UPGRADE_RUNTIME_UNKNOWN'?translate('refusalRuntimeUnknown'):translate('refusalOther').replace('{code}',String(code));
+        const refusalWords=code=>isFetchCode(code)?translate(FETCH_KEYS[code]):code==='UPGRADE_NOT_NEWER'?translate('refusalNotNewer'):code==='UPGRADE_NOT_A_CANDIDATE'?translate('refusalNotCandidate'):code==='UPGRADE_SUMS_MISSING'?translate('refusalSumsMissing'):code==='UPGRADE_CANDIDATE_INVALID'?translate('refusalInvalid'):code==='UPGRADE_RUNTIME_UNVERIFIED'?translate('refusalRuntimeUnverified'):code==='UPGRADE_RUNTIME_UNDECLARED'?translate('refusalRuntimeUndeclared'):code==='UPGRADE_RUNTIME_UNKNOWN'?translate('refusalRuntimeUnknown'):code==='UPGRADE_CURRENT_UNREADABLE'?translate('refusalCurrentUnreadable'):translate('refusalOther').replace('{code}',String(code));
         const refusalGroups=(()=>{const groups=new Map();for(const item of upgrade?.refusals??[]){const code=String(item.code??'UPGRADE_CANDIDATE_INVALID');const group=groups.get(code)??{code,items:[]};group.items.push(item);groups.set(code,group);}return [...groups.values()];})();
         // An expected skip is not news: an older candidate and an unrelated directory are refused by design
         // on every read. What a user needs is the *actionable* refusal -- the directory that looks like a
@@ -617,6 +650,9 @@ export default {
            const receiptCode=String(upgradeReceipt.code??'');
            if(receiptCode==='SUITE_UPGRADE_RESTART_REQUIRED')return {tone:'warn',title:translate('upgradeRowInstalled').replace('{version}',String(upgradeReceipt.target??installed??'')),version:null,detail:translate('upgradeDetailInstalled')};
           // 未确认不是失败：既没有宿主的码、也读不到盘上版本时，页面只能说“重启后确认”，不许断言没装上（ADR-059）。
+          // The old Client generation handed the install to the Host but was reloaded before it could read a
+          // verdict. This is not "unconfirmed by the disk": it is "submitted, confirm after restart".
+          if(receiptCode==='SUITE_UPGRADE_SUBMITTED')return {tone:'warn',title:translate('upgradeRowSubmitted'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:false,detail:translate('upgradeDetailSubmitted')};
           if(receiptCode==='SUITE_UPGRADE_UNCONFIRMED')return {tone:'warn',title:translate('upgradeRowUnconfirmed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,detail:translate('upgradeDetailUnconfirmed')};
            const written=(upgradeReceipt.operations??[]).some(step=>step.changed===true);
            return {tone:'error',title:translate('upgradeRowFailed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,
