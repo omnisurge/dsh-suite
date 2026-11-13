@@ -163,8 +163,9 @@ export default {
       // 安装后的读回是有界重试：官方安装器会重载插件树，读回自己也可能落在重载窗口里（0.2.0 稳定版升级实证：
       // 字节已落盘、页面却弹“安装没有完成（SUITE_HOST_REFUSED）”）。次数与间隔只影响“确认得有多快”，
       // 不影响任何写操作——读回永远是只读。
-      // 用对象而不是两个裸常量：Bundle 里 `attempts:6` 是可命中的变异锚点，撤回重试时门禁必红。
-      const UPGRADE_READBACK={attempts:6,delayMs:500};
+      // 用对象而不是两个裸常量：Bundle 里 `attempts` 是可命中的变异锚点，撤回重试时门禁必红。
+      // 12 秒上限覆盖插件树重载与旧 Host 退出窗口；显式宿主码仍只读回一次，不拖慢失败判定。
+      const UPGRADE_READBACK={attempts:12,delayMs:1000};
       const call=async(method,...args)=>{
        const namespace=wire.namespace;
        if(!namespace||typeof namespace[method]!=='function')throw Error('SUITE_NAMESPACE_MISSING '+method+(remoteState.mountError?' (owned Remote mount failed: '+remoteState.mountError+')':' (the Host namespace is not mounted in this window)'));
@@ -211,7 +212,10 @@ export default {
        const diagnostic=(receipt&&typeof receipt.diagnostic==='string'?receipt.diagnostic:null)??transport;
        const onDisk=receipt&&typeof receipt.onDisk==='string'?receipt.onDisk:null;
        const unconfirmed=Boolean(receipt&&receipt.activationUnconfirmed);
+       const receiptRecord=receipt&&receipt.lastInstall&&typeof receipt.lastInstall==='object'?receipt.lastInstall:null;
        if(code==='SUITE_UPGRADE_RESTART_REQUIRED')return {state:'restart',code,operations,diagnostic,target:version,onDisk,activationUnconfirmed:unconfirmed,readback:false};
+       if(receiptRecord!==null&&receiptRecord.target===version&&receiptRecord.phase==='written')
+        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk:receiptRecord.onDisk??onDisk??version,activationUnconfirmed:true,readback:false,record:true};
        // ADR-079: 有些码不是对安装的判决，而是"这条通道没了"——安装套件正好替换承载这次调用的插件，
        // 回执会随插件树重载一起消失（实测 gateway/cancelled）。这种码不能当失败：给它完整读回预算，
        // 把两项独立事实读回来：盘上已装版本，以及宿主在 profile 里留下的持久安装记录（upgrade.json）。
@@ -335,10 +339,13 @@ export default {
         const convergeReceipt=(receipt,candidates)=>{
          if(!receipt)return null;
          const target=receipt.target??null;
-         const running=candidates&&typeof candidates.currentVersion==='string'?candidates.currentVersion:null;
-         if(target!==null&&(receipt.onDisk===target||running===target))
-          return {...receipt,code:'SUITE_UPGRADE_RESTART_REQUIRED',target,onDisk:target,activationUnconfirmed:true};
          const offered=candidates&&candidates.latest?String(candidates.latest.version):null;
+         if(offered===null)return null;
+         const running=candidates&&typeof candidates.currentVersion==='string'?candidates.currentVersion:null;
+         const record=candidates&&candidates.lastInstall&&typeof candidates.lastInstall==='object'?candidates.lastInstall:null;
+         const recordWritten=record!==null&&record.target===target&&record.phase==='written';
+         if(target!==null&&(receipt.onDisk===target||running===target||recordWritten))
+          return {...receipt,code:'SUITE_UPGRADE_RESTART_REQUIRED',target,onDisk:recordWritten?(record.onDisk??target):target,activationUnconfirmed:true};
          return offered===target?receipt:null;
         };
         const receiptRef=React.useRef(null);

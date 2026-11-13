@@ -47,6 +47,9 @@ export interface OcrConfig{
  /** Baidu Intelligent Cloud pair. */
  baiduApiKeyRef:string;
  baiduSecretKeyRef:string;
+ /** ADR-086 document parsing credentials; never values. */
+ mineruApiKeyRef:string;
+ paddleOcrTokenRef:string;
  maxPages:number;
 }
 /** The reference names are product-defined, exactly as the confirmed design shows them: the user pastes
@@ -56,13 +59,17 @@ export const OCR_SECRET_ID_REF='OMNISURGE_OCR_SECRET_ID';
 export const OCR_SECRET_KEY_REF='OMNISURGE_OCR_SECRET_KEY';
 export const BAIDU_OCR_API_KEY_REF='OMNISURGE_BAIDU_OCR_API_KEY';
 export const BAIDU_OCR_SECRET_KEY_REF='OMNISURGE_BAIDU_OCR_SECRET_KEY';
-export const DEFAULT_OCR_CONFIG:OcrConfig={provider:'tencent',secretIdRef:OCR_SECRET_ID_REF,secretKeyRef:OCR_SECRET_KEY_REF,baiduApiKeyRef:BAIDU_OCR_API_KEY_REF,baiduSecretKeyRef:BAIDU_OCR_SECRET_KEY_REF,maxPages:40};
+export const MINERU_API_KEY_REF='OMNISURGE_MINERU_API_KEY';
+export const PADDLEOCR_TOKEN_REF='OMNISURGE_PADDLEOCR_TOKEN';
+export const DEFAULT_OCR_CONFIG:OcrConfig={provider:'tencent',secretIdRef:OCR_SECRET_ID_REF,secretKeyRef:OCR_SECRET_KEY_REF,baiduApiKeyRef:BAIDU_OCR_API_KEY_REF,baiduSecretKeyRef:BAIDU_OCR_SECRET_KEY_REF,mineruApiKeyRef:MINERU_API_KEY_REF,paddleOcrTokenRef:PADDLEOCR_TOKEN_REF,maxPages:40};
 export const OcrConfigSchema=z.object({
  provider:z.union(['tencent','baidu'] as const).default('tencent').description('Which OCR supplier the capability uses by default. The card can switch it; switching affects this card only.'),
  secretIdRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(OCR_SECRET_ID_REF).description('Credential reference holding the Tencent SecretId. The value itself never enters this file; the card writes it through the official credential service.'),
  secretKeyRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(OCR_SECRET_KEY_REF).description('Credential reference holding the Tencent SecretKey. The value itself never enters this file; the card writes it through the official credential service.'),
  baiduApiKeyRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(BAIDU_OCR_API_KEY_REF).description('Credential reference holding the Baidu API Key. The value itself never enters this file; the card writes it through the official credential service.'),
  baiduSecretKeyRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(BAIDU_OCR_SECRET_KEY_REF).description('Credential reference holding the Baidu Secret Key. The value itself never enters this file; the card writes it through the official credential service.'),
+ mineruApiKeyRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(MINERU_API_KEY_REF).description('Credential reference holding the optional MinerU API token used by the precise document parsing mode.'),
+ paddleOcrTokenRef:z.string().pattern(CREDENTIAL_REF_NAME).role('credential-ref').default(PADDLEOCR_TOKEN_REF).description('Credential reference holding the PaddleOCR API token used by all PaddleOCR document parsing modes.'),
  maxPages:z.number().min(1).max(200).default(40).description('How many pages one recognition call may render. A longer document is refused with the page count, so the caller can pass a range.'),
 });
 export function normalizeOcrConfig(value:unknown):OcrConfig{
@@ -79,6 +86,8 @@ export function normalizeOcrConfig(value:unknown):OcrConfig{
   secretKeyRef:text('secretKeyRef',OCR_SECRET_KEY_REF),
   baiduApiKeyRef:text('baiduApiKeyRef',BAIDU_OCR_API_KEY_REF),
   baiduSecretKeyRef:text('baiduSecretKeyRef',BAIDU_OCR_SECRET_KEY_REF),
+  mineruApiKeyRef:text('mineruApiKeyRef',MINERU_API_KEY_REF),
+  paddleOcrTokenRef:text('paddleOcrTokenRef',PADDLEOCR_TOKEN_REF),
   maxPages:Number.isInteger(pages)&&pages>=1&&pages<=200?pages:DEFAULT_OCR_CONFIG.maxPages,
  };
 }

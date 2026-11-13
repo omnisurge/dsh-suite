@@ -27,7 +27,10 @@ import {ComponentInventory,readReleaseComponents,SUITE_PACKAGE} from './componen
 import type {ComponentRuntimeProbe} from './components.js';
 import {createOcrService,type OcrService} from './ocr-service.js';
 import {OcrRefusal} from './ocr-contract.js';
+import {createDocumentParseService} from './document-parse-service.js';
+import type {DocumentParseCapabilities,DocumentParseRequest,DocumentParseResult,DocumentParseService,DocumentParseState} from './document-parse-types.js';
 import {registerComponentTool,registerEnvironmentTool,registerOcrTool,registerUpgradeTool} from './tool.js';
+import {registerDocumentParseTool} from './document-parse-tool.js';
 import {BootGuard} from './recovery.js';
 import {StartupHealer} from './heal.js';
 import {SuiteUpgrade} from './upgrade.js';
@@ -100,6 +103,8 @@ export class SuiteDevelopment extends TypertRemoteService {
  private readonly ocrConfig:()=>ReturnType<typeof normalizeOcrConfig>;
  /** One service feeds both the tool and the card, so they read the same ledger and budget. */
  private readonly ocr:OcrService;
+ /** ADR-086: document parsing is a separate service and tool; it only shares the Host credential store. */
+ private readonly documentParseService:DocumentParseService;
  constructor(ctx:Context,config?:SuiteConfig,releaseFetcher?:ReleaseFetcherFactory){
   super(ctx,'omnisurgeSuiteDev');
   this.releaseDirectory=()=>readConfigured(config?.releaseDirectory);
@@ -119,6 +124,14 @@ export class SuiteDevelopment extends TypertRemoteService {
      if(stored.ref.mediaType!=='image/png'&&stored.ref.mediaType!=='image/jpeg')throw new OcrRefusal('OCR_IMAGE_UNSUPPORTED','conversation attachment media type '+stored.ref.mediaType+' is not PNG/JPEG');
      return {bytes:stored.data,mediaType,page:1,width:stored.ref.width,height:stored.ref.height};
     },
+   });
+   this.documentParseService=createDocumentParseService({
+    config:()=>{const current=this.ocrConfig();return {mineruApiKeyRef:current.mineruApiKeyRef,paddleOcrTokenRef:current.paddleOcrTokenRef};},
+    profileDirectory:async()=>{const profile=this.ctx.get('profileContext') as {dir?:string}|undefined;return typeof profile?.dir==='string'?profile.dir:null;},
+    resolveCredential:ref=>this.resolveOcrCredential(ref),
+    describeCredential:ref=>this.describeOcrCredential(ref),
+    readState:()=>this.readDocumentParseState(),
+    writeState:next=>this.writeDocumentParseState(next),
    });
    this.ocrConfig=()=>normalizeOcrConfig(config?.multimodal);
   // ADR-062：极限模式的权威事实搬到 agent-teams 行（卡片自己拥有它编辑的配置），套件行不再持有它。
@@ -279,6 +292,10 @@ export class SuiteDevelopment extends TypertRemoteService {
     recognize:input=>this.ocr.recognize(input),
     render:input=>this.ocr.render(input),
    });
+   registerDocumentParseTool(ctx,{
+    capabilities:()=>this.documentParseService.capabilities(),
+    parse:input=>this.documentParseService.parse(input),
+   });
  }
  private async beginBootGuard():Promise<void>{
   const definitions=await this.definitions(),outcome=await this.guard.begin(definitions.map(definition=>({id:definition.id,rowId:definition.rowId,module:definition.module})));
@@ -343,6 +360,12 @@ export class SuiteDevelopment extends TypertRemoteService {
  async ocrRecognize(input:{path?:string;attachment?:OcrImageAttachment;mode:'accurate'|'handwriting'|'both';provider?:string;page?:number;pages?:string;reconcile?:boolean}):Promise<OcrRecognizeResult>{return this.ocr.recognize(input);}
  @Remote
  async ocrRender(input:{path:string;page:number;box?:{x0:number;y0:number;x1:number;y1:number};dpi?:number;polygon?:{x:number;y:number}[];sourceDpi?:number;outputDirectory?:string}):Promise<OcrRenderResult>{return this.ocr.render(input);}
+ @Remote
+ async documentParseCapabilities():Promise<DocumentParseCapabilities>{return this.documentParseService.capabilities();}
+ @Remote
+ async documentParse(input:DocumentParseRequest):Promise<DocumentParseResult>{return this.documentParseService.parse(input);}
+ @Remote
+ async documentParseSetEnabled(enabled:boolean):Promise<DocumentParseCapabilities>{const current=await this.readDocumentParseState();await this.writeDocumentParseState({...current,enabled:enabled===true});return this.documentParseService.capabilities();}
  @Remote
  async healAcknowledge(entryId:string):Promise<{acknowledged:boolean}>{return {acknowledged:await this.healer.acknowledge(entryId)};}
  @Remote
@@ -603,6 +626,22 @@ export class SuiteDevelopment extends TypertRemoteService {
   const current=await this.readOcrState();
   const provider=next.provider==='tencent'||next.provider==='baidu'?next.provider:current.provider;
   await writeProfileState(await profileStateDirectory(directory),'ocr.json',{enabled:next.enabled??current.enabled,...(provider===undefined?{}:{provider})});
+ }
+ /** ADR-086: document parsing has its own switch and last-error witness; never shares OCR state. */
+ private async readDocumentParseState():Promise<DocumentParseState>{
+  const directory=this.profileDir();
+  if(directory===null)return {enabled:false};
+  try{
+   const parsed=JSON.parse(await readFile(join(await profileStateDirectory(directory),'document-parse.json'),'utf8')) as {enabled?:unknown;lastErrors?:unknown};
+   const lastErrors=parsed!==null&&typeof parsed==='object'&&parsed.lastErrors!==null&&typeof parsed.lastErrors==='object'?parsed.lastErrors as Record<string,{code:string;at:string;retryAfter:number|null;mode?:string|null}>:undefined;
+   return {enabled:parsed!==null&&typeof parsed==='object'&&parsed.enabled===true,...(lastErrors===undefined?{}:{lastErrors})};
+  }catch{return {enabled:false};}
+ }
+ private async writeDocumentParseState(next:DocumentParseState):Promise<void>{
+  const directory=this.profileDir();
+  if(directory===null)throw new Error('DOCUMENT_PARSE_STATE_UNWRITABLE: this Host has no profile directory to store the switch in');
+  const current=await this.readDocumentParseState();
+  await writeProfileState(await profileStateDirectory(directory),'document-parse.json',{...current,...next});
  }
  /** Latest durable conversation images, newest first. The card uses these as the sample for its one "try it";
   * no image bytes are copied or uploaded. Missing session service is a readable empty list, not an error. */

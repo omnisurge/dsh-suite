@@ -15,6 +15,8 @@ export const GROUP={
   'teams/client.js':'client',
   // ADR-036：OCR 设置卡（配置面）。Client 侧只用官方 remote 与库组件，不碰 node:*。
   'ocr/client.js':'client',
+  // ADR-086：文档解析设置卡。Client 只走官方 remote 与库组件，不碰 node:*。
+  'document-parse/client.js':'client',
   // ADR-064：字段→补丁的纯函数（无 node:*、无副作用），Client 与单测共用。
   'teams/team-config-patch.js':'client',
 
@@ -48,7 +50,13 @@ export const GROUP={
   'ocr-service.ts':'host',
   'ocr-tencent.ts':'host',
   'ocr-usage.ts':'host',
+  // ADR-086：文档解析的 Host 适配器/service/tool；不进入 Client 运行时。
+  'document-parse-mineru.ts':'host',
+  'document-parse-paddle.ts':'host',
+  'document-parse-service.ts':'host',
+  'document-parse-tool.ts':'host',
   // 只有类型与联合，无副作用、无 node:*：Client 与 Host 共用。
+  'document-parse-types.ts':'shared',
   'ocr-types.ts':'shared',
   'types.ts':'shared',
 

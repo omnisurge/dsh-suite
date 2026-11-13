@@ -1,8 +1,8 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
-  "description": "Independent extensions for DeepSeek Harness. Includes web search.",
+  "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
   "exports": {
     "./cordis.patch.yml": "./cordis.patch.yml",
@@ -48,6 +48,10 @@
     "./ocr-types": {
       "types": "./lib/ocr-types.d.ts",
       "default": "./lib/ocr-types.js"
+    },
+    "./document-parse-types": {
+      "types": "./lib/document-parse-types.d.ts",
+      "default": "./lib/document-parse-types.js"
     }
   },
   "files": [
@@ -62,6 +66,16 @@
     "lib/client.js",
     "lib/components.d.ts",
     "lib/components.js",
+    "lib/document-parse-types.d.ts",
+    "lib/document-parse-types.js",
+    "lib/document-parse-mineru.d.ts",
+    "lib/document-parse-mineru.js",
+    "lib/document-parse-paddle.d.ts",
+    "lib/document-parse-paddle.js",
+    "lib/document-parse-service.d.ts",
+    "lib/document-parse-service.js",
+    "lib/document-parse-tool.d.ts",
+    "lib/document-parse-tool.js",
     "lib/config.d.ts",
     "lib/config.js",
     "lib/development.d.ts",
@@ -178,18 +192,31 @@
       {
         "version": "0.2.1-rc.5",
         "gateScope": "G1-G5"
+      },
+      {
+        "version": "0.2.2-rc.1",
+        "gateScope": "G1-G5"
+      },
+      {
+        "version": "0.2.2-rc.1",
+        "platform": "win32",
+        "gateScope": "G6"
+      },
+      {
+        "version": "0.2.2-rc.1",
+        "platform": "linux",
+        "gateScope": "G6"
       }
     ],
     "note": "Runtimes this generation was actually exercised on. The Client compares the official boot manifest's release version against this list and reports anything else as unverified. Admission to load is a separate decision owned by engines.dsh (ADR-015, this repository's own decision log).",
     "platforms": {
       "verified": [
         "darwin",
-        "win32"
-      ],
-      "unverified": [
+        "win32",
         "linux"
       ],
-      "note": "macOS verified by this repository gates (G1-G5). Windows verified by G6 on an installed desktop runtime (install+load+three cards+save); it is not a full in-repo G1-G5 gate run. Linux never run."
+      "unverified": [],
+      "note": "macOS verified by this repository gates (G1-G5). Windows and Linux verified by G6 on the official CLI web host (install+load+settings cards); the Windows/Linux Electron desktop windows themselves were not exercised, so this is platform-deployment evidence, not full desktop acceptance."
     }
   },
   "dependencies": {

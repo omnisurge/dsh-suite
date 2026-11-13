@@ -4,6 +4,7 @@ import type {
   TypertRemoteInfo,
   TypertRemoteMethod,
 } from '@deepseek-ai/dsh-typert-protocol'
+import type { DocumentParseCapabilities, DocumentParseRequest, DocumentParseResult } from '@omnisurge/dsh-suite/document-parse-types'
 import type { OcrCapabilities, OcrImageAttachment, OcrRecognizeResult, OcrRenderResult } from '@omnisurge/dsh-suite/ocr-types'
 import type { SetupCheck, SetupInspection } from '@omnisurge/dsh-suite/searxng'
 import type { ComponentSetStatus, DevelopmentStatus, EnvironmentNotesState, HealRecord, LimitModeStatus, McpMigrationResult, McpProbeResult, McpPurposeSnapshot, McpPurposeWriteResult, McpServerCatalog, McpServerDraft, McpServerMutation, SetupExpectedConfiguration, SetupSettingsOwner, SkillDocument, SkillDraft, SkillMutation, SkillsCatalog, SkillScope, TeamConfigPatch, TeamConfigState, TeamConfigWrite, TeamStatus, UpgradeResult, UpgradeStatus } from '@omnisurge/dsh-suite/types'
@@ -21,6 +22,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     checkRelease: (runtimeVersion?: string) => Promise<RemoteResult<UpgradeStatus>>
     componentsStatus: () => Promise<RemoteResult<ComponentSetStatus>>
     createSkill: (draft: SkillDraft) => Promise<RemoteResult<SkillMutation>>
+    documentParse: (input: DocumentParseRequest) => Promise<RemoteResult<DocumentParseResult>>
+    documentParseCapabilities: () => Promise<RemoteResult<DocumentParseCapabilities>>
+    documentParseSetEnabled: (enabled: boolean) => Promise<RemoteResult<DocumentParseCapabilities>>
     environmentNotes: () => Promise<RemoteResult<EnvironmentNotesState>>
     healAcknowledge: (entryId: string) => Promise<RemoteResult<{ acknowledged: boolean; }>>
     healScan: () => Promise<RemoteResult<HealRecord[]>>
@@ -62,6 +66,9 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'omnisurgeSuiteDev/checkRelease': (runtimeVersion?: string) => Promise<RemoteResult<UpgradeStatus>>
     'omnisurgeSuiteDev/componentsStatus': () => Promise<RemoteResult<ComponentSetStatus>>
     'omnisurgeSuiteDev/createSkill': (draft: SkillDraft) => Promise<RemoteResult<SkillMutation>>
+    'omnisurgeSuiteDev/documentParse': (input: DocumentParseRequest) => Promise<RemoteResult<DocumentParseResult>>
+    'omnisurgeSuiteDev/documentParseCapabilities': () => Promise<RemoteResult<DocumentParseCapabilities>>
+    'omnisurgeSuiteDev/documentParseSetEnabled': (enabled: boolean) => Promise<RemoteResult<DocumentParseCapabilities>>
     'omnisurgeSuiteDev/environmentNotes': () => Promise<RemoteResult<EnvironmentNotesState>>
     'omnisurgeSuiteDev/healAcknowledge': (entryId: string) => Promise<RemoteResult<{ acknowledged: boolean; }>>
     'omnisurgeSuiteDev/healScan': () => Promise<RemoteResult<HealRecord[]>>
@@ -109,6 +116,9 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'omnisurgeSuiteDev/checkRelease': TypertRemoteMethod<{ readonly 'runtimeVersion'?: string }, UpgradeStatus>
   readonly 'omnisurgeSuiteDev/componentsStatus': TypertRemoteMethod<{  }, ComponentSetStatus>
   readonly 'omnisurgeSuiteDev/createSkill': TypertRemoteMethod<{ readonly 'draft': SkillDraft }, SkillMutation>
+  readonly 'omnisurgeSuiteDev/documentParse': TypertRemoteMethod<{ readonly 'input': DocumentParseRequest }, DocumentParseResult>
+  readonly 'omnisurgeSuiteDev/documentParseCapabilities': TypertRemoteMethod<{  }, DocumentParseCapabilities>
+  readonly 'omnisurgeSuiteDev/documentParseSetEnabled': TypertRemoteMethod<{ readonly 'enabled': boolean }, DocumentParseCapabilities>
   readonly 'omnisurgeSuiteDev/environmentNotes': TypertRemoteMethod<{  }, EnvironmentNotesState>
   readonly 'omnisurgeSuiteDev/healAcknowledge': TypertRemoteMethod<{ readonly 'entryId': string }, { acknowledged: boolean; }>
   readonly 'omnisurgeSuiteDev/healScan': TypertRemoteMethod<{  }, HealRecord[]>

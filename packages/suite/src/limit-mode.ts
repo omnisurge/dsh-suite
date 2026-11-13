@@ -4,7 +4,7 @@
  * - 判定按 agent：同一进程里不同会话可以有不同模型，所以段文本每次组装时按 `context.agent` 重新判定，
  *   而不是注册时判定（注册时判定等于 profile 级，ADR-058 D2 已否掉）。
  * - 失败即不注入：读不到模型选择、配置非法、文本为空，一律返回空文本，绝不猜一个"可能命中"。
- * - 只读字段：只读 `modelSelection.next.{provider,model}`；不读消息正文、prompt、工具参数、凭据。
+ * - 只读字段：优先读官方 `agent.model`（rc.2.2 指定入口），退化读 `modelSelection.pending ?? lastUsed`；不读消息正文、prompt、工具参数、凭据。
  */
 import type {LimitModeSelection,LimitModeStatus} from './types.js';
 // 唯一声明处（limits.json）：Host、行 schema、Client 三方读同一份数据（tsc 会把它带进 lib/，esbuild 内联进两个 bundle）。
@@ -70,8 +70,30 @@ export function matchesLimitModels(models:readonly string[],selection:ModelSelec
  return patterns.every(pattern=>model.includes(pattern));
 }
 
-/** 从官方投影读当前 agent 的下一跳选择；读不到就是读不到，不拿 provider 空串冒充。 */
+const selectionFrom=(value:unknown):ModelSelection|null=>{
+ const record=asRecord(value);
+ const provider=asString(record?.provider),model=asString(record?.model);
+ return provider!==null&&model!==null?{provider,model}:null;
+};
+/** rc.2.2 的 AgentModel.current() / 直接 selection 形状；当前 rc.5 没有它时返回 null。 */
+const selectionFromAgentModel=(agent:unknown):ModelSelection|null=>{
+ const model=asRecord(agent)?.model;
+ if(model===undefined||model===null)return null;
+ try{
+  if(typeof model==='function')return selectionFrom((model as()=>unknown)());
+  const record=asRecord(model);
+  if(record===null)return selectionFrom(model);
+  if(typeof record.current==='function')return selectionFrom((record.current as()=>unknown).call(record));
+  return selectionFrom(record.current??record);
+ }catch{return null;}
+};
+/** 从官方读面读当前 agent 的下一跳选择；读不到就是读不到，不拿 provider 空串冒充。
+ *  rc.2.2 优先 agent.model；当前 rc.5 的 AgentModel 不可用则读 raw state 的 pending ?? lastUsed
+ *  （state 的 `next` 只存在于 wire view，stateOf 永远没有 next）。 */
 export function selectionOf(ctx:CtxLike,agent:unknown):ModelSelection|null{
+ let fromAgent:ModelSelection|null=null;
+ try{fromAgent=selectionFromAgentModel(agent);}catch{fromAgent=null;}
+ if(fromAgent!==null)return fromAgent;
  const session=asRecord(agent)?.session;
  if(session===undefined||session===null)return null;
  const projections=ctx.get('sessionProjections') as {stateOf?:(session:unknown,key:string)=>unknown}|undefined;
@@ -79,9 +101,8 @@ export function selectionOf(ctx:CtxLike,agent:unknown):ModelSelection|null{
  let state:unknown;
  try{state=projections.stateOf(session,'modelSelection');}
  catch{return null;}
- const next=asRecord(asRecord(state)?.next);
- const provider=asString(next?.provider),model=asString(next?.model);
- return provider!==null&&model!==null?{provider,model}:null;
+ const record=asRecord(state);
+ return selectionFrom(record?.pending) ?? selectionFrom(record?.lastUsed);
 }
 
 /** 从 agents 列表里取第一个能读出的选择（ADR-069 D2，0.2.2-3）。
