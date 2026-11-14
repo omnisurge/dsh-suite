@@ -36,7 +36,7 @@ import {BootGuard} from './recovery.js';
 import {StartupHealer} from './heal.js';
 import {SuiteUpgrade} from './upgrade.js';
 import {readSkillsCatalog} from './skills-catalog.js';
-import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,migrateLegacyClientRows,migrateStaticHttpRows,probeMcpServer,readMcpServers,removeMcpServer,updateMcpServer,withProfileLock} from './mcp-servers.js';
+import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,probeMcpServer,readMcpServers,removeMcpServer,updateMcpServer,withProfileLock} from './mcp-servers.js';
 import {PURPOSE_SECTION_NAME,PURPOSE_SECTION_ORDER,createPurposeStore,purposeUnavailable} from './mcp-purpose.js';
 import {LIMIT_MODE_ORDER,LIMIT_MODE_SECTION,firstReadableSelection,limitModeSectionText,matchesLimitModels,normalizeLimitMode,selectionOf} from './limit-mode.js';
 import type {LimitModeConfig} from './limit-mode.js';
@@ -47,7 +47,7 @@ import type {PurposeStore} from './mcp-purpose.js';
 import type {LoaderLike,ToolsLike} from './mcp-servers.js';
 import {createSkill,readSkill,removeSkill,updateSkill} from './skills-manage.js';
 import type {SkillContext,SkillRegistryLike} from './skills-manage.js';
-import type {SkillsCatalog,McpMigrationResult,McpProbeResult,McpPurposeServer,McpPurposeSnapshot,McpPurposeWriteResult,McpServerCatalog,McpServerDraft,McpServerMutation,SkillDocument,SkillDraft,SkillMutation,SkillScope} from './types.js';
+import type {SkillsCatalog,McpProbeResult,McpPurposeServer,McpPurposeSnapshot,McpPurposeWriteResult,McpServerCatalog,McpServerDraft,McpServerMutation,SkillDocument,SkillDraft,SkillMutation,SkillScope} from './types.js';
 import type {OcrCapabilities,OcrImageAttachment,OcrRecognizeResult,OcrRenderResult} from './ocr-types.js';
 import type {ComponentDefinition,ComponentSetStatus,DevelopmentOperation,DevelopmentStatus,EnvironmentNotesState,HealRecord,HostRuntimeBuild,LimitModeStatus,UpgradeResult,UpgradeStatus} from './types.js';
 export type {ComponentDefinition,ComponentStatus,ComponentSetStatus,RecoveryReceipt,UpgradeStatus,UpgradeResult,BuildCapabilities,BuildResult,ClientRuntimeBuild,DevelopmentOperation,DevelopmentStatus,HostRuntimeBuild} from './types.js';
@@ -392,17 +392,17 @@ export class SuiteDevelopment extends TypertRemoteService {
  async listMcpServers():Promise<McpServerCatalog>{
   return readMcpServers(this.mcpContext());
  }
- /** Add one server row to the profile patch; the runtime reloads it (patchReload: live) or reports pending. */
+ /** Add one server row: static goes to official config.servers, OAuth to the Suite profile patch. */
  @Remote
  async addMcpServer(draft:McpServerDraft):Promise<McpServerMutation>{
   return addMcpServer(this.mcpContext(),draft);
  }
- /** Replace the fields the page owns on one profile-owned row. */
+ /** Replace the fields the page owns on one editable row (official entry or Suite patch row). */
  @Remote
  async updateMcpServer(rowId:string,draft:McpServerDraft):Promise<McpServerMutation>{
   return updateMcpServer(this.mcpContext(),rowId,draft);
  }
- /** Remove a profile row, or disable a bundle-provided row through the documented override. */
+ /** Remove one editable row; bundle-provided and non-Suite patch rows are read-only. */
  @Remote
  async removeMcpServer(rowId:string):Promise<McpServerMutation>{
   return removeMcpServer(this.mcpContext(),rowId);
@@ -430,17 +430,6 @@ export class SuiteDevelopment extends TypertRemoteService {
  @Remote
  async probeMcpServer(rowId:string):Promise<McpProbeResult>{
   return probeMcpServer(this.mcpContext(),rowId);
- }
- /** Move official static-HTTP rows onto the v2-capable client (ADR-030 D5); next process picks it up. */
- @Remote
- async migrateMcpServers():Promise<McpMigrationResult>{
-  return migrateStaticHttpRows(this.mcpContext());
- }
- /** Move rows that name the historical external dual client onto the Suite subpath (ADR-033 D4); next process
-  * loads it, so the receipt says restartRequired rather than claiming the running one changed. */
- @Remote
- async migrateMcpClients():Promise<McpMigrationResult>{
-  return migrateLegacyClientRows(this.mcpContext());
  }
  /** The body behind one editable skill row; the page calls this only after the user asks to edit. */
  @Remote

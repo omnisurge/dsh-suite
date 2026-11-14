@@ -1,8 +1,10 @@
 /** MCP server management: read the live server rows, and route writes to the owner of the runtime.
  *
  * Two facts decide the design. (1) The write target depends on the runtime: rc.2+ delegates generic static
- * servers to the official `mcp-manager` (`mcp-managed.ts`), while rc.1 and the Suite's own OAuth/dual clients
- * still write the profile patch. The capability check picks exactly one owner; there is no second write path.
+ * servers to the official `mcp-manager` (`mcp-managed.ts`); the Suite's own OAuth/dual clients still write
+ * the profile patch. On old runtimes without that manager the page is read-only and no write path exists
+ * (ADR-095 D3: 0.3.0 retires the rc.1 generic patch path). The capability check picks exactly one owner;
+ * there is no second write path.
  * (2) The Loader and the tool table know `running`/`failed`/`disabled`/`pending` plus a tool count. Client
  * plugins that DO publish a loopback control plane (the dual v2 client and the OAuth client) add the kind and
  * the negotiated protocol era, read from their own `status`/`probe` endpoints (ADR-030).
@@ -14,12 +16,12 @@ import type {} from '@deepseek-ai/dsh-typert-protocol/types';
 import {copyFile,mkdir,open,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import {dirname,join} from 'node:path';
 import {isMap,isSeq,parseDocument} from 'yaml';
-import {MANAGED_ROW_PREFIX,managedCatalog,managedEntryFromDraft,managedProbe,managedStatusOf,managedWrite} from './mcp-managed.js';
+import {MANAGED_ROW_PREFIX,managedCatalogRead,managedEntryFromDraft,managedProbe,managedStatusOf,managedWrite} from './mcp-managed.js';
 import type {ManagedAuthority} from './mcp-managed.js';
 import {failureOf,fileStateOf} from './mcp-purpose.js';
 import type {PurposeRemoval,PurposeStoreLike} from './mcp-purpose.js';
-import type {McpDraftInvalidDetail,McpMigrationResult,McpProbeResult,McpPurposePartialDetail,McpPurposeWriteFailureDetail,McpRuntimeState,McpRuntimeStatus,McpServerCatalog,McpServerDraft,McpServerEntry,McpServerKind,McpServerMutation,McpServerState,McpServerTransport,McpWriteFailureDetail} from './types.js';
-export type {McpMigrationResult,McpProbeResult,McpRuntimeStatus,McpServerCatalog,McpServerDraft,McpServerEntry,McpServerMutation} from './types.js';
+import type {McpCatalogIssue,McpDraftInvalidDetail,McpProbeResult,McpPurposePartialDetail,McpPurposeWriteFailureDetail,McpRuntimeState,McpRuntimeStatus,McpServerCatalog,McpServerDraft,McpServerEntry,McpServerKind,McpServerMutation,McpServerState,McpServerTransport,McpWriteFailureDetail} from './types.js';
+export type {McpProbeResult,McpRuntimeStatus,McpServerCatalog,McpServerDraft,McpServerEntry,McpServerMutation} from './types.js';
 
 declare module '@deepseek-ai/dsh-typert-protocol/types'{
  interface RemoteErrorDetailsMap{
@@ -29,14 +31,15 @@ declare module '@deepseek-ai/dsh-typert-protocol/types'{
   'mcp/server-exists':{};
   'mcp/server-missing':{};
   'mcp/server-not-editable':{};
-  'mcp/client-package-unknown':{};
+  'mcp/server-inherited':{};
+  'mcp/catalog-unreadable':{code:'read-failed'|'namespace-missing';raw:string};
   'mcp/write-locked':{};
   'mcp/managed-unavailable':{};
   'mcp/managed-write-failed':{reason:'refused';detail?:string};
   'mcp/write-failed':McpWriteFailureDetail;
   'mcp/row-missing':{};
   'mcp/probe-unavailable':{};
-  'mcp/migration-unavailable':{};
+  'mcp/unsupported':{};
   'mcp/purpose-conflict':{};
   'mcp/purpose-key-unknown':{};
   'mcp/purpose-invalid':{};
@@ -68,25 +71,25 @@ export const CLIENT_ADAPTERS:Readonly<Record<string,{prefix:string;kind:McpServe
  '@omnisurge/dsh-suite/mcp-oauth':{prefix:'/mcp-oauth-client',kind:'oauth'},
 });
 /** The historical external name of the v2-capable static client (SDK v2 + version negotiation, ADR-041 in
- * omnidsh). Kept as the read-compatible identity of old rows; new rows are written with SUITE_V2_CLIENT. */
+ * omnidsh). Kept as the read-compatible identity of old rows; 0.3.0 does not write it. */
 export const V2_CLIENT='@omnisurge/dsh-mcp-dual-client';
-/** The subpath the Suite carries (ADR-033): the only name a migration writes. */
+/** The subpath the Suite carries (ADR-033): read-compatible for old rows; 0.3.0 does not write it. */
 export const SUITE_V2_CLIENT='@omnisurge/dsh-suite/mcp-dual';
+/** The only client package a new profile-patch row writes (ADR-095 D6.3). */
 export const SUITE_OAUTH_CLIENT='@omnisurge/dsh-suite/mcp-oauth';
 /** The one profile-level package (ADR-033): it carries both client subpaths, so a profile that depends on it
  * can load either without naming an external package anywhere. */
-export const SUITE_PACKAGE='@omnisurge/dsh-suite';
-/** The historical external name of the OAuth client (ADR-033 D4): read-compatible, and a migration source. */
+/** The historical external name of the OAuth client (ADR-033 D4): read-compatible only. */
 export const OAUTH_CLIENT='@omnisurge/dsh-mcp-oauth-client';
 const V2_CLIENTS:ReadonlySet<string>=new Set([V2_CLIENT,SUITE_V2_CLIENT]);
 /** The two historical names and the subpath each one moves to (ADR-033 D4). One table: the row fact
- * (`clientSource`) and the migration both read it, so a legacy name cannot move without also being labelled.
+ * (`clientSource`) reads it, so a legacy name cannot be mistaken for a current one.
  */
 const LEGACY_TO_SUITE:Readonly<Record<string,string>>=Object.freeze({[V2_CLIENT]:SUITE_V2_CLIENT,[OAUTH_CLIENT]:SUITE_OAUTH_CLIENT});
 /** The official client: initialize only, so its rows are v1 and it has no status endpoint. */
 export const OFFICIAL_CLIENT='@deepseek-ai/dsh-mcp-client';
 /** ADR-033 D4: which layer provides a row's client. Derived from the same constants the adapter table and the
- * migration use, so the page never keeps its own package-name list. */
+ * one adapter table, so the page never keeps its own package-name list. */
 export function clientSourceOf(clientPackage:string):McpServerEntry['clientSource']{
  if(clientPackage===OFFICIAL_CLIENT)return 'official';
  if(LEGACY_TO_SUITE[clientPackage]!==undefined)return 'external-legacy';
@@ -169,6 +172,9 @@ export interface McpServerContext {
 
 const unreadable=()=>new RemoteError('mcp/profile-patch-unreadable','MCP_PROFILE_PATCH_UNREADABLE: the profile patch is not a YAML sequence this build can edit',{});
 const unavailable=()=>new RemoteError('mcp/profile-unavailable','MCP_PROFILE_UNAVAILABLE: this process has no profile patch to write',{});
+/** ADR-095 D3: 0.3.0 no longer writes the old generic profile-patch rows. A runtime without the official
+ * manager is read-only, and this is the one refusal every write entry point uses. */
+const unsupportedRuntime=()=>new RemoteError('mcp/unsupported','MCP_UNSUPPORTED: this DSH does not provide the official MCP manager; the Suite no longer supports the old profile-patch write path',{});
 /** A refusal carries the machine fact the page renders (field + reason, and the range when the value has one)
  * next to the readable diagnostic: the Host owns the fact, the Client owns the sentence (AGENTS §5.10). The
  * second parameter is required so no validation path can refuse without naming what it refused. */
@@ -341,21 +347,27 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
  const toolNames=toolNamesOf(ctx.tools);
  const profilePackage=await readProfilePackage(ctx.profileDir);
  const reload=reloadModeOf(profilePackage);
+ const authority:McpServerCatalog['authority']=ctx.managed?'official':'unsupported';
+ const unsupported=authority==='unsupported';
  const rows=ctx.patchPath?insertRows(parsePatch(await readPatchText(ctx.patchPath))):[];
+ let catalogIssue:McpCatalogIssue|null=null;
  const profileRowIds=new Set(rows.map(row=>row.rowId));
  const rowPackages=new Map(rows.map(row=>[row.rowId,row.packageName] as const));
- const dualAvailable=v2ClientAvailable(profilePackage,rowPackages.values(),entries);
  const servers:McpServerEntry[]=[],seen=new Set<string>(),seenRows=new Set<string>();
  for(const entry of entries){
   seenRows.add(entry.options.id);
   const name=serverNameOf(entry);
+  const clientPackage=typeof entry.options.name==='string'&&entry.options.name.length>0?entry.options.name:rowPackages.get(entry.options.id)??'';
+  const clientSource=clientSourceOf(clientPackage);
+  // ADR-095 D3: on a runtime without the official manager the page is read-only. Keep the Suite's own
+  // OAuth/dual rows visible, but do not turn the Loader/tool table back into a general server directory.
+  if(unsupported&&clientSource!=='suite'&&clientSource!=='external-legacy')continue;
   if(name===null||seen.has(name))continue;
   seen.add(name);
   const config=readConfig(entry)??{};
   const transport=transportOf(config)??'streamable-http';
   const headers=config.headers;
   const env=config.env;
-  const clientPackage=typeof entry.options.name==='string'&&entry.options.name.length>0?entry.options.name:rowPackages.get(entry.options.id)??'';
   const state=stateOf(entry);
   servers.push({
    name,
@@ -365,16 +377,17 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    rowId:entry.options.id,
    origin:profileRowIds.has(entry.options.id)?'profile':'loaded',
    managed:false,
-   editable:profileRowIds.has(entry.options.id),
+   // F2a: on rc.2 only the Suite's own clients still own a profile-patch row. Historical official-client
+   // static rows and bundle-provided rows are listed read-only; the Host write path enforces the same rule.
+   editable:authority==='official'&&profileRowIds.has(entry.options.id)&&clientSource==='suite',
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
    ...stdioFactsOf(transport,config),
    clientPackage,
-   clientSource:clientSourceOf(clientPackage),
+   clientSource,
    kind:kindOf(clientPackage),
    ...oauthFactsOf(clientPackage,config),
    runtime:null,
-   upgradable:false,
    probeAvailable:probeAvailability(ctx,transport,clientPackage,state).available,
    protocolSupport:protocolSupportOf(clientPackage,transport),
   });
@@ -382,12 +395,14 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
  // Rows written to the profile that the Loader has not picked up yet (or that are switched off) are still
  // rows the user must be able to see, edit and delete: a write that never loads must not vanish silently.
  for(const row of rows){
+  const clientPackage=row.packageName??'';
+  const clientSource=clientSourceOf(clientPackage);
+  if(unsupported&&clientSource!=='suite'&&clientSource!=='external-legacy')continue;
   if(seenRows.has(row.rowId))continue;
   seenRows.add(row.rowId);
   const name=row.serverName??row.rowId;
   const headers=row.config.headers;
   const env=row.config.env;
-  const clientPackage=row.packageName??'';
   // A patch row the Loader has no entry for is either switched off or not mounted yet: neither has a live
   // client, so neither may offer a check (ADR-031 D3).
   const state:McpServerState=row.disabled?'disabled':'pending';
@@ -399,23 +414,24 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    rowId:row.rowId,
    origin:'profile',
    managed:false,
-   editable:true,
+   editable:authority==='official'&&clientSource==='suite',
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
    ...stdioFactsOf(transportOf(row.config)??'streamable-http',row.config),
    clientPackage,
-   clientSource:clientSourceOf(clientPackage),
+   clientSource,
    kind:kindOf(clientPackage),
    ...oauthFactsOf(clientPackage,row.config),
    runtime:null,
-   upgradable:false,
    probeAvailable:probeAvailability(ctx,transportOf(row.config)??'streamable-http',clientPackage,state).available,
    protocolSupport:protocolSupportOf(clientPackage,transportOf(row.config)??'streamable-http'),
   });
  }
  // ADR-094：官方 manager 的条目与状态是权威；rowId 用 managed:<name> 与 profile 行区分，写操作据此路由。
  if(ctx.managed){
-  for(const row of managedCatalog(ctx.managed)){
+  const managed=managedCatalogRead(ctx.managed);
+  catalogIssue=managed.issue;
+  for(const row of managed.rows){
    const transport=transportOf(row.entry)??'streamable-http';
    const status=managedStatusOf(row.view);
    const headers=row.entry.headers;
@@ -439,44 +455,16 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
     // The official manager's diagnostic is a client report like any other: mask endpoints and truncate it at
     // the same boundary the legacy path uses (ADR-030 D2), instead of passing raw text through.
     runtime:status.runtime===null?null:{...status.runtime,...(typeof status.runtime.error==='string'?{error:sanitizeDiagnostic(status.runtime.error)}:{})},
-    upgradable:false,
     probeAvailable:true,
     protocolSupport:protocolSupportOf(OFFICIAL_CLIENT,transport),
    });
   }
  }
  servers.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);
- // The v2 migration is offered only where it can work: an official static-HTTP row in a profile that
- // already carries the v2-capable client package (ADR-030 D5).
- for(const server of servers){
-  // 官方 manager 托管的行不参与 v2 迁移：迁移动作只改 profile 行，托管行的权威是 config.servers（ADR-094）。
-  server.upgradable=dualAvailable&&server.transport==='streamable-http'&&server.clientPackage===OFFICIAL_CLIENT&&!server.rowId.startsWith(MANAGED_ROW_PREFIX);
- }
  await readRuntimes(ctx,servers);
- return {servers,reload,authority:ctx.managed?'official':'rows'};
+ return {servers,reload,authority,issue:catalogIssue};
 }
 
-/** The one availability predicate for the v2 client: profile dependency/bundle, a stored row, or a loaded row.
- * Both the catalog (which offers the migration) and the action (which performs it) read this same fact. */
-export function v2ClientAvailable(profilePackage:Record<string,unknown>|null,rowPackages:Iterable<string|null>,entries:Iterable<LoaderEntryLike>):boolean{
- // The Suite carries both subpaths: a clean profile depends on '@omnisurge/dsh-suite' and holds no MCP row at
- // all, so the external names can never be the only witness (ADR-033 D1).
- if(hasClientPackage(profilePackage,SUITE_PACKAGE))return true;
- for(const name of V2_CLIENTS)if(hasClientPackage(profilePackage,name))return true;
- for(const name of rowPackages)if(name!==null&&(V2_CLIENTS.has(name)||name===SUITE_PACKAGE))return true;
- for(const entry of entries){const name=entry.options.name;if(typeof name==='string'&&(V2_CLIENTS.has(name)||name===SUITE_PACKAGE))return true;}
- return false;
-}
-/** 该包是否已在 profile 里声明（依赖或 `dsh.profile.bundles`）；迁移只在这个事实成立时提供。 */
-function hasClientPackage(profilePackage:Record<string,unknown>|null,name:string):boolean{
- if(!profilePackage)return false;
- const dependencies=profilePackage.dependencies;
- if(dependencies&&typeof dependencies==='object'&&Object.hasOwn(dependencies,name))return true;
- const dsh=profilePackage.dsh;
- const profile=dsh&&typeof dsh==='object'?(dsh as Record<string,unknown>).profile:undefined;
- const bundles=profile&&typeof profile==='object'?(profile as Record<string,unknown>).bundles:undefined;
- return Array.isArray(bundles)&&bundles.includes(name);
-}
 /** Every status read is bounded and non-fatal: a slow or broken client plugin degrades that one row to
 /** `runtime: null`, never the whole list (ADR-030 D2). */
 async function withDeadline<T>(work:Promise<T>,timeoutMs:number):Promise<T|null>{
@@ -568,93 +556,6 @@ export async function probeMcpServer(ctx:McpServerContext,rowId:string):Promise<
  }
  const runtime=await availability.reader(clientPackage,name,'probe');
  return {rowId,name,runtime:runtime===null?null:normalizeRuntime(runtime)};
-}
-/** Rewrite official static-HTTP rows onto the v2-capable client (ADR-030 D5). Id/s/url/headers stay byte-
- * identical: only the row's package name changes, the backup is named for the action, and the effect is
- * next-process (the running process already loaded the old client). Idempotent: a second call is `changed:false`. */
-export async function migrateStaticHttpRows(ctx:McpServerContext):Promise<McpMigrationResult>{
- if(!ctx.patchPath)throw unavailable();
- const path=ctx.patchPath;
- return withPatchLock(path,async()=>{
-  const profilePackage=await readProfilePackage(ctx.profileDir);
-  const text=await readPatchText(path);
-  const doc=parsePatch(text);
-  // The availability predicate is the same one the catalog uses, so a row the page marks upgradable never gets a
-  // refusal from the action (AGENTS §8.3: one semantic for every entry point).
-  const rowsHere=insertRows(doc);
-  const dualAvailable=v2ClientAvailable(profilePackage,rowsHere.map(row=>row.packageName),loadedEntries(ctx.loader));
-  if(!dualAvailable){
-   throw new RemoteError('mcp/migration-unavailable','MCP_MIGRATION_UNAVAILABLE: the profile carries no v2-capable MCP client',{});
-  }
-  const changed:string[]=[];
-  const contents=doc.contents;
-  if(isSeq(contents)){
-   for(const outer of contents.items){
-    if(!isMap(outer)||!outer.has('insert'))continue;
-    const insert=outer.get('insert');
-    if(!isSeq(insert))continue;
-    for(const inner of insert.items){
-     if(!isMap(inner))continue;
-     if(toPlain(inner.get('name'))!==OFFICIAL_CLIENT)continue;
-     const config=toPlain(inner.get('config'));
-     if(!config||typeof config!=='object'||Array.isArray(config))continue;
-     const plain=config as Record<string,unknown>;
-     if(transportOf(plain)!=='streamable-http')continue;
-     setMapValue(inner,'name',SUITE_V2_CLIENT);
-     const id=toPlain(inner.get('id'));
-     if(typeof id==='string')changed.push(id);
-    }
-   }
-  }
-  if(changed.length===0)return {changed:false,rows:[],backupPath:null,restartRequired:false};
-  const backup=path+'.bak-mcp-v2-'+new Date().toISOString().replace(/[:.]/gu,'-');
-  // The backup is a precondition, not a courtesy: if it cannot be written, the patch is NOT touched.
-  try{
-   await copyFile(path,backup);
-  }catch(error){
-   throw writeFailure('the pre-migration backup could not be written, so the patch was left unchanged',error);
-  }
-  await writePatchAtomic(path,String(doc));
-  return {changed:true,rows:changed,backupPath:backup,restartRequired:true};
- });
-}
-/** ADR-033 D4: rewrite historical external-package rows onto the subpath the Suite carries. Only `name` changes:
- * id and config stay byte-identical, the backup is written before the patch is touched, a second call reports
- * `changed:false`, and the effect is next-process (the running process already loaded the old module). */
-export async function migrateLegacyClientRows(ctx:McpServerContext):Promise<McpMigrationResult>{
- if(!ctx.patchPath)throw unavailable();
- const path=ctx.patchPath;
- return withPatchLock(path,async()=>{
-  const doc=parsePatch(await readPatchText(path));
-  const changed:string[]=[];
-  const contents=doc.contents;
-  if(isSeq(contents)){
-   for(const outer of contents.items){
-    if(!isMap(outer)||!outer.has('insert'))continue;
-    const insert=outer.get('insert');
-    if(!isSeq(insert))continue;
-    for(const inner of insert.items){
-     if(!isMap(inner))continue;
-     const rawName=toPlain(inner.get('name'));
-     const suiteName=typeof rawName==='string'?LEGACY_TO_SUITE[rawName]:undefined;
-     if(suiteName===undefined)continue;
-     setMapValue(inner,'name',suiteName);
-     const id=toPlain(inner.get('id'));
-     if(typeof id==='string')changed.push(id);
-    }
-   }
-  }
-  if(changed.length===0)return {changed:false,rows:[],backupPath:null,restartRequired:false};
-  const backup=path+'.bak-mcp-client-'+new Date().toISOString().replace(/[:.]/gu,'-');
-  // The backup is a precondition, not a courtesy: if it cannot be written, the patch is NOT touched.
-  try{
-   await copyFile(path,backup);
-  }catch(error){
-   throw writeFailure('the pre-migration backup could not be written, so the patch was left unchanged',error);
-  }
-  await writePatchAtomic(path,String(doc));
-  return {changed:true,rows:changed,backupPath:backup,restartRequired:true};
- });
 }
 async function withPatchLock<T>(path:string,work:()=>Promise<T>):Promise<T> {
  const lock=path+LOCK_SUFFIX;
@@ -818,6 +719,11 @@ function assertDraftShape(draft:McpServerDraft,kind:McpServerKind|undefined):voi
  const oauth=kind==='oauth';
  const clientId=draft.staticClientId;
  const timeout=draft.authorizationTimeoutMs;
+ // R6: a named endpoint fact must be the documented string. A number/object used to fall through
+ // `draftFacts`'s type filter and become "not named", so an edit silently kept the stored value while
+ // reporting success. The refusal names the field before the endpoint-required checks, for add and edit.
+ if(named(draft.url)&&typeof draft.url!=='string')throw invalid('url must be a string when it is named',{field:'url',reason:'wrong-type'});
+ if(named(draft.command)&&typeof draft.command!=='string')throw invalid('command must be a string when it is named',{field:'command',reason:'wrong-type'});
  if(oauth){
   if(named(draft.headers))throw invalid('an OAuth row has no custom headers: remove the named field',{field:'headers',reason:'not-allowed'});
   if(named(draft.env))throw invalid('an OAuth row has no environment variables: remove the named field',{field:'env',reason:'not-allowed'});
@@ -880,17 +786,6 @@ function updateConfig(draft:McpServerDraft,row:PatchRow,kind:McpServerKind):{nam
  return {name:facts.name,transport,config:{transport,serverName:facts.name,...facts.config}};
 }
 
-/** ADR-033 D1: which client a NEW row loads, chosen from what the row is — never from whatever happens to be
- * loaded. A profile may still hold rows naming the old external packages (uninstalled later) and a fresh profile
- * holds no MCP row at all; neither may decide. The carried dual client only speaks `streamable-http`, so a stdio
- * row stays on the official client; an OAuth draft takes the OAuth subpath; every other HTTP row takes the v2
- * subpath the Suite carries. This is the one rule: the migration writes the same two subpaths. */
-function clientPackageForDraft(draft:McpServerDraft):string{
- if(draft.transport==='stdio')return OFFICIAL_CLIENT;
- if(draft.kind==='oauth')return SUITE_OAUTH_CLIENT;
- return SUITE_V2_CLIENT;
-}
-
 function nextRowId(base:string,used:Set<string>):string {
  if(!used.has(base))return base;
  for(let index=2;index<1000;index+=1){
@@ -914,6 +809,21 @@ const managedNameOf=(rowId:string):string|null=>rowId.startsWith(MANAGED_ROW_PRE
 function managedMissing():RemoteError{
  return new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this server is managed by the official MCP manager',{});
 }
+/** F2a: on rc.2 only the Suite's own client rows may use the profile patch. A historical official-client
+ * static row or a bundle-provided row belongs to another owner and is read-only here. */
+function externalRow():RemoteError{
+ return new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this row is provided by another client or bundle; edit it at its owner',{});
+}
+/** F6: a directory read failure is not “no servers”. Writes that depend on the directory (duplicate-name
+ * checks, managed row lookup) must fail closed instead of writing against an empty catalog. */
+function catalogUnreadable(issue:McpCatalogIssue):RemoteError{
+ return new RemoteError('mcp/catalog-unreadable','MCP_CATALOG_UNREADABLE: the official MCP directory could not be read; no write was attempted',{code:issue.code,raw:issue.raw});
+}
+function managedRowsForWrite(authority:ManagedAuthority):ReturnType<typeof managedCatalogRead>['rows']{
+ const read=managedCatalogRead(authority);
+ if(read.issue!==null)throw catalogUnreadable(read.issue);
+ return read.rows;
+}
 
 /** ADR-094: the official manager owns generic servers. The draft keeps its existing shape; only the storage
  *  (config.servers via the Settings revision fence) differs from the legacy profile-patch path. */
@@ -921,7 +831,7 @@ async function addManagedServer(ctx:McpServerContext,draft:McpServerDraft):Promi
  const authority=ctx.managed;
  if(!authority)throw unavailable();
  const {name,transport}=createConfig(draft);
- if(managedCatalog(authority).some(row=>row.name===name)||loadedEntries(ctx.loader).some(entry=>serverNameOf(entry)===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: a server with this name already exists',{});
+ if(managedRowsForWrite(authority).some(row=>row.name===name)||loadedEntries(ctx.loader).some(entry=>serverNameOf(entry)===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: a server with this name already exists',{});
  await managedWrite(authority,name,managedEntryFromDraft(null,draft,transport));
  return {mode:'added',rowId:MANAGED_ROW_PREFIX+name,name,applied:'live'};
 }
@@ -929,7 +839,7 @@ async function addManagedServer(ctx:McpServerContext,draft:McpServerDraft):Promi
 async function updateManagedServer(ctx:McpServerContext,name:string,rowId:string,draft:McpServerDraft):Promise<McpServerMutation>{
  const authority=ctx.managed;
  if(!authority)throw managedMissing();
- const row=managedCatalog(authority).find(item=>item.name===name);
+ const row=managedRowsForWrite(authority).find(item=>item.name===name);
  if(!row)throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such managed server exists',{});
  if(typeof draft?.name==='string'&&draft.name.trim().length>0&&draft.name.trim()!==name)throw invalid('renaming a managed server is not supported; delete it and add the new name',{field:'name',reason:'not-editable'});
  // ADR-094: a managed row is a static server. An edit that names another kind is the same conflict the
@@ -949,13 +859,14 @@ async function updateManagedServer(ctx:McpServerContext,name:string,rowId:string
 }
 
 export async function addMcpServer(ctx:McpServerContext,draft:McpServerDraft):Promise<McpServerMutation> {
- if(ctx.managed&&draft?.kind!=='oauth')return addManagedServer(ctx,draft);
+ if(!ctx.managed)throw unsupportedRuntime();
+ if(draft?.kind!=='oauth')return addManagedServer(ctx,draft);
  const path=ctx.patchPath;
  if(!path)throw unavailable();
  const {name,config}=createConfig(draft);
  // ADR-094: an OAuth row still lives in the profile patch, but its name must not shadow an official
  // managed entry — the two would register the same serverName and collide at the tool table.
- if(ctx.managed&&managedCatalog(ctx.managed).some(row=>row.name===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: the official MCP manager already has this name',{});
+ if(ctx.managed&&managedRowsForWrite(ctx.managed).some(row=>row.name===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: the official MCP manager already has this name',{});
  return withPatchLock(path,async()=>{
   const text=await readPatchText(path);
   const doc=parsePatch(text);
@@ -965,7 +876,8 @@ export async function addMcpServer(ctx:McpServerContext,draft:McpServerDraft):Pr
   if(rows.some(row=>row.serverName===name))throw new RemoteError('mcp/server-exists','MCP_SERVER_EXISTS: this name is already in the profile patch',{});
   const used=new Set<string>([...entries.map(entry=>entry.options.id),...rows.map(row=>row.rowId)]);
   const rowId=nextRowId('mcp-'+name,used);
-  const packageName=clientPackageForDraft(draft);
+  // ADR-095 D6.3: an OAuth row is the only new profile-patch row this page writes; static rows are official.
+  const packageName=SUITE_OAUTH_CLIENT;
   if(!isSeq(doc.contents))throw unreadable();
   (doc.contents as {add:(value:unknown)=>void}).add({insert:[{id:rowId,name:packageName,config}]});
   await writePatchAtomic(path,String(doc));
@@ -978,6 +890,7 @@ export async function addMcpServer(ctx:McpServerContext,draft:McpServerDraft):Pr
 }
 
 export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:McpServerDraft):Promise<McpServerMutation> {
+ if(!ctx.managed)throw unsupportedRuntime();
  const managedName=managedNameOf(rowId);
  if(managedName!==null)return updateManagedServer(ctx,managedName,rowId,draft);
  const path=ctx.patchPath;
@@ -987,6 +900,7 @@ export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:Mc
   const doc=parsePatch(text);
   const row=insertRows(doc).find(item=>item.rowId===rowId);
   if(!row)throw new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this row is not owned by the profile patch',{});
+  if(ctx.managed&&clientSourceOf(row.packageName??'')!=='suite')throw externalRow();
   const kind=kindOf(row.packageName??'');
   const {name,config}=updateConfig(draft,row,kind);
   // Same semantic as the add path (AGENTS §8.3): a row loaded by an adapter client only speaks streamable-http,
@@ -1018,9 +932,12 @@ export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:Mc
 }
 
 export async function removeMcpServer(ctx:McpServerContext,rowId:string):Promise<McpServerMutation> {
+ if(!ctx.managed)throw unsupportedRuntime();
  const managedName=managedNameOf(rowId);
  if(managedName!==null){
-  if(!ctx.managed)throw managedMissing();
+  const managedRow=managedRowsForWrite(ctx.managed).find(row=>row.name===managedName);
+  if(managedRow===undefined)throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such managed server exists',{});
+  if(managedRow.inherited===true)throw new RemoteError('mcp/server-inherited','MCP_SERVER_INHERITED: this server comes from the composition base layer and cannot be deleted here; disable or override it instead',{});
   // ADR-032 D5：旁路文件里的用途键随条目一起删。官方条目与旁路文件不是同一份存储，先提交旁路、
   // 再删条目；条目删除失败就把旁路回滚（服务器仍在，用途也仍在），不留“服务器没了、用途还在”的半态。
   const removal=ctx.purposes?await ctx.purposes.removal(rowId):null;
@@ -1044,35 +961,18 @@ export async function removeMcpServer(ctx:McpServerContext,rowId:string):Promise
   const doc=parsePatch(text);
   const contents=doc.contents;
   if(!isSeq(contents))throw unreadable();
-  const entry=loadedEntries(ctx.loader).find(item=>item.options.id===rowId);
   const row=insertRows(doc).find(item=>item.rowId===rowId);
-  if(!row&&!entry)throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such server row is loaded or patch-owned',{});
-  const name=row?.serverName??(entry?serverNameOf(entry):null)??rowId;
-  if(row){
-   const outer=contents.items[row.outerIndex];
-   if(!isMap(outer))throw unreadable();
-   const insert=outer.get('insert');
-   if(!isSeq(insert))throw unreadable();
-   if(insert.items.length<=1)contents.items.splice(row.outerIndex,1);
-   else insert.items.splice(row.innerIndex,1);
-  }else{
-   // Bundle-provided rows are disabled through the documented override rather than by editing the bundle.
-   const override=contents.items.find(item=>isMap(item)&&toPlain(item.get('id'))===rowId);
-   const overridden=override!==undefined&&isMap(override);
-   const overrideMap=override as unknown as {get:(key:string)=>unknown}|undefined;
-   // Deleting something already deleted is not a second write: an override that already disables the row and
-   // a Loader entry that already reports disabled mean the user's intent is satisfied. Rewriting would churn
-   // the patch bytes and report a change that did not happen.
-   if(overridden&&toPlain(overrideMap?.get('disabled'))===true&&(entry===undefined||stateOf(entry)==='disabled'))return {mode:'removed',rowId,name,applied:'live'};
-   if(overridden){
-    // An override that says disabled:false is the user (or the official page) explicitly enabling a bundle
-    // row: removing it means flipping that override, not appending a second one. Leaving it untouched was the
-    // one branch that reported success while changing nothing.
-    setMapValue(override,'disabled',true);
-   }else{
-    (contents as {add:(value:unknown)=>void}).add({id:rowId,disabled:true});
-   }
-  }
+  if(!row)throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such server row is stored in the profile patch',{});
+  // F2a: only a Suite-owned patch row may be deleted on rc.2; a historical official-client or bundle row is
+  // not this page's to remove. The same refusal covers a direct Remote call that bypasses the page.
+  if(clientSourceOf(row.packageName??'')!=='suite')throw externalRow();
+  const name=row.serverName??rowId;
+  const outer=contents.items[row.outerIndex];
+  if(!isMap(outer))throw unreadable();
+  const insert=outer.get('insert');
+  if(!isSeq(insert))throw unreadable();
+  if(insert.items.length<=1)contents.items.splice(row.outerIndex,1);
+  else insert.items.splice(row.innerIndex,1);
   // ADR-032 D5: deleting a row is one transaction over two files — the cleaned purposes and the patch. Both
   // temporary files exist before either rename, the purpose file is renamed first, and a failed patch rename
   // rolls the purpose file back. A rollback that also fails is reported as a partial deletion with both files'
@@ -1110,7 +1010,7 @@ export async function removeMcpServer(ctx:McpServerContext,rowId:string):Promise
   }
   removal?.settle();
  // F3: the purpose backup was this transaction's rollback source, not an artifact the user asked for; the patch
- // backup stays, because the migration Remotes surface that path to the user.
+ // backup stays as the rollback source for this transaction.
  await removal?.cleanup();
   // Deleting a bundle row can leave a disabled entry in the Loader rather than removing the id; both "gone"
   // and "disabled" are the effect the user asked for, so waiting only for absence would report pending

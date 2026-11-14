@@ -9,7 +9,7 @@
  * Only controls inside a presentation modal are clicked, and whatever was clicked is returned so the caller
  * can record it as evidence. Nothing here asserts success: the caller still has to prove the shell is usable.
  */
-const CANDIDATES=['Continue','Configure later','Skip','Open app','Close'];
+const CANDIDATES=['Continue','Get started','Configure later','Skip','Skip for now','Not now','Maybe later','Open app','Close'];
 
 export async function dismissOnboarding(page,{steps=8}={}){
  const used=[];

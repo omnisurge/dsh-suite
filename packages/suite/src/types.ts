@@ -91,7 +91,7 @@ export interface McpServerEntry {
  toolCount:number;
  /** 行的稳定 id（profile patch 里 `insert` 行的 id），编辑/删除的定位键。 */
  rowId:string;
- /** 'profile' = 用户可编辑的配置（本 profile 的 patch 行，或 rc.2+ 官方 config.servers 条目）；'loaded' = 行来自某个 bundle，删除时改写 disabled 覆盖。 */
+ /** 'profile' = 用户可编辑的配置（本 profile 的 patch 行，或 rc.2+ 官方 config.servers 条目）；'loaded' = 行来自某个 bundle，只读。 */
  origin:'profile'|'loaded';
  /** 该行由官方 MCP manager 托管（ADR-094）：写走 config.servers；表单据此隐藏官方没有的字段。 */
  managed:boolean;
@@ -120,8 +120,6 @@ export interface McpServerEntry {
  authorizationTimeoutMs?:number;
  /** 客户端插件报告的连接态；null = 该客户端没有状态控制面（官方/stdio/未知包），页面显示“无连接态可查”。 */
  runtime:McpRuntimeStatus|null;
- /** 该行仍是官方客户端的静态 HTTP 行，且 profile 里有 v2 客户端可用（ADR-030 D5）。 */
- upgradable:boolean;
  /** 该行可以发起用户触发的实时探测（客户端有控制面，且本进程有 loopback 可问）。 */
  probeAvailable:boolean;
  /** 该行可能谈成的协议：`negotiable` = 客户端支持 v2 协商；`v1-only` = 官方客户端/stdio/OAuth（只能 v1）；
@@ -129,13 +127,15 @@ export interface McpServerEntry {
  protocolSupport:'v1-only'|'negotiable'|'unknown';
 }
 /** 'live' = profile 的 patchReload 是 live，写入后由运行时重载；'manual' = 需要重启才生效。
- * authority 是目录的数据源事实（ADR-094 D5）：'official' = 官方 manager 在场，通用服务器归 config.servers；
- * 'rows' = 没有官方 manager，旧 patch 路径仍是唯一写目标。 */
-export interface McpServerCatalog {servers:McpServerEntry[];reload:'live'|'manual';authority:'official'|'rows';}
+ * authority 是目录的数据源事实（ADR-094 D5 / ADR-095 D3）：'official' = 官方 manager 在场，通用服务器归
+ * config.servers；'unsupported' = 当前 DSH 没有官方 manager，0.3.0 已删除旧通用 patch 写路径，页面只读
+ * （套件自有 OAuth/dual 客户端行仍可列出，但不可写）。 */
+/** F6: the directory-level read fact. A failed official settings read must not be presented as an empty
+ * MCP list; the page shows this issue instead of its empty state. */
+export interface McpCatalogIssue {code:'read-failed'|'namespace-missing';raw:string;}
+export interface McpServerCatalog {servers:McpServerEntry[];reload:'live'|'manual';authority:'official'|'unsupported';issue?:McpCatalogIssue|null;}
 /** 用户触发的实时探测结果（ADR-030 D3）：runtime 为客户端插件当场报告的事实。 */
 export interface McpProbeResult {rowId:string;name:string;runtime:McpRuntimeStatus|null;}
-/** 旧静态 HTTP 行改走 v2 客户端的结果（ADR-030 D5）：生效需要重启进程。 */
-export interface McpMigrationResult {changed:boolean;rows:string[];backupPath:string|null;restartRequired:boolean;}
 /** 新增/编辑的输入。headers/env 是用户刚输入的明文，只在写 patch 时使用，不回显、不进日志、不进错误消息。 */
 export interface McpServerDraft {
  name:string;

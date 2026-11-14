@@ -7,7 +7,7 @@ import type {
 import type { DocumentParseCapabilities, DocumentParseRequest, DocumentParseResult } from '@omnisurge/dsh-suite/document-parse-types'
 import type { OcrCapabilities, OcrImageAttachment, OcrRecognizeResult, OcrRenderResult } from '@omnisurge/dsh-suite/ocr-types'
 import type { SetupCheck, SetupInspection } from '@omnisurge/dsh-suite/searxng'
-import type { ComponentSetStatus, DevelopmentStatus, EnvironmentNotesState, HealRecord, LimitModeStatus, McpMigrationResult, McpProbeResult, McpPurposeSnapshot, McpPurposeWriteResult, McpServerCatalog, McpServerDraft, McpServerMutation, SetupExpectedConfiguration, SetupSettingsOwner, SkillDocument, SkillDraft, SkillMutation, SkillsCatalog, SkillScope, UpgradeResult, UpgradeStatus } from '@omnisurge/dsh-suite/types'
+import type { ComponentSetStatus, DevelopmentStatus, EnvironmentNotesState, HealRecord, LimitModeStatus, McpProbeResult, McpPurposeSnapshot, McpPurposeWriteResult, McpServerCatalog, McpServerDraft, McpServerMutation, SetupExpectedConfiguration, SetupSettingsOwner, SkillDocument, SkillDraft, SkillMutation, SkillsCatalog, SkillScope, UpgradeResult, UpgradeStatus } from '@omnisurge/dsh-suite/types'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface TypertRemoteNamespace$6f6d6e69737572676553656172786e675365747570 {
@@ -31,8 +31,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     limitModeStatus: () => Promise<RemoteResult<LimitModeStatus>>
     listMcpServers: () => Promise<RemoteResult<McpServerCatalog>>
     listSkills: (options: { cwd?: string; }) => Promise<RemoteResult<SkillsCatalog>>
-    migrateMcpClients: () => Promise<RemoteResult<McpMigrationResult>>
-    migrateMcpServers: () => Promise<RemoteResult<McpMigrationResult>>
     ocrCapabilities: () => Promise<RemoteResult<OcrCapabilities>>
     ocrRecentImages: () => Promise<RemoteResult<{ attachment: OcrImageAttachment; label: string; }[]>>
     ocrRecognize: (input: { path?: string; attachment?: OcrImageAttachment; mode: 'accurate' | 'handwriting' | 'both'; provider?: string; page?: number; pages?: string; reconcile?: boolean; }) => Promise<RemoteResult<OcrRecognizeResult>>
@@ -72,8 +70,6 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'omnisurgeSuiteDev/limitModeStatus': () => Promise<RemoteResult<LimitModeStatus>>
     'omnisurgeSuiteDev/listMcpServers': () => Promise<RemoteResult<McpServerCatalog>>
     'omnisurgeSuiteDev/listSkills': (options: { cwd?: string; }) => Promise<RemoteResult<SkillsCatalog>>
-    'omnisurgeSuiteDev/migrateMcpClients': () => Promise<RemoteResult<McpMigrationResult>>
-    'omnisurgeSuiteDev/migrateMcpServers': () => Promise<RemoteResult<McpMigrationResult>>
     'omnisurgeSuiteDev/ocrCapabilities': () => Promise<RemoteResult<OcrCapabilities>>
     'omnisurgeSuiteDev/ocrRecentImages': () => Promise<RemoteResult<{ attachment: OcrImageAttachment; label: string; }[]>>
     'omnisurgeSuiteDev/ocrRecognize': (input: { path?: string; attachment?: OcrImageAttachment; mode: 'accurate' | 'handwriting' | 'both'; provider?: string; page?: number; pages?: string; reconcile?: boolean; }) => Promise<RemoteResult<OcrRecognizeResult>>
@@ -119,8 +115,6 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'omnisurgeSuiteDev/limitModeStatus': TypertRemoteMethod<{  }, LimitModeStatus>
   readonly 'omnisurgeSuiteDev/listMcpServers': TypertRemoteMethod<{  }, McpServerCatalog>
   readonly 'omnisurgeSuiteDev/listSkills': TypertRemoteMethod<{ readonly 'options': { cwd?: string; } }, SkillsCatalog>
-  readonly 'omnisurgeSuiteDev/migrateMcpClients': TypertRemoteMethod<{  }, McpMigrationResult>
-  readonly 'omnisurgeSuiteDev/migrateMcpServers': TypertRemoteMethod<{  }, McpMigrationResult>
   readonly 'omnisurgeSuiteDev/ocrCapabilities': TypertRemoteMethod<{  }, OcrCapabilities>
   readonly 'omnisurgeSuiteDev/ocrRecentImages': TypertRemoteMethod<{  }, { attachment: OcrImageAttachment; label: string; }[]>
   readonly 'omnisurgeSuiteDev/ocrRecognize': TypertRemoteMethod<{ readonly 'input': { path?: string; attachment?: OcrImageAttachment; mode: 'accurate' | 'handwriting' | 'both'; provider?: string; page?: number; pages?: string; reconcile?: boolean; } }, OcrRecognizeResult>

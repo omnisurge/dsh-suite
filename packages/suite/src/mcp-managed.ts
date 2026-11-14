@@ -7,7 +7,7 @@
  * 不用官方 TypeScript 类型：这些形状随 rc 线变化，Host 只按公开方法名与字段名读取，缺失即视为不可用。
  */
 import {RemoteError} from '@deepseek-ai/dsh-typert-protocol';
-import type {McpRuntimeStatus,McpServerDraft,McpServerState,McpServerTransport} from './types.js';
+import type {McpCatalogIssue,McpRuntimeStatus,McpServerDraft,McpServerState,McpServerTransport} from './types.js';
 
 export const MCP_MANAGER_MODULE='@deepseek-ai/dsh-mcp-manager';
 /** 目录里官方托管条目的稳定定位键；用户条目的定位键仍是 profile 行 id。 */
@@ -21,7 +21,7 @@ export interface ManagedManagerLike{
  probe(name:string,options?:{signal?:AbortSignal}):Promise<unknown>;
  restart(name:string):Promise<void>;
 }
-export interface ManagedDescriptorLike{ns?:unknown;revision?:unknown;value?:unknown;}
+export interface ManagedDescriptorLike{ns?:unknown;revision?:unknown;value?:unknown;base?:unknown;user?:unknown;}
 export interface ManagedSettingsLike{
  describe(options?:{redactSecrets?:boolean}):ManagedDescriptorLike[];
  mutate(ns:string,ops:readonly ManagedPathOp[],expectedRevision?:number):Promise<void>;
@@ -33,27 +33,43 @@ export interface ManagedAuthority{
  settings:ManagedSettingsLike;
 }
 
-export interface ManagedCatalogRow{name:string;entry:Record<string,unknown>;view:ManagedViewLike|null;}
+export interface ManagedCatalogRow{name:string;entry:Record<string,unknown>;view:ManagedViewLike|null;/** F9: the entry also exists in the composition base layer; an official unset writes that inherited value back. */inherited:boolean;}
 
 const asRecord=(value:unknown):Record<string,unknown>|null=>value!==null&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:null;
 
-/** 读官方命名空间的当前值；读不到就是读不到，不伪造空表。 */
-export function managedDescriptor(authority:ManagedAuthority):{revision:number;servers:Record<string,Record<string,unknown>>}|null{
+/** 读官方命名空间的当前值；读不到就是读不到，不伪造空表。F6 keeps the failure as a directory issue
+ *  instead of letting the caller turn a failed read into an empty server list. */
+export interface ManagedDescriptorRead {
+ descriptor:{revision:number;servers:Record<string,Record<string,unknown>>}|null;
+ issue:McpCatalogIssue|null;
+ /** F9: names present in the composition base layer; an official unset would write the inherited value back. */
+ baseServers:ReadonlySet<string>;
+}
+function boundedDiagnostic(error:unknown):string{
+ const message=typeof (error as {message?:unknown})?.message==='string'?(error as {message:string}).message:String(error);
+ return message.length<=2000?message:message.slice(0,2000);
+}
+function readManagedDescriptor(authority:ManagedAuthority):ManagedDescriptorRead{
  let list:ManagedDescriptorLike[];
  try{list=authority.settings.describe({redactSecrets:false});}
- catch{return null;}
+ catch(error){return {descriptor:null,issue:{code:'read-failed',raw:boundedDiagnostic(error)},baseServers:new Set()};}
  const found=list.find(item=>asRecord(item)!==null&&item.ns===authority.namespace);
  const section=asRecord(found);
- if(section===null)return null;
+ if(section===null)return {descriptor:null,issue:{code:'namespace-missing',raw:authority.namespace},baseServers:new Set()};
  const value=asRecord(section.value);
  const servers=asRecord(value?.servers);
+ const base=asRecord(section.base);
+ const baseServers=asRecord(base?.servers);
  const revision=typeof section.revision==='number'?section.revision:0;
  const out:Record<string,Record<string,unknown>>={};
  for(const [name,entry] of Object.entries(servers??{})){
   const record=asRecord(entry);
   if(record!==null)out[name]=record;
  }
- return {revision,servers:out};
+ return {descriptor:{revision,servers:out},issue:null,baseServers:new Set(Object.keys(baseServers??{}))};
+}
+export function managedDescriptor(authority:ManagedAuthority):{revision:number;servers:Record<string,Record<string,unknown>>}|null{
+ return readManagedDescriptor(authority).descriptor;
 }
 
 export function managedViews(authority:ManagedAuthority):Map<string,ManagedViewLike>{
@@ -93,14 +109,19 @@ export function managedStatusOf(view:ManagedViewLike|null):{state:McpServerState
  }
 }
 
-/** 目录行：条目来自 config.servers，状态来自 mcpManager；两个来源都读不到时条目照列、状态未知。 */
-export function managedCatalog(authority:ManagedAuthority):ManagedCatalogRow[]{
- const descriptor=managedDescriptor(authority);
- if(descriptor===null)return [];
+export interface ManagedCatalogRead {rows:ManagedCatalogRow[];issue:McpCatalogIssue|null;}
+/** 目录行：条目来自 config.servers，状态来自 mcpManager；两个来源都读不到时条目照列、状态未知。
+ *  A failed settings read is reported as an issue, never as “there are no servers”. */
+export function managedCatalogRead(authority:ManagedAuthority):ManagedCatalogRead{
+ const read=readManagedDescriptor(authority);
+ if(read.descriptor===null)return {rows:[],issue:read.issue};
  const views=managedViews(authority);
- return Object.entries(descriptor.servers)
-  .map(([name,entry])=>({name,entry,view:views.get(name)??null}))
-  .sort((left,right)=>left.name<right.name?-1:left.name>right.name?1:0);
+ return {issue:null,rows:Object.entries(read.descriptor.servers)
+  .map(([name,entry])=>({name,entry,view:views.get(name)??null,inherited:read.baseServers.has(name)}))
+  .sort((left,right)=>left.name<right.name?-1:left.name>right.name?1:0)};
+}
+export function managedCatalog(authority:ManagedAuthority):ManagedCatalogRow[]{
+ return managedCatalogRead(authority).rows;
 }
 
 function pairsToObject(pairs:unknown):Record<string,string>{
@@ -180,7 +201,7 @@ export async function managedProbe(authority:ManagedAuthority,name:string):Promi
 }
 
 /** 官方行发现：按模块名找 entry id（行 id 由用户 profile 决定），再确认两个服务都在。
- *  缺任何一半都返回 null——UI 退回旧路径（ADR-092 D4：同一运行时只允许一个 owner）。 */
+ *  缺任何一半都返回 null——页面只读（ADR-095 D6.3：同一运行时只允许一个 owner）。 */
 export function discoverManagedAuthority(entries:readonly {id?:unknown;name?:unknown}[],lookup:(name:string)=>unknown):ManagedAuthority|null{
  for(const entry of entries){
   if(entry===null||typeof entry!=='object')continue;

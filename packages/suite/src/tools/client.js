@@ -87,6 +87,8 @@ const en={
   mcpKeepUnlessChanged:"The saved value is not shown; only your edits change it.",
   mcpEmptyTitle:'No MCP servers yet',
   mcpEmptyDescription:'Add a server and its tools become available to the model.',
+  mcpCatalogSummaryUnreadable:'MCP server directory unreadable',
+  mcpCatalogUnreadable:'The MCP server directory could not be read. This is not an empty list.',
   mcpProfileUnavailable:"No writable configuration is available.",
   mcpPatchUnreadable:"Unsupported configuration format; editing unavailable.",
   mcpAddTitle:'Add MCP server',
@@ -111,8 +113,8 @@ const en={
   mcpFailOnStartupHint:"When on, a startup failure is an error instead of leaving a degraded server.",
   mcpGroupOfficial:'Servers managed by the app',
   mcpGroupOfficialHint:'Same configuration as the official plugin page; changes here are visible there.',
-  mcpGroupSuite:"This suite's MCP clients",
-  mcpGroupSuiteHint:'OAuth sign-in and connection handling, maintained by this suite.',
+  mcpGroupSuite:'Other sources',
+  mcpGroupSuiteHint:'Suite-owned clients, historical configuration, or plugin-provided servers; editability follows each row.',
   mcpEnabled:'Enabled',
   mcpEnabledHint:'A disabled server stays listed but does not start.',
   mcpManagedUnavailable:"The app's MCP manager is not available here, so servers cannot be changed on this page.",
@@ -148,6 +150,7 @@ const en={
   mcpServerExists:'A server with this name already exists.',
   mcpServerMissing:'That server row no longer exists; refresh and try again.',
   mcpServerNotEditable:"This row belongs to another configuration and cannot be edited here.",
+  mcpServerInherited:"This server comes from the base configuration and cannot be deleted here. Disable it or override it instead.",
   mcpWriteLocked:"Another writer is editing the configuration; try again shortly.",
   mcpWriteFailed:"Writing the configuration failed; nothing changed. Retry later.",
   mcpSaveFailed:"Change failed; see diagnostic code, then retry.",
@@ -256,28 +259,8 @@ const en={
   mcpProbeDone:'Check finished: {state}',
   mcpProbeNoAnswer:"Check finished without a connection status; try the check again.",
   mcpProbeFailed:"The connection check failed; see the technical diagnostics for the error code.",
-  mcpUpgradableNotice:'{count} static HTTP rows are still loaded by the official client (v1 only).',
-  mcpMigrate:'Switch to the v2 client',
-  mcpMigrating:'Switching…',
-  mcpMigrateTitle:'Switch static HTTP rows to the v2 client?',
-  mcpMigrateText:"This changes the client used by {count} rows, backs up the configuration, and takes effect after a restart.",
-  mcpMigrateConfirm:'Switch and back up',
-  mcpMigrateDone:'Switched {count} rows · restart required',
-  mcpMigrateNoop:'Every row already uses the v2 client',
-  mcpMigrationFailed:"Switch failed; see diagnostic code, then retry.",
+  mcpUnsupported:"This DSH does not provide the official MCP management capability; the Suite no longer supports the old configuration path. Upgrade DSH or continue with 0.2.5 stable.",
   mcpProbeUnavailable:"This MCP server does not support connection checks.",
-  mcpMigrationUnavailable:"No configured MCP client supports v2.",
-  mcpLegacyNotice:'{count} rows still load an old external client package: {names}',
-  mcpMigrateClients:'Switch to the built-in clients',
-  mcpMigratingClients:'Switching…',
-  mcpMigrateClientsTitle:'Switch rows to the built-in MCP clients?',
-  mcpMigrateClientsText:"This changes the client used by {count} rows, backs up the configuration, and takes effect after a restart.",
-  mcpMigrateClientsConfirm:'Switch and back up',
-  mcpMigrateClientsDone:'Switched {count} rows · restart required',
-  mcpMigrateClientsNoop:'Every row already uses the built-in clients',
-  mcpClientsRestart:'Restart the app for the switch to take effect.',
-  mcpClientsMigrationFailed:"Client switch failed; see diagnostic code, then retry.",
-  mcpClientsBackup:'Backup file',
 };
 
 const zh={
@@ -322,6 +305,8 @@ const zh={
   mcpKeepUnlessChanged:"当前值不显示；编辑后才更改。",
   mcpEmptyTitle:'还没有 MCP 服务器',
   mcpEmptyDescription:'添加一台服务器后，它的工具会出现在模型可用的工具表里。',
+  mcpCatalogSummaryUnreadable:'MCP 服务器目录读取失败',
+  mcpCatalogUnreadable:'MCP 服务器目录读取失败；这里不是空列表。',
   mcpProfileUnavailable:"当前没有可写的配置文件。",
   mcpPatchUnreadable:"当前配置格式不受支持，本页无法编辑。",
   mcpAddTitle:'添加 MCP 服务器',
@@ -346,8 +331,8 @@ const zh={
   mcpFailOnStartupHint:"开启后，启动失败会报错，不会降级运行。",
   mcpGroupOfficial:'由应用管理的服务器',
   mcpGroupOfficialHint:'与官方插件页使用同一份配置；这里改的服务器，官方页面也看得到。',
-  mcpGroupSuite:'本套件自带的 MCP 客户端',
-  mcpGroupSuiteHint:'这些客户端提供 OAuth 登录与连接方式适配，由本套件维护。',
+  mcpGroupSuite:'其他来源的服务器',
+  mcpGroupSuiteHint:'本套件自带的客户端、历史配置或插件提供的服务器；能否编辑以每行按钮为准。',
   mcpEnabled:'启用',
   mcpEnabledHint:'停用的服务器仍会列出，但不会启动。',
   mcpManagedUnavailable:'当前环境没有可用的 MCP 管理器，这里暂时不能改服务器。',
@@ -383,6 +368,7 @@ const zh={
   mcpServerExists:'同名服务器已存在。',
   mcpServerMissing:'该服务器行已不存在，刷新后重试。',
   mcpServerNotEditable:"此行不属于当前配置，无法在此编辑。",
+  mcpServerInherited:"该服务器来自基础配置，无法在这里删除；请改用禁用或覆盖。",
   mcpWriteLocked:"另一个写入者正在修改配置，请稍后重试。",
   mcpWriteFailed:"写入配置失败，原文件未更改；请稍后重试。",
   mcpSaveFailed:"改动失败；机器码见诊断，请重试。",
@@ -491,28 +477,8 @@ const zh={
   mcpProbeDone:'检查完成：{state}',
   mcpProbeNoAnswer:"检查完成但未返回连接状态，请重新检查。",
   mcpProbeFailed:"检查连接失败；错误码见原始技术诊断。",
-  mcpUpgradableNotice:'{count} 条旧静态 HTTP 行仍由官方客户端加载（只支持 v1）。',
-  mcpMigrate:'改走 v2 客户端',
-  mcpMigrating:'正在切换…',
-  mcpMigrateTitle:'把静态 HTTP 行改走 v2 客户端？',
-  mcpMigrateText:"会更改 {count} 行使用的客户端、备份当前配置，并在重启后生效。",
-  mcpMigrateConfirm:'切换并备份',
-  mcpMigrateDone:'已改 {count} 条 · 需要重启生效',
-  mcpMigrateNoop:'已全部在 v2 客户端上',
-  mcpMigrationFailed:"切换失败；机器码见诊断，请重试。",
+  mcpUnsupported:"当前 DSH 不提供官方 MCP 管理能力，套件已不再支持旧路径；请升级 DSH 或继续使用 0.2.5 stable。",
   mcpProbeUnavailable:"此 MCP 服务器不支持连接状态检查。",
-  mcpMigrationUnavailable:"当前配置没有支持 v2 的 MCP 客户端，无法切换。",
-  mcpLegacyNotice:'{count} 行仍由旧外部客户端包加载：{names}',
-  mcpMigrateClients:'改走内嵌客户端',
-  mcpMigratingClients:'正在切换…',
-  mcpMigrateClientsTitle:'把这些行改走套件内嵌 MCP 客户端？',
-  mcpMigrateClientsText:"会更改 {count} 行使用的客户端、备份当前配置，并在重启后生效。",
-  mcpMigrateClientsConfirm:'切换并备份',
-  mcpMigrateClientsDone:'已改 {count} 行 · 需要重启生效',
-  mcpMigrateClientsNoop:'已全部在内嵌客户端上',
-  mcpClientsRestart:'重启应用后切换才生效。',
-  mcpClientsMigrationFailed:"客户端切换失败；机器码见诊断，请重试。",
-  mcpClientsBackup:'备份文件',
 };
 
 /** The 0.1.3 skills dictionary, carried over verbatim (30 keys per language). */
@@ -630,6 +596,7 @@ const mcpSentence=(t,issue)=>issue===null?null:
   issue.kind==='mount'?t('componentNotStarted'):
   issue.kind==='profile-unavailable'?t('mcpProfileUnavailable'):
   issue.kind==='patch-unreadable'?t('mcpPatchUnreadable'):
+  issue.kind==='catalog-unreadable'?t('mcpCatalogUnreadable'):
   issue.kind==='answer'?t('answerUnreadable'):
   t('componentNotStarted');
 /** The four server states the Host reports; an unknown value is shown verbatim, never guessed into a state. */
@@ -667,13 +634,14 @@ const MCP_MUTATION_ERRORS=new Map([
   ['mcp/server-exists','mcpServerExists'],
   ['mcp/server-missing','mcpServerMissing'],
   ['mcp/server-not-editable','mcpServerNotEditable'],
+  ['mcp/server-inherited','mcpServerInherited'],
   ['mcp/profile-unavailable','mcpProfileUnavailable'],
   ['mcp/profile-patch-unreadable','mcpPatchUnreadable'],
   ['mcp/write-locked','mcpWriteLocked'],
   ['mcp/write-failed','mcpWriteFailed'],
   ['mcp/probe-unavailable','mcpProbeUnavailable'],
   ['mcp/row-missing','mcpServerMissing'],
-  ['mcp/migration-unavailable','mcpMigrationUnavailable'],
+  ['mcp/unsupported','mcpUnsupported'],
   ['mcp/managed-unavailable','mcpManagedUnavailable'],
   ['mcp/managed-write-failed','mcpWriteFailed'],
 ]);
@@ -755,7 +723,7 @@ const mcpDraftInvalidSentence=(t,failed)=>{
   return fill(t(reasonKey),{label});
 };
 const mutationRaw=failed=>failed&&failed.failure&&typeof failed.failure.raw==='string'?failed.failure.raw:String(failed&&failed.message?failed.message:failed);
-/** Probe/migration refusals reuse the MCP code table but need their own fallback sentence: a failed check is not a
+/** Probe refusals reuse the MCP code table but need their own fallback sentence: a failed check is not a
  * failed save. The machine code still only travels to the technical disclosure. */
 const mcpActionSentence=(t,failed,fallbackKey)=>{
   const code=failed&&typeof failed==='object'?codeOf(failed):null;
@@ -1231,11 +1199,17 @@ function McpTab(props){
   const servers=catalog!==null&&catalog!==undefined&&Array.isArray(catalog.servers)?catalog.servers:[];
   // ADR-094 D4：官方 manager 在场时，托管行与套件自有客户端是两类事实，列表按来源分开；
   // 没有官方 manager（rc.1）时保持原来的单列表，页面不凭空多出两个分区。
-  const authority=catalog!==null&&catalog!==undefined&&catalog.authority==='official'?'official':'rows';
+  // A catalog that is absent, old, or explicitly unsupported is read-only: only the official manager is a
+  // writable authority in 0.3.0 (ADR-095 D3).
+  const authority=catalog!==null&&catalog!==undefined&&catalog.authority==='official'?'official':'unsupported';
+  const unsupported=authority==='unsupported';
+  const catalogIssue=catalog!==null&&catalog!==undefined&&catalog.issue&&typeof catalog.issue==='object'?catalog.issue:null;
   const officialRows=servers.filter(server=>server.managed===true);
   const ownRows=servers.filter(server=>server.managed!==true);
-  const sentence=mcpSentence(t,slot.issue);
-  const summary=catalog===null?t('summaryPending'):fill(t('mcpServersSummary'),{
+  // F6 reuses the existing read-failure surface: a catalog issue is another read failure, not a new block.
+  const failureIssue=slot.issue??(catalogIssue!==null?{kind:'catalog-unreadable',raw:catalogIssue.raw}:null);
+  const sentence=mcpSentence(t,failureIssue);
+  const summary=catalog===null?t('summaryPending'):catalogIssue!==null?t('mcpCatalogSummaryUnreadable'):fill(t('mcpServersSummary'),{
     servers:servers.length,
     running:servers.filter(server=>server.state==='running').length,
     tools:servers.reduce((total,server)=>total+(Number.isFinite(server.toolCount)?server.toolCount:0),0),
@@ -1250,11 +1224,6 @@ function McpTab(props){
   const [probing,setProbing]=React.useState(null);
   const [probeIssue,setProbeIssue]=React.useState(null);
   const [runtimeOverrides,setRuntimeOverrides]=React.useState({});
-  const [migrating,setMigrating]=React.useState(false);
-  const [migrationIssue,setMigrationIssue]=React.useState(null);
-  const [migratingClients,setMigratingClients]=React.useState(false);
-  const [clientsIssue,setClientsIssue]=React.useState(null);
-  const [clientsReceipt,setClientsReceipt]=React.useState(null);
   // One OAuth session at a time: the pasted code lives here only until the submit succeeds, and a catalog read
   // (the page's own refresh) drops it rather than keeping a credential-shaped value in long-lived state.
   const [oauthSession,setOauthSession]=React.useState(null);
@@ -1321,11 +1290,6 @@ function McpTab(props){
   const purposesIssue=slot.purposesIssue??null;
   const purposesUnreadable=purposes!==null&&purposes.unreadable!==null&&purposes.unreadable!==undefined;
   const purposeTextOf=rowId=>purposes!==null&&purposes.purposes!==null&&typeof purposes.purposes[rowId]==='string'?purposes.purposes[rowId]:'';
-  const upgradableCount=servers.filter(server=>server.upgradable===true).length;
-  // ADR-033 D4: rows still loading a historical external package. The Host labels them (clientSource); this page
-  // never keeps its own package-name list.
-  const legacyRows=servers.filter(server=>server.clientSource==='external-legacy');
-  const legacyCount=legacyRows.length;
   // A host confirm layer outlives this component; the owner closes it so a tab switch cannot leave it behind.
   React.useEffect(()=>()=>{if(confirmRef.current!==null){confirmRef.current.close();confirmRef.current=null;}},[]);
   const setValue=(key,value)=>setValues(current=>current===null?current:{...current,[key]:value});
@@ -1379,6 +1343,11 @@ function McpTab(props){
     // ADR-033 D1: the kind picks which carried client the Host writes; an edit keeps the row's existing client
     // and its transport, so neither key is named by an edit — the row is the fact (0.2.0-5 key-set rule).
     if(form.mode==='add'){draft.kind=values.kind==='oauth'?'oauth':'static';draft.transport=values.transport;}
+    else if(form.server!==null&&values.transport!==(form.server.transport==='stdio'?'stdio':'streamable-http')){
+      // R5: the edit form offers a transport switch for rows whose client allows it, but the draft used to omit
+      // the changed transport and the Host kept the stored one. Name it only when the user actually changed it.
+      draft.transport=values.transport;
+    }
     // A collapsed endpoint sends no url/command/args/cwd, so the Host keeps the existing values untouched.
     if(form.mode==='add'||values.endpointOpen){
       // "Blank submits nothing": an opened-but-empty endpoint field keeps the existing endpoint instead of
@@ -1491,67 +1460,6 @@ function McpTab(props){
     }finally{
       setProbing(null);
     }
-  };
-  const migrate=async()=>{
-    if(migrating)return;
-    setMigrationIssue(null);setMigrating(true);
-    try{
-      const result=await mutate('migrateMcpServers');
-      const changed=result!==null&&typeof result==='object'&&result.changed===true;
-      const count=changed&&Array.isArray(result.rows)?result.rows.length:upgradableCount;
-      showToast({text:changed?fill(t('mcpMigrateDone'),{count}):t('mcpMigrateNoop'),kind:'mcp-migration',closeLabel:t('closeToast')});
-      start();
-    }catch(failed){
-      setMigrationIssue({sentence:mcpActionSentence(t,failed,'mcpMigrationFailed'),raw:mutationRaw(failed)});
-    }finally{
-      setMigrating(false);
-    }
-  };
-  const askMigrate=()=>{
-    if(confirmRef.current!==null)confirmRef.current.close();
-    confirmRef.current=showConfirm({
-      title:t('mcpMigrateTitle'),
-      text:fill(t('mcpMigrateText'),{count:upgradableCount}),
-      cancelLabel:t('cancel'),
-      confirmLabel:t('mcpMigrateConfirm'),
-      tone:'danger',
-      onCancel:()=>{confirmRef.current=null;},
-      onConfirm:()=>{confirmRef.current=null;void migrate();},
-    });
-  };
-  const migrateClients=async()=>{
-    if(migratingClients)return;
-    setClientsIssue(null);setClientsReceipt(null);setMigratingClients(true);
-    try{
-      const result=await mutate('migrateMcpClients');
-      const changed=result!==null&&typeof result==='object'&&result.changed===true;
-      const count=changed&&Array.isArray(result.rows)?result.rows.length:legacyCount;
-      if(changed){
-        // The backup is a technical fact: it goes to the disclosure, never to the receipt sentence.
-        setClientsReceipt({backupPath:typeof result.backupPath==='string'&&result.backupPath.length>0?result.backupPath:null});
-        showToast({text:fill(t('mcpMigrateClientsDone'),{count}),kind:'mcp-clients-migration',closeLabel:t('closeToast')});
-      }else{
-        showToast({text:t('mcpMigrateClientsNoop'),kind:'mcp-clients-migration',closeLabel:t('closeToast')});
-      }
-      start();
-    }catch(failed){
-      setClientsIssue({sentence:mcpActionSentence(t,failed,'mcpClientsMigrationFailed'),raw:mutationRaw(failed)});
-    }finally{
-      setMigratingClients(false);
-    }
-  };
-  const askMigrateClients=()=>{
-    if(migratingClients)return;
-    if(confirmRef.current!==null)confirmRef.current.close();
-    confirmRef.current=showConfirm({
-      title:t('mcpMigrateClientsTitle'),
-      text:fill(t('mcpMigrateClientsText'),{count:legacyCount}),
-      cancelLabel:t('cancel'),
-      confirmLabel:t('mcpMigrateClientsConfirm'),
-      tone:'danger',
-      onCancel:()=>{confirmRef.current=null;},
-      onConfirm:()=>{confirmRef.current=null;void migrateClients();},
-    });
   };
   /** ADR-052 D3: the wait is observed by a bounded poll of the read-only status, never by holding the login
    * request open. Each scheduled read carries the generation token, so a cancelled or completed wait cannot land
@@ -1700,7 +1608,7 @@ function McpTab(props){
     }
   };
   const savePurpose=async(rowId,explicit)=>{
-    if(purposes===null||purposesUnreadable||purposeBusy!==null)return;
+    if(unsupported||purposes===null||purposesUnreadable||purposeBusy!==null)return;
     const purpose=(explicit===undefined?String(purposeDraft):String(explicit)).trim();
     setPurposeBusy(rowId);setPurposeIssue(null);
     try{
@@ -1714,7 +1622,7 @@ function McpTab(props){
     }finally{setPurposeBusy(null);}
   };
   const saveRouting=async next=>{
-    if(purposes===null||purposesUnreadable||purposeBusy!==null)return;
+    if(unsupported||purposes===null||purposesUnreadable||purposeBusy!==null)return;
     setPurposeBusy('routing');setPurposeIssue(null);
     try{
       // An explicit off is the routing:false fact; nothing else in the section changes.
@@ -1809,10 +1717,10 @@ function McpTab(props){
     // ADR-032: the purpose is one line per row. It renders once — either the stored value or the edit buffer —
     // and it renders at all only while the snapshot is readable. A broken or absent snapshot is not "no purpose":
     // the file cannot be trusted, so the row shows nothing here and the panel states the reason once, above.
-    const purposeReadable=purposes!==null&&!purposesUnreadable;
+    const purposeReadable=purposes!==null&&!purposesUnreadable&&!unsupported;
     const purposeText=purposeTextOf(id);
     const startPurposeEdit=()=>{
-      if(purposeBusy!==null)return;
+      if(unsupported||purposeBusy!==null)return;
       purposeFocusReturn.current=id;
       setPurposeEditing(id);setPurposeDraft(purposeText);
     };
@@ -1889,14 +1797,15 @@ function McpTab(props){
       badge:h(Badge,{key:'state',tone:stateTone,'data-testid':'mcp-state-'+id},stateWord),
       meta:mcpMeta(),
       children:detail.length>0?h('div',{className:'omni-ui-listFacts','data-testid':'mcp-facts-zone-'+id},detail):undefined,
-      actions:h(ActionGroup,null,
+      actions:unsupported?null:h(ActionGroup,null,
         // ADR-034 D1: sign-in is offered whenever the client is not authorized (needs-login or a failed
         // attempt); an unknown runtime published no connection fact, so it offers no action at all.
         oauthRow&&runtime!==null&&runtime!==undefined&&(runtime.state==='needs-login'||runtime.state==='failed')?h(Button,{variant:'ghost',busy:session!==null,onClick:()=>{void startOauthLogin(server);},'data-testid':'mcp-login-'+serverName},t('mcpOauthLogin')):null,
         oauthRow&&runtime!==null&&runtime!==undefined&&runtime.state==='connected'?h(Button,{variant:'ghost',busy:sessionBusy&&session.phase==='logging-out',onClick:()=>{void logoutOauth(server);},'data-testid':'mcp-logout-'+serverName},t('mcpOauthLogout')):null,
         probeable?h(Button,{variant:'ghost',busy:probing===id,onClick:()=>{void probe(server);},'data-testid':'mcp-probe-'+id},t('mcpCheckConnection')):null,
         server.editable===true?h(Button,{variant:'ghost','data-testid':'mcp-edit-'+id,onClick:()=>openEdit(server)},t('mcpSettings')):null,
-        h(Button,{variant:'danger-ghost',busy:removing===id,'data-testid':'mcp-delete-'+id,onClick:()=>askRemove(server)},t('remove'))),
+        // F2a: on rc.2 only a Suite-owned patch row is editable; a bundle/legacy row is read-only.
+        server.editable===true?h(Button,{variant:'danger-ghost',busy:removing===id,'data-testid':'mcp-delete-'+id,onClick:()=>askRemove(server)},t('remove')):null),
     });
   };
   const pairEditor=(kind,rows)=>h('div',{className:'omni-ui-stack','data-testid':'mcp-'+kind+'-editor'},
@@ -1930,10 +1839,10 @@ function McpTab(props){
   const formSection=()=>{
     const add=form.mode==='add';
     const server=form.server;
-    // A row loaded by an HTTP-only client (the Suite's own dual/OAuth subpaths, or an old external row that has not
-    // been migrated yet) can never be a stdio row, and the Host refuses that switch: the page must not offer a path
-    // that is guaranteed to be rejected. The hint is the readable reason.
-    const httpOnlyClient=!add&&server!==null&&(server.clientSource==='suite'||server.clientSource==='external-legacy'||values.kind==='oauth');
+    // A row loaded by an HTTP-only client (the Suite's own dual/OAuth subpaths) can never be a stdio row, and the
+    // Host refuses that switch: the page must not offer a path that is guaranteed to be rejected. Historical
+    // external rows are read-only under either authority, so they never reach this form.
+    const httpOnlyClient=!add&&server!==null&&(server.clientSource==='suite'||values.kind==='oauth');
     // ADR-094 D4：官方 manager 托管的条目与套件自有客户端共用一张表单，但官方 schema 没有的字段不出现。
     const managed=!add&&server!==null&&server.managed===true;
     const officialTarget=add?(authority==='official'&&values.kind!=='oauth'):managed;
@@ -1994,6 +1903,7 @@ function McpTab(props){
   if(form!==null&&values!==null)return formSection();
   return h('section',{className:'omni-ui-stack','data-testid':'mcp-section','aria-label':t('tabMcp')},
     h(StatusLine,{'data-testid':'mcp-summary'},summary),
+    catalog!==null&&unsupported?h(StatusLine,{tone:'warn',role:'status','data-testid':'mcp-unsupported'},t('mcpUnsupported')):null,
     purposesIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-purpose-read-failure'},
       h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-purpose-read-error'},t('mcpPurposeReadFailed')),
       h(Disclosure,{'data-testid':'mcp-purpose-read-raw',title:t('rawDetails')},
@@ -2004,16 +1914,16 @@ function McpTab(props){
         h(Disclosure,{'data-testid':'mcp-purpose-unreadable-raw',title:t('rawDetails')},
           h('pre',{className:'omni-ui-excerpt'},String(purposes.unreadable.code??'')+'\n'+String(purposes.unreadable.raw??''))))
       :h('div',{'data-testid':'mcp-routing-row'},
-        h(Switch,{label:t('mcpRouting'),description:t('mcpRoutingHint'),checked:purposes.routing===true,disabled:purposeBusy!==null,onChange:event=>{void saveRouting(event.target.checked);},'data-testid':'mcp-routing'})),
+        h(Switch,{label:t('mcpRouting'),description:t('mcpRoutingHint'),checked:purposes.routing===true,disabled:unsupported||purposeBusy!==null,onChange:event=>{void saveRouting(event.target.checked);},'data-testid':'mcp-routing'})),
     h('div',{className:'omni-ui-toolbar','data-testid':'mcp-toolbar'},
       h(ActionGroup,null,
-        h(Button,{onClick:openAdd,'data-testid':'mcp-add-server'},t('mcpAdd')),
+        h(Button,{onClick:openAdd,disabled:unsupported,'data-testid':'mcp-add-server'},t('mcpAdd')),
         h(Button,{'data-testid':'mcp-refresh',busy,onClick:()=>start()},busy?t('refreshing'):t('refresh')),
         receipt)),
     sentence===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-failure-block'},
       h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-failure'},sentence),
       h(Disclosure,{'data-testid':'mcp-failure-raw',title:t('rawDetails')},
-        h('pre',{className:'omni-ui-excerpt'},slot.issue.raw))),
+        h('pre',{className:'omni-ui-excerpt'},String(failureIssue.raw??'')))),
     deleteIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-action-failure'},
       h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-action-error'},deleteIssue.sentence),
       h(Disclosure,{'data-testid':'mcp-action-raw',title:t('rawDetails')},
@@ -2022,25 +1932,6 @@ function McpTab(props){
       h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-probe-error'},probeIssue.sentence),
       h(Disclosure,{'data-testid':'mcp-probe-raw',title:t('rawDetails')},
         h('pre',{className:'omni-ui-excerpt'},probeIssue.raw))),
-    migrationIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-migration-failure'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-migration-error'},migrationIssue.sentence),
-      h(Disclosure,{'data-testid':'mcp-migration-raw',title:t('rawDetails')},
-        h('pre',{className:'omni-ui-excerpt'},migrationIssue.raw))),
-    upgradableCount>0?h('div',{className:'omni-ui-stack','data-testid':'mcp-migration'},
-      h(StatusLine,{tone:'warn','data-testid':'mcp-upgradable'},fill(t('mcpUpgradableNotice'),{count:upgradableCount})),
-      h(ActionGroup,null,h(Button,{busy:migrating,onClick:askMigrate,'data-testid':'mcp-migrate'},migrating?t('mcpMigrating'):t('mcpMigrate')))):null,
-    clientsIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-clients-migration-failure'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-clients-migration-error'},clientsIssue.sentence),
-      h(Disclosure,{'data-testid':'mcp-clients-migration-raw',title:t('rawDetails')},
-        h('pre',{className:'omni-ui-excerpt'},clientsIssue.raw))),
-    clientsReceipt===null?null:h(React.Fragment,null,
-      h('div',{className:'omni-ui-stack','data-testid':'mcp-clients-restart'},
-        h(StatusLine,{tone:'warn',role:'status'},t('mcpClientsRestart'))),
-      clientsReceipt.backupPath===null?null:h(Disclosure,{'data-testid':'mcp-clients-backup',title:t('mcpClientsBackup')},
-        h('pre',{className:'omni-ui-excerpt'},clientsReceipt.backupPath))),
-    legacyCount>0&&catalog!==null?h('div',{className:'omni-ui-stack','data-testid':'mcp-legacy-notice'},
-      h(StatusLine,{tone:'warn'},fill(t('mcpLegacyNotice'),{count:legacyCount,names:legacyRows.map(server=>String(server.name)).join(', ')})),
-      h(ActionGroup,null,h(Button,{busy:migratingClients,onClick:askMigrateClients,'data-testid':'mcp-migrate-clients'},migratingClients?t('mcpMigratingClients'):t('mcpMigrateClients')))):null,
     servers.length===0?null:authority==='official'
       ?h(React.Fragment,null,
         officialRows.length===0?null:h('section',{className:'omni-ui-stack','data-testid':'mcp-group-official'},
@@ -2053,7 +1944,7 @@ function McpTab(props){
           h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list-suite'},ownRows.map(row))))
       :h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list'},servers.map(row)),
     catalog!==null&&servers.length===0&&sentence===null?h('div',{'data-testid':'mcp-empty'},
-      h(EmptyState,{title:t('mcpEmptyTitle'),description:t('mcpEmptyDescription'),action:h(Button,{onClick:openAdd,'data-testid':'mcp-empty-add'},t('mcpAdd'))})):null);
+      h(EmptyState,{title:t('mcpEmptyTitle'),description:t('mcpEmptyDescription'),action:h(Button,{onClick:openAdd,disabled:unsupported,'data-testid':'mcp-empty-add'},t('mcpAdd'))})):null);
 }
 
 /**
@@ -2146,7 +2037,10 @@ export function applyToolsPanel(ctx,options={}){
   const readMcpServers=async()=>{
     const value=await call(MCP_METHOD);
     if(!value||typeof value!=='object'||!Array.isArray(value.servers))throw failure('answer','SUITE_RESULT_INVALID '+MCP_METHOD+' answered without a servers array');
-    return {servers:value.servers,reload:value.reload==='live'?'live':'manual',authority:value.authority==='official'?'official':'rows'};
+    const issue=value.issue&&typeof value.issue==='object'&&typeof value.issue.code==='string'
+      ?{code:value.issue.code,raw:typeof value.issue.raw==='string'?value.issue.raw:''}
+      :null;
+    return {servers:value.servers,reload:value.reload==='live'?'live':'manual',authority:value.authority==='official'?'official':'unsupported',issue};
   };
   const readMcpPurposes=async()=>{
     const value=await call(MCP_PURPOSES_METHOD);
@@ -2183,7 +2077,7 @@ export function applyToolsPanel(ctx,options={}){
       if(disposed||controller.signal.aborted)return;
       if(tab==='skills'){slot.data={skills:value.skills,roots:value.roots};slot.complete=value.complete;}
       else{
-        slot.data={servers:value.servers.servers,reload:value.servers.reload,authority:value.servers.authority};
+        slot.data={servers:value.servers.servers,reload:value.servers.reload,authority:value.servers.authority,issue:value.servers.issue};
         slot.purposes=value.purposes;
         slot.purposesIssue=value.purposesIssue;
       }
