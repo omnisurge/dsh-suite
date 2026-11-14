@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -193,7 +193,7 @@
         "win32",
         "linux"
       ],
-      "note": "macOS verified by this repository gates (G1-G5). Windows G6 was verified for 0.3.0 but not rerun for the 0.3.1 patch, so win32 is unverified for this patch. Linux G6 is not verified for this generation because NAS execution is frozen by ADR0048; the Linux rc.1 evidence is historical only."
+      "note": "macOS verified by this repository gates (G1-G5). Windows G6 was verified for 0.3.0 but not rerun for the 0.3.2 patch, so win32 is unverified for this patch. Linux G6 is not verified for this generation because NAS execution is frozen by ADR0048; the Linux rc.1 evidence is historical only."
     }
   },
   "dependencies": {

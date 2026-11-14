@@ -9,7 +9,7 @@
  */
 import * as React from 'react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject } from 'react'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ModelSelection, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type {
@@ -32,10 +32,18 @@ import {
 import { remoteSelectAccepted, tryDirectoryFor, unwrapCatalog, type CatalogGroup } from '../directory-bind.js'
 import { injectStyles, showConfirm, showToast, Switch } from '@omnisurge/dsh-ui'
 import { CSS } from './styles.js'
+import type { SlotEntry, SlotHost } from './slot-host.js'
+import {
+  isOfficialModelEntry,
+  MODEL_LABEL_SLOT,
+  MODEL_OPTIONS_SLOT,
+  MODEL_SLOT,
+  orderSlotEntries,
+} from './slot-host.js'
 
 export const inject = ['slots', 'remote', 'remote.session']
 
-const SLOT = 'conversation.input.model'
+const SLOT = MODEL_SLOT
 const CHAT_ROUTE_REQUEST_TIMEOUT_MS = 1_500
 
 const LEVEL_NAMES: Record<string, string> = {
@@ -71,6 +79,25 @@ function currentModel(state: ModelDirectoryState) {
 function sliderLevels(state: ModelDirectoryState): readonly EffortLevel[] {
   const efforts = currentModel(state)?.reasoning?.efforts
   return efforts !== undefined && efforts.length >= 2 ? efforts : []
+}
+
+/**
+ * The official ModelSelect only uses the model metadata to decide whether to
+ * render its own effort row. The seat drops that metadata from the view the
+ * official component sees; the original directory remains the write owner.
+ */
+function stripReasoning(state: ModelDirectoryState): ModelDirectoryState {
+  return {
+    ...state,
+    groups: state.groups.map((group) => ({
+      ...group,
+      models: group.models.map((model) => {
+        if (model.reasoning === undefined) return model
+        const { reasoning: _reasoning, ...rest } = model
+        return rest
+      }),
+    })),
+  }
 }
 
 /** chibi（大肥鱼，素材复用自 dsh-reasoning-effort/HanaAyane，MIT）默认开启。 */
@@ -255,7 +282,7 @@ function drawRadiation(
   }
 }
 
-function EffortSlider({ directory }: { directory: ModelDirectory }) {
+function EffortSlider({ directory, locked = false }: { directory: ModelDirectory; readonly locked?: boolean }) {
   const directoryState = useSyncExternalStore(
     (notify) => directory.store.subscribe(notify),
     () => directory.store.getSnapshot(),
@@ -282,7 +309,7 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
   const redrawRef = useRef<(() => void) | null>(null)
 
   const available = directoryState.current !== null && levels.length >= 2
-  const busy = committing || directoryState.status === 'selecting'
+  const busy = locked || committing || directoryState.status === 'selecting'
   const error = localError ?? directoryState.error
 
   useEffect(() => {
@@ -383,7 +410,7 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
 
   const commit = useCallback(
     async (raw: number) => {
-      if (committingRef.current) return
+      if (committingRef.current || locked) return
       committingRef.current = true
       const previous = committedRef.current
 
@@ -463,6 +490,7 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
   }
 
   const beginDragging = (input: HTMLInputElement, pointerId: number, clientX: number) => {
+    if (locked || committingRef.current) return
     pointerActiveRef.current = true
     activePointerIdRef.current = pointerId
     draggingRef.current = true
@@ -527,6 +555,7 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
   }, [available, error])
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (locked || committingRef.current) return
     const current = clampIndex(Number(event.currentTarget.value), levels.length)
     let target: number | undefined
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown' || event.key === 'PageDown') {
@@ -539,6 +568,9 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
       target = levels.length - 1
     }
     if (target === undefined) return
+    // The slider lives inside the official menu whose root handles arrow keys
+    // for row focus; keep the slider's own keyboard semantics here.
+    event.stopPropagation()
     event.preventDefault()
     void commit(target)
   }
@@ -590,10 +622,13 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
           max={count - 1}
           step="0.01"
           value={preview}
-          disabled={busy}
+          // Keep the range focusable while our own commit is in flight: disabling it
+          // blurs the official menu root, whose onBlur closes the whole menu.
+          aria-disabled={busy ? 'true' : undefined}
           aria-label="推理强度"
           aria-valuetext={effortName}
           onChange={(event) => {
+            if (locked || committingRef.current) return
             showPointerPreview(Number(event.currentTarget.value))
           }}
           onPointerDown={(event) => {
@@ -603,7 +638,12 @@ function EffortSlider({ directory }: { directory: ModelDirectory }) {
             beginDragging(event.currentTarget, event.pointerId, event.clientX)
           }}
           onPointerMove={(event) => moveDragging(event.currentTarget, event.pointerId, event.clientX)}
-          onPointerUp={(event) => stopDragging(event.currentTarget, event.pointerId, event.clientX)}
+          onPointerUp={(event) => {
+            // Pointer dragging deliberately avoids stealing focus; return focus on release
+            // so the same control remains reachable with Arrow/Home/End afterwards.
+            try { event.currentTarget.focus({preventScroll: true}) } catch { /* focus is optional */ }
+            stopDragging(event.currentTarget, event.pointerId, event.clientX)
+          }}
           onPointerCancel={(event) => {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
               event.currentTarget.releasePointerCapture(event.pointerId)
@@ -774,6 +814,8 @@ interface ModelSeatProps {
   readonly useSessions?: (selector: (state: { readonly byId?: Record<string, { readonly origin?: string }> }) => unknown) => unknown
   /** Save the Team selection through the official agentTeams remote. */
   readonly selectTeamMode?: (enabled: boolean) => Promise<string | null>
+  /** Read-only slot ledger used to put the official ModelSelect and its child entries back. */
+  readonly slotHost?: SlotHost
 }
 
 function ModelSeat(props: ModelSeatProps) {
@@ -920,7 +962,7 @@ function WorkModelRemoteSeat({
 }
 
 function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, useSessions, selectTeamMode }: Pick<ModelSeatProps, 'sessionId' | 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void }) {
-  const addressed = useSession === undefined ? false : useSession(snapshot => snapshot.subagent !== null) === true
+  const addressed = useSession === undefined ? false : useSession(snapshot => snapshot.subagent !== null && snapshot.subagent !== undefined) === true
   const listed = useSessions === undefined ? false : useSessions(state => state.byId?.[sessionId]?.origin === 'subagent') === true
   const mode = useProjection === undefined ? undefined : useProjection('agentTeam')
   const selection = useProjection === undefined ? undefined : useProjection('modelSelection')
@@ -957,7 +999,261 @@ function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, 
   )
 }
 
-export function WorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, selectTeamMode }: { readonly controller: ModelDirectory; readonly sessionId: SessionId; readonly locked: boolean } & Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'>) {
+type WorkModelReadyProps = {
+  readonly controller: ModelDirectory
+  readonly sessionId: SessionId
+  readonly locked: boolean
+  readonly slotHost?: SlotHost
+} & Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'>
+
+type RenderSlotOptions = { readonly fallback?: ReactNode }
+
+type SlotStandardProps = {
+  readonly sessionId: SessionId
+  readonly useProjection: NonNullable<ModelSeatProps['useProjection']>
+  readonly useSession: NonNullable<ModelSeatProps['useSession']>
+  readonly useSessions: NonNullable<ModelSeatProps['useSessions']>
+}
+
+const fallbackProjection: NonNullable<ModelSeatProps['useProjection']> = () => undefined
+const fallbackSession: NonNullable<ModelSeatProps['useSession']> = () => false
+const fallbackSessions: NonNullable<ModelSeatProps['useSessions']> = () => false
+
+function useSlotEntries(host: SlotHost, key: string, winners: boolean): readonly SlotEntry[] {
+  const read = useCallback(
+    () => (winners ? host.entriesOfSlot(key) : host.entries(key)),
+    [host, key, winners],
+  )
+  const [entries, setEntries] = useState<readonly SlotEntry[]>(() => read())
+  useEffect(() => {
+    const sync = () => setEntries(read())
+    sync()
+    return host.subscribe(key, sync)
+  }, [host, key, read])
+  return entries
+}
+
+function renderSlotEntry(
+  entry: SlotEntry,
+  sessionId: SessionId,
+  owner: Record<string, unknown>,
+  host: SlotHost,
+  standard: SlotStandardProps,
+): ReactNode {
+  if (typeof entry.component !== 'function') return null
+  let injected: Record<string, unknown> = {}
+  if (entry.inject !== undefined) {
+    try {
+      injected = entry.inject(String(sessionId))
+    } catch {
+      return null
+    }
+  }
+  const t = entry.locale === undefined ? undefined : host.bindLocale(entry.locale)
+  return React.createElement(entry.component as React.ComponentType<Record<string, unknown>>, {
+    ...standard,
+    ...injected,
+    ...owner,
+    ...(t === undefined ? {} : { t }),
+  })
+}
+
+function renderSlotEntries(
+  entries: readonly SlotEntry[],
+  sessionId: SessionId,
+  owner: Record<string, unknown>,
+  host: SlotHost,
+  standard: SlotStandardProps,
+): ReactNode {
+  return orderSlotEntries(entries).map((entry, index) => (
+    <React.Fragment key={String(entry.options.id ?? entry.locale ?? 'entry') + ':' + index}>
+      {renderSlotEntry(entry, sessionId, owner, host, standard)}
+    </React.Fragment>
+  ))
+}
+
+function EffortSliderOption({ controller, locked }: { readonly controller?: ModelDirectory; readonly locked: boolean }) {
+  if (controller === undefined) return null
+  return (
+    <div className="omnieff-advanced">
+      <EffortSlider directory={controller} locked={locked} />
+    </div>
+  )
+}
+
+interface OfficialSeatBoundaryProps {
+  readonly fallback: ReactNode
+  readonly children: ReactNode
+}
+
+interface OfficialSeatBoundaryState {
+  readonly failed: boolean
+}
+
+let OfficialSeatBoundaryImplementation: React.ComponentType<OfficialSeatBoundaryProps> | undefined
+
+/** A future official component change must degrade to the local menu, never take the seat down. */
+function OfficialSeatBoundary(props: OfficialSeatBoundaryProps): ReactNode {
+  // React.Component is a browser external; resolve it only when a real renderer
+  // asks for the seat. The module-loader inspection fixture supplies a minimal
+  // React stub without Component and must still be able to load the bundle.
+  if (OfficialSeatBoundaryImplementation === undefined) {
+    OfficialSeatBoundaryImplementation = class extends React.Component<OfficialSeatBoundaryProps, OfficialSeatBoundaryState> {
+      state: OfficialSeatBoundaryState = { failed: false }
+
+      static getDerivedStateFromError(): OfficialSeatBoundaryState {
+        return { failed: true }
+      }
+
+      componentDidCatch(error: unknown): void {
+        console.warn('[effort-slider] official ModelSelect rejected the seat entry; using the local menu', error)
+      }
+
+      render(): ReactNode {
+        return this.state.failed ? this.props.fallback : this.props.children
+      }
+    }
+  }
+  const Boundary = OfficialSeatBoundaryImplementation
+  return <Boundary {...props} />
+}
+
+function OfficialModelSeat({ controller, sessionId, locked, slotHost, useProjection, useSession, useSessions, selectTeamMode }: WorkModelReadyProps & { readonly slotHost: SlotHost }) {
+  const entries = useSlotEntries(slotHost, MODEL_SLOT, false)
+  const official = entries.find(isOfficialModelEntry)
+  const state = useSyncExternalStore(
+    (notify) => controller.store.subscribe(notify),
+    () => controller.store.getSnapshot(),
+  )
+  const currentChoice = state.current !== null && state.groups.some((group) => (
+    group.id === state.current?.provider && group.models.some((model) => model.id === state.current?.model)
+  ))
+  // The official ModelSelect opens its model chooser directly when no
+  // resolvable selection exists. Keep the existing full menu in that state so
+  // the Team switch remains reachable; the official entry takes over as soon
+  // as the current model is present in the loaded catalog.
+  const fallback = <FallbackWorkModelReady controller={controller} sessionId={sessionId} locked={locked} useProjection={useProjection} useSession={useSession} useSessions={useSessions} selectTeamMode={selectTeamMode} />
+  if (official === undefined || !currentChoice) return fallback
+  return (
+    <OfficialSeatBoundary key={String(official.options.id ?? official.locale ?? 'model') + ':' + String(sessionId)} fallback={fallback}>
+      <OfficialModelSeatBody
+        entry={official}
+        controller={controller}
+        sessionId={sessionId}
+        locked={locked}
+        slotHost={slotHost}
+        useProjection={useProjection}
+        useSession={useSession}
+        useSessions={useSessions}
+      />
+    </OfficialSeatBoundary>
+  )
+}
+
+function OfficialModelSeatBody({ entry, controller, sessionId, locked, slotHost, useProjection, useSession, useSessions }: WorkModelReadyProps & { readonly entry: SlotEntry; readonly slotHost: SlotHost }) {
+  const original = controller.store
+  const originalState = useSyncExternalStore(
+    (notify) => original.subscribe(notify),
+    () => original.getSnapshot(),
+  )
+  const strippedState = React.useMemo(() => stripReasoning(originalState), [originalState])
+  const directory = React.useMemo(() => ({
+    subscribe: (notify: () => void) => original.subscribe(notify),
+    getSnapshot: () => strippedState,
+  }), [original, strippedState])
+  const injected = React.useMemo<Record<string, unknown>>(() => {
+    if (entry.inject === undefined) return {}
+    try {
+      return entry.inject(String(sessionId))
+    } catch {
+      return {}
+    }
+  }, [entry, sessionId])
+  const t = React.useMemo(
+    () => (entry.locale === undefined ? (key: string) => key : slotHost.bindLocale(entry.locale)),
+    [entry.locale, slotHost],
+  )
+  const labelEntries = useSlotEntries(slotHost, MODEL_LABEL_SLOT, true)
+  const optionEntries = useSlotEntries(slotHost, MODEL_OPTIONS_SLOT, true)
+  const standard = React.useMemo<SlotStandardProps>(() => ({
+    sessionId,
+    useProjection: useProjection ?? fallbackProjection,
+    useSession: useSession ?? fallbackSession,
+    useSessions: useSessions ?? fallbackSessions,
+  }), [sessionId, useProjection, useSession, useSessions])
+  const renderSlot = useCallback((key: string, owner?: Record<string, unknown>, opts?: RenderSlotOptions): ReactNode => {
+    if (key === MODEL_LABEL_SLOT) {
+      const entry = labelEntries[0]
+      return entry === undefined
+        ? (opts?.fallback ?? null)
+        : renderSlotEntry(entry, sessionId, owner ?? {}, slotHost, standard)
+    }
+    if (key === MODEL_OPTIONS_SLOT) {
+      return renderSlotEntries(optionEntries, sessionId, owner ?? {}, slotHost, standard)
+    }
+    return opts?.fallback ?? null
+  }, [labelEntries, optionEntries, sessionId, slotHost, standard])
+  const select = useCallback(async (selection: ModelSelection) => {
+    const state = original.getSnapshot()
+    const group = state.groups.find((candidate) => candidate.id === selection.provider)
+    const model = group?.models.find((candidate) => candidate.id === selection.model)
+    const levels = model?.reasoning?.efforts ?? []
+    let effort = selection.reasoningEffort
+    if (levels.length > 0) {
+      const sameRoute = state.current?.provider === selection.provider && state.current.model === selection.model
+      const preferred = selection.reasoningEffort
+        ?? (sameRoute ? state.current?.reasoningEffort : undefined)
+        ?? model?.reasoning?.defaultEffort
+      // Preserve the official directory semantics: when the target model has no
+      // default effort and the caller did not choose one, omit the field rather
+      // than silently forcing the first catalogue level.
+      effort = preferred !== undefined && levels.some((level) => level.id === preferred)
+        ? preferred
+        : undefined
+    } else {
+      effort = undefined
+    }
+    const next = {
+      ...selection,
+      ...(effort === undefined ? {} : { reasoningEffort: effort }),
+    }
+    const officialSelect = injected.select
+    if (typeof officialSelect === 'function') {
+      return (officialSelect as (value: ModelSelection) => Promise<unknown>)(next)
+    }
+    return controller.select(next)
+  }, [original, injected, controller])
+  const load = useCallback(() => {
+    const officialLoad = injected.load
+    if (typeof officialLoad === 'function') {
+      ;(officialLoad as () => void)()
+      return
+    }
+    void controller.load().catch(() => undefined)
+  }, [injected, controller])
+  const resolveText = typeof injected.resolveText === 'function'
+    ? injected.resolveText as (text: string) => string
+    : (text: string) => text
+  const available = injected.available !== false
+  return React.createElement(entry.component as React.ComponentType<Record<string, unknown>>, {
+    locked,
+    available,
+    directory,
+    load,
+    select,
+    resolveText,
+    t,
+    renderSlot,
+  })
+}
+
+export function WorkModelReady(props: WorkModelReadyProps) {
+  return props.slotHost === undefined
+    ? <FallbackWorkModelReady {...props} />
+    : <OfficialModelSeat {...props} slotHost={props.slotHost} />
+}
+
+function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, selectTeamMode }: WorkModelReadyProps) {
   const directory = controller.store
   const load = useCallback(() => {
     void controller.load().then(() => undefined, () => undefined)
@@ -1095,7 +1391,7 @@ export function WorkModelReady({ controller, sessionId, locked, useProjection, u
             <>
               {levels.length >= 2 ? (
                 <div className="omnieff-advanced">
-                  <EffortSlider directory={controller} />
+                  <EffortSlider directory={controller} locked={locked || busy} />
                 </div>
               ) : null}
               <div className="omnieff-menu-separator" />
@@ -1128,6 +1424,30 @@ interface AgentTeamsRemote {
   setEnabled: (sessionId: SessionId, enabled: boolean) => Promise<{ ok: boolean; error?: { message?: string } }>
 }
 
+interface SlotRegistryFace {
+  readonly entries: (key: string) => readonly unknown[]
+  readonly entriesOfSlot: (key: string) => readonly unknown[]
+  readonly subscribe: (key: string, listener: () => void) => () => void
+}
+
+interface LocaleFace {
+  readonly bind: (namespace: string) => (key: string, vars?: Record<string, unknown>) => string
+}
+
+function createSlotHost(scope: unknown, root: unknown): SlotHost {
+  const local = scope as { readonly slots: SlotRegistryFace; readonly locale?: LocaleFace }
+  const top = root as { readonly locale?: LocaleFace }
+  const locale = local.locale ?? top.locale
+  return {
+    entries: (key) => local.slots.entries(key) as readonly SlotEntry[],
+    entriesOfSlot: (key) => local.slots.entriesOfSlot(key) as readonly SlotEntry[],
+    subscribe: (key, listener) => local.slots.subscribe(key, listener),
+    bindLocale: (namespace) => locale === undefined
+      ? (key: string) => key
+      : locale.bind(namespace),
+  }
+}
+
 export function apply(ctx: ClientContext) {
   // The official agent-team Client plugin owns this Remote face. Read it through a declared inject
   // scope; the seat only presents the same projection and writes through the same endpoint.
@@ -1148,6 +1468,23 @@ export function apply(ctx: ClientContext) {
     const modelDirectories = scope.get('modelDirectories') as ModelDirectoryResolver | undefined
     if (modelDirectories === undefined) return
     const sessionRemote = scope.get('remote.session') as SessionRemote | undefined
+    const slotHost = createSlotHost(scope, ctx)
+    const bindDirectory = (sessionId: SessionId) => tryDirectoryFor((id) => modelDirectories.directoryFor(id), sessionId)
+
+    // The official ModelSelect parent entry declares this list slot. Our
+    // contribution is an ordinary child entry, not a second parent seat.
+    scope.slots.inject(MODEL_OPTIONS_SLOT, () =>
+      scope.slots.register(
+        {
+          name: MODEL_OPTIONS_SLOT,
+          id: 'omnisurge-effort-slider',
+          order: -10,
+          registrant: '@omnisurge/dsh-effort-slider',
+          inject: (sessionId: SessionId) => ({ controller: bindDirectory(sessionId) }),
+        },
+        EffortSliderOption,
+      ),
+    )
 
     scope.effect(() => {
       injectStyles()
@@ -1162,11 +1499,16 @@ export function apply(ctx: ClientContext) {
       scope.slots.register(
         {
           name: SLOT,
-          priority: -100, // OMNI_SEAT_PRIORITY — abdicate onto official model chip
-          registrant: "@omnisurge/dsh-effort-slider",
+          // Above the official ModelSelect (priority 0) so the suite can
+          // provide the effort wrapper, but below the official
+          // experimental-liveshare ViewerModelSeat (-10) so viewer sessions
+          // keep their read-only seat.
+          priority: -1,
+          registrant: '@omnisurge/dsh-effort-slider',
           inject: (sessionId: SessionId) => ({
             sessionId,
-            bind: () => tryDirectoryFor((id) => modelDirectories.directoryFor(id), sessionId),
+            bind: () => bindDirectory(sessionId),
+            slotHost,
             loadCatalog: async () => {
               if (sessionRemote?.modelCatalog === undefined) return { groups: [], error: '模型清单不可用' }
               try {

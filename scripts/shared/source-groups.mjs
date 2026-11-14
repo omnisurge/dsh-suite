@@ -22,6 +22,7 @@ export const GROUP={
   'effort-slider/shared.ts':'client',
   'effort-slider/directory-bind.ts':'client',
   'effort-slider/client/index.tsx':'client',
+  'effort-slider/client/slot-host.ts':'client',
   'effort-slider/client/styles.ts':'client',
   'effort-slider/client/assets.ts':'client',
 
