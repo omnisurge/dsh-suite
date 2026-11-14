@@ -364,6 +364,15 @@ body[data-omniwc="chat"] .omnieff-model-menu { display: none; }
 .omnieff-advanced {
   padding: 10px 12px 8px;
 }
+.omnieff-team-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 6px 14px;
+  cursor: pointer;
+}
 .omnieff-menu-separator {
   height: 1px;
   background: var(--omni-stroke);

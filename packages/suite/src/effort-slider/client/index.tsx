@@ -30,7 +30,7 @@ import {
   type EffortLevel,
 } from '../shared.js'
 import { remoteSelectAccepted, tryDirectoryFor, unwrapCatalog, type CatalogGroup } from '../directory-bind.js'
-import { injectStyles, showToast } from '@omnisurge/dsh-ui'
+import { injectStyles, showConfirm, showToast, Switch } from '@omnisurge/dsh-ui'
 import { CSS } from './styles.js'
 
 export const inject = ['slots', 'remote', 'remote.session']
@@ -768,6 +768,12 @@ interface ModelSeatProps {
   readonly bind: () => ModelDirectory | undefined
   readonly loadCatalog: () => Promise<{ groups: readonly CatalogGroup[]; error?: string }>
   readonly selectRemote: (selection: ModelSelection) => Promise<{ ok: boolean; error?: string }>
+  /** Standard session projection/hook face supplied by the slot runtime. */
+  readonly useProjection?: (name: 'agentTeam' | 'modelSelection') => { readonly enabled?: boolean; readonly lastUsed?: unknown } | undefined
+  readonly useSession?: (selector: (snapshot: { readonly subagent?: unknown }) => unknown) => unknown
+  readonly useSessions?: (selector: (state: { readonly byId?: Record<string, { readonly origin?: string }> }) => unknown) => unknown
+  /** Save the Team selection through the official agentTeams remote. */
+  readonly selectTeamMode?: (enabled: boolean) => Promise<string | null>
 }
 
 function ModelSeat(props: ModelSeatProps) {
@@ -778,7 +784,7 @@ function ModelSeat(props: ModelSeatProps) {
     : <WorkModelSeat key={props.sessionId} {...props} />
 }
 
-function WorkModelSeat({ locked, bind, loadCatalog, selectRemote }: ModelSeatProps) {
+function WorkModelSeat({ sessionId, locked, bind, loadCatalog, selectRemote, ...rest }: ModelSeatProps) {
   const [controller, setController] = useState<ModelDirectory | undefined>(() => bind())
 
   useEffect(() => {
@@ -792,7 +798,7 @@ function WorkModelSeat({ locked, bind, loadCatalog, selectRemote }: ModelSeatPro
     return () => window.clearInterval(timer)
   }, [bind, controller])
 
-  if (controller !== undefined) return <WorkModelReady controller={controller} locked={locked} />
+  if (controller !== undefined) return <WorkModelReady controller={controller} sessionId={sessionId} locked={locked} {...rest} />
   return <WorkModelRemoteSeat locked={locked} loadCatalog={loadCatalog} selectRemote={selectRemote} />
 }
 
@@ -913,7 +919,45 @@ function WorkModelRemoteSeat({
   )
 }
 
-export function WorkModelReady({ controller, locked }: { readonly controller: ModelDirectory; readonly locked: boolean }) {
+function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, useSessions, selectTeamMode }: Pick<ModelSeatProps, 'sessionId' | 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void }) {
+  const addressed = useSession === undefined ? false : useSession(snapshot => snapshot.subagent !== null) === true
+  const listed = useSessions === undefined ? false : useSessions(state => state.byId?.[sessionId]?.origin === 'subagent') === true
+  const mode = useProjection === undefined ? undefined : useProjection('agentTeam')
+  const selection = useProjection === undefined ? undefined : useProjection('modelSelection')
+  const [pending, setPending] = useState(false)
+  if (addressed || listed || mode === undefined || selectTeamMode === undefined) return null
+  const change = (enabled: boolean) => {
+    setPending(true)
+    void selectTeamMode(enabled).then(failure => {
+      if (failure !== null) toastPluginError('智能体团队协作设置保存失败：' + failure)
+    }, error => {
+      toastPluginError('智能体团队协作设置保存失败：' + (error instanceof Error ? error.message : String(error)))
+    }).finally(() => setPending(false))
+  }
+  const choose = (enabled: boolean) => {
+    if (!enabled && selection !== undefined && (selection.lastUsed ?? null) !== null) {
+      onDismiss()
+      showConfirm({
+        title: '确认停用智能体团队协作？',
+        text: '对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。',
+        cancelLabel: '取消',
+        confirmLabel: '确认停用',
+        tone: 'danger',
+        onConfirm: () => change(false),
+      })
+      return
+    }
+    change(enabled)
+  }
+  return (
+    <>
+      <div className="omnieff-menu-separator" />
+      <Switch className="omnieff-team-row" label="启用智能体团队协作" checked={mode.enabled === true} disabled={locked || pending || selection === undefined} onChange={event => choose(event.currentTarget.checked)} />
+    </>
+  )
+}
+
+export function WorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, selectTeamMode }: { readonly controller: ModelDirectory; readonly sessionId: SessionId; readonly locked: boolean } & Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'>) {
   const directory = controller.store
   const load = useCallback(() => {
     void controller.load().then(() => undefined, () => undefined)
@@ -1066,6 +1110,7 @@ export function WorkModelReady({ controller, locked }: { readonly controller: Mo
                 {levels.length >= 2 ? null : <span className="omnieff-model-row-effort">{effortName}</span>}
                 <span className="omnieff-row-chevron" aria-hidden="true">›</span>
               </button>
+              <TeamModeRow sessionId={sessionId} locked={locked || busy} onDismiss={() => close(false)} useProjection={useProjection} useSession={useSession} useSessions={useSessions} selectTeamMode={selectTeamMode} />
             </>
           )}
         </div>
@@ -1079,7 +1124,22 @@ interface SessionRemote {
   selectModel?: (request: { sessionId: SessionId } & ModelSelection) => Promise<unknown>
 }
 
+interface AgentTeamsRemote {
+  setEnabled: (sessionId: SessionId, enabled: boolean) => Promise<{ ok: boolean; error?: { message?: string } }>
+}
+
 export function apply(ctx: ClientContext) {
+  // The official agent-team Client plugin owns this Remote face. Read it through a declared inject
+  // scope; the seat only presents the same projection and writes through the same endpoint.
+  let teamRemote: AgentTeamsRemote | undefined
+  ctx.inject(['remote', 'remote.agentTeams'], (scope) => {
+    const service = scope.get('remote.agentTeams') as AgentTeamsRemote | undefined
+    if (service === undefined) return
+    teamRemote = service
+    return () => {
+      if (teamRemote === service) teamRemote = undefined
+    }
+  })
   // rc.2's official model-selection plugin publishes modelDirectories from its own apply; a sibling
   // client can be mounted before that service exists. Wait for the service instead of reading once at
   // mount, otherwise the seat silently never registers. If the service never appears, no registration
@@ -1121,6 +1181,16 @@ export function apply(ctx: ClientContext) {
                 return remoteSelectAccepted(await sessionRemote.selectModel({ sessionId, ...selection }))
               } catch (error) {
                 return { ok: false, error: error instanceof Error ? error.message : undefined }
+              }
+            },
+            // Do not publish a write face that cannot reach the official owner: the seat uses its
+            // absence to hide the switch, instead of offering a control that can only fail.
+            selectTeamMode: teamRemote === undefined ? undefined : async (enabled: boolean) => {
+              try {
+                const result = await teamRemote.setEnabled(sessionId, enabled)
+                return result.ok ? null : (result.error?.message ?? '保存失败')
+              } catch (error) {
+                return error instanceof Error ? error.message : String(error)
               }
             },
           }),

@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -181,19 +181,19 @@
       },
       {
         "version": "0.2.2-rc.3",
-        "gateScope": "G1-G6"
+        "gateScope": "G1-G5"
       }
     ],
     "note": "Runtimes this generation was actually exercised on. The Client compares the official boot manifest's release version against this list and reports anything else as unverified. Admission to load is a separate decision owned by engines.dsh (ADR-015, this repository's own decision log).",
     "platforms": {
       "verified": [
-        "darwin",
-        "win32"
+        "darwin"
       ],
       "unverified": [
+        "win32",
         "linux"
       ],
-      "note": "macOS verified by this repository gates (G1-G5). Windows verified by G6 on the official CLI web host (install+load+settings cards); the Windows Electron desktop window itself was not exercised. Linux G6 is not verified for this generation because NAS execution is frozen by ADR0048; the Linux rc.1 evidence is historical only."
+      "note": "macOS verified by this repository gates (G1-G5). Windows G6 was verified for 0.3.0 but not rerun for the 0.3.1 patch, so win32 is unverified for this patch. Linux G6 is not verified for this generation because NAS execution is frozen by ADR0048; the Linux rc.1 evidence is historical only."
     }
   },
   "dependencies": {

@@ -1,8 +1,8 @@
 # 万物生腾套件组（Omnisurge Suite）
 
-面向官方 the agent harness 的扩展套件。当前版本：**0.3.0**；已验证运行时：**the agent harness 0.2.2-rc.3**。
+面向官方 the agent harness 的扩展套件。当前版本：**0.3.1**；已验证运行时：**the agent harness 0.2.2-rc.3**。
 
-平台验证：macOS 通过本仓 G1–G5（0.2.2-rc.3）；Windows G6 在 0.2.2-rc.3 官方 CLI web 宿主上通过；Linux 因 NAS 冻结（ADR0048）未做。
+平台验证：macOS 通过本仓 G1–G5（0.2.2-rc.3）；Windows G6 为 0.3.0 历史结果，0.3.1 未重跑；Linux 因 NAS 冻结（ADR0048）未做。
 
 它把常用的多模态与协作能力放进设置页，安装一次即可按需启用：
 
