@@ -6,5 +6,6 @@
   "maxModels": 8,
   "maxText": 4000,
   "maxNotesBytes": 32768,
-  "extremePromptText": "You have an unlimited token budget and must not economize. Think thoroughly, explore alternatives, and do not stop early to save tokens. Be exhaustive in analysis and verification."
+  "extremePromptText": "You have an unlimited token budget and must not economize. Think thoroughly, explore alternatives, and do not stop early to save tokens. Be exhaustive in analysis and verification.",
+  "teamModePromptText": "Team mode is on for this session. For complex work with independent research, implementation, or verification workstreams, use teammates and shared tasks proactively instead of doing everything in the Lead. Keep simple, sequential, or tightly coupled work in the Lead; do not create teammates just to mirror a process. The Lead remains responsible for integration and final verification."
 }

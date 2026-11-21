@@ -53,12 +53,12 @@ export function groupsFromCatalog(value: unknown): readonly CatalogGroup[] {
   return out;
 }
 
-export function unwrapCatalog(result: unknown): { groups: readonly CatalogGroup[]; error?: string } {
-  if (result === null || typeof result !== "object") return { groups: [], error: "模型清单不可用" };
+export function unwrapCatalog(result: unknown, unavailable = "模型清单不可用"): { groups: readonly CatalogGroup[]; error?: string } {
+  if (result === null || typeof result !== "object") return { groups: [], error: unavailable };
   const envelope = result as { ok?: unknown; value?: unknown; error?: { message?: unknown } };
   if (envelope.ok === false) {
     const message = envelope.error?.message;
-    return { groups: [], error: typeof message === "string" && message !== "" ? message : "模型清单不可用" };
+    return { groups: [], error: typeof message === "string" && message !== "" ? message : unavailable };
   }
   return { groups: groupsFromCatalog(envelope.ok === true ? envelope.value : result) };
 }

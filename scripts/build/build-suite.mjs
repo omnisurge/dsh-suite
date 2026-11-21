@@ -47,7 +47,7 @@ export async function buildSuite(root,state,env,signal){
   await run(process.execPath,[createRequire(join(root,'package.json')).resolve('typescript/bin/tsc'),'-p',join(business,'tsconfig.json'),'--outDir',lib],{cwd:root,env:compilerEnv,signal});
   // Every owned Client source is checked, not only the entry: the carried module's sources are what the
   // entry imports, and an esbuild failure is a worse diagnostic than the syntax error itself.
-  for(const name of ['client.js','search/client.js','search/client-flow.js','tools/client.js'])await run(process.execPath,['--check',join(business,'src',name)],{cwd:root,env:compilerEnv,signal});
+  for(const name of ['client.js','search/client.js','search/client-flow.js','tools/client.js','compaction-budget/client.js'])await run(process.execPath,['--check',join(business,'src',name)],{cwd:root,env:compilerEnv,signal});
   // The loaded manager freezes a generated projection of the one canonical source.
   // Host modules that carry a third-party library are bundled in place: the profile loader resolves
   // '@deepseek-ai/*' for plugins but not arbitrary packages, and the Suite ships no runtime dependencies
@@ -103,6 +103,12 @@ export async function buildSuite(root,state,env,signal){
   const stampedComponent=stamp(bundled.outputFiles[0].text);
   if(/__OMNISURGE_[A-Z_]+__/.test(stampedComponent))throw Error('UNSTAMPED_COMPONENT_BUNDLE: the Suite-side module bundle still carries a build placeholder');
   await writeFile(join(lib,'searxng.js'),stampedComponent);
+  // ADR-102: module-owned read-only effect probes advertise the bytes loaded, not the package on disk.
+  for(const name of ['compaction-budget.js','compaction-guard.js']){
+   const output=stamp(await readFile(join(lib,name),'utf8'));
+   if(/__OMNISURGE_[A-Z_]+__/.test(output))throw Error('UNSTAMPED_COMPONENT_BUNDLE: '+name);
+   await writeFile(join(lib,name),output);
+  }
   // ADR-033: the MCP client modules the Suite carries are bundled one file each. The MCP SDK is inlined at
   // build time (the profile loader resolves only '@deepseek-ai/*'), cordis/schemastery stay external like
   // every other plugin module. The tsc per-file outputs under lib/clients are removed afterwards and only

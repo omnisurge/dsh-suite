@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.3.2",
+  "version": "0.3.6",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -28,6 +28,14 @@
     "./searxng": {
       "types": "./lib/searxng.d.ts",
       "default": "./lib/searxng.js"
+    },
+    "./compaction-budget": {
+      "types": "./lib/compaction-budget.d.ts",
+      "default": "./lib/compaction-budget.js"
+    },
+    "./compaction-guard": {
+      "types": "./lib/compaction-guard.d.ts",
+      "default": "./lib/compaction-guard.js"
     },
     "./mcp-dual": {
       "types": "./lib/mcp-dual.d.ts",
@@ -81,6 +89,18 @@
     "lib/document-parse-tool.js",
     "lib/config.d.ts",
     "lib/config.js",
+    "lib/compaction-budget.d.ts",
+    "lib/compaction-budget.js",
+    "lib/compaction-budget-settings.d.ts",
+    "lib/compaction-budget-settings.js",
+    "lib/compaction-budget-core.d.ts",
+    "lib/compaction-budget-core.js",
+    "lib/compaction-budget-provenance.d.ts",
+    "lib/compaction-budget-provenance.js",
+    "lib/compaction-budget-status.d.ts",
+    "lib/compaction-budget-status.js",
+    "lib/compaction-guard.d.ts",
+    "lib/compaction-guard.js",
     "lib/development.d.ts",
     "lib/development.js",
     "lib/dsh-home.d.ts",
@@ -98,6 +118,8 @@
     "lib/limit-mode.d.ts",
     "lib/limit-mode.js",
     "lib/limits.json",
+    "lib/team-mode.d.ts",
+    "lib/team-mode.js",
     "lib/login-gateway.d.ts",
     "lib/login-gateway.js",
     "lib/loopback-origin.d.ts",
@@ -176,11 +198,7 @@
   "omnisurge": {
     "verifiedRuntimes": [
       {
-        "version": "0.2.2-rc.2",
-        "gateScope": "G1-G5"
-      },
-      {
-        "version": "0.2.2-rc.3",
+        "version": "0.2.2-rc.5",
         "gateScope": "G1-G5"
       }
     ],
@@ -193,14 +211,14 @@
         "win32",
         "linux"
       ],
-      "note": "macOS verified by this repository gates (G1-G5). Windows G6 was verified for 0.3.0 but not rerun for the 0.3.2 patch, so win32 is unverified for this patch. Linux G6 is not verified for this generation because NAS execution is frozen by ADR0048; the Linux rc.1 evidence is historical only."
+      "note": "This 0.3.6 stable release targets macOS DSH 0.2.2-rc.5; final artifact-bound G5 results and limitations are recorded in docs/evidence/release-0.3.6.md. Windows and Linux remain unverified; NAS execution is frozen by ADR0048. Earlier rc.3 and internal-iteration results are historical only, not this stable release."
     }
   },
   "dependencies": {
     "zod": "4.4.3"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.5",
+    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/dsh-api-gateway": ">=0.2.0-rc.2 <1.0.0",
     "@deepseek-ai/dsh-app-boot": ">=0.2.0-rc.2 <1.0.0",
     "@deepseek-ai/dsh-credentials": ">=0.2.0-rc.2 <1.0.0",
@@ -208,7 +226,7 @@
     "@deepseek-ai/dsh-tools": ">=0.2.0-rc.2 <1.0.0",
     "@deepseek-ai/dsh-typert-protocol": ">=0.2.0-rc.2 <1.0.0",
     "@deepseek-ai/dsh-web": ">=0.2.0-rc.2 <1.0.0",
-    "@deepseek-ai/schemastery": "^3.18.5"
+    "@deepseek-ai/schemastery": "3.19.0"
   },
   "engines": {
     "dsh": ">=0.2.0-rc.2 <1.0.0"

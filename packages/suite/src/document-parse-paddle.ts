@@ -4,7 +4,56 @@ import {DocumentParseRefusal, type DocumentParseModeDescriptor, type DocumentPar
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 const JOB_URL = 'https://paddleocr.aistudio-app.com/api/v2/ocr/jobs';
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const timeoutRefusal = (message = 'PaddleOCR request timed out') => new DocumentParseRefusal('DOCUMENT_PARSE_TIMEOUT', message);
+const abortRefusal = () => new DocumentParseRefusal('DOCUMENT_PARSE_ABORTED', 'PaddleOCR request was cancelled');
+/** Race one provider request against its own deadline. The losing task's later rejection is consumed here. */
+function withTimeout<T>(task: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+ if (signal?.aborted) return Promise.reject(abortRefusal());
+ let timer: ReturnType<typeof setTimeout> | undefined;
+ let onAbort: (() => void) | undefined;
+ const guard = new Promise<T>((_resolve, reject) => {
+  timer = setTimeout(() => reject(timeoutRefusal()), timeoutMs);
+  if (signal !== undefined) {
+   onAbort = () => reject(abortRefusal());
+   signal.addEventListener('abort', onAbort, {once: true});
+  }
+ });
+ return Promise.race([task, guard]).finally(() => {
+  if (timer !== undefined) clearTimeout(timer);
+  if (onAbort !== undefined && signal !== undefined) signal.removeEventListener('abort', onAbort);
+ });
+}
+/** One HTTP request with a real AbortController and the same race deadline: a stalled fetch that ignores
+ * its signal must still release the user instead of hanging until the process-level timeout. */
+async function httpRequest(fetcher: FetchLike, url: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<Response> {
+ if (signal?.aborted) throw abortRefusal();
+ const controller = new AbortController();
+ const onAbort = () => controller.abort();
+ if (signal !== undefined) {
+  if (signal.aborted) controller.abort();
+  else signal.addEventListener('abort', onAbort, {once: true});
+ }
+ const timer = setTimeout(() => controller.abort(), timeoutMs);
+ try {
+  return await withTimeout(fetcher(url, {...init, signal: controller.signal}), timeoutMs, signal);
+ } catch (error) {
+  if (error instanceof DocumentParseRefusal) throw error;
+  if (signal?.aborted) throw abortRefusal();
+  if (controller.signal.aborted) throw timeoutRefusal();
+  throw error;
+ } finally {
+  clearTimeout(timer);
+  if (signal !== undefined) signal.removeEventListener('abort', onAbort);
+ }
+}
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+ if (signal?.aborted) throw abortRefusal();
+ await new Promise<void>((resolve, reject) => {
+  const onAbort = () => {clearTimeout(timer); reject(abortRefusal());};
+  const timer = setTimeout(() => {signal?.removeEventListener('abort', onAbort); resolve();}, ms);
+  signal?.addEventListener('abort', onAbort, {once: true});
+ });
+}
 
 const MODES: DocumentParseModeDescriptor[] = [
  {id: 'paddleocr-vl-1.6-async', provider: 'paddleocr', displayKey: 'modePaddleVl16', auth: 'credential', credentialRoles: ['token'], transport: 'async', inputs: ['pdf', 'image', 'url'], outputs: ['markdown', 'json', 'images'], maxBytes: 200 * 1024 * 1024, maxPages: 1000},
@@ -19,10 +68,10 @@ function throwFor(response: Response, payload: any, provider = 'PaddleOCR'): voi
  const code = status === 401 || status === 403 ? 'DOCUMENT_PARSE_AUTH_FAILED' : status === 429 ? 'DOCUMENT_PARSE_QUOTA_EXHAUSTED' : 'DOCUMENT_PARSE_PROVIDER_ERROR';
  throw new DocumentParseRefusal(code, provider + ' refused with HTTP ' + status + (payload?.errorMsg ? ': ' + String(payload.errorMsg) : ''));
 }
-async function json(fetcher: FetchLike, url: string, init: RequestInit): Promise<any> {
- const response = await fetcher(url, init);
+async function json(fetcher: FetchLike, url: string, init: RequestInit, timeoutMs: number, signal?: AbortSignal): Promise<any> {
+ const response = await httpRequest(fetcher, url, init, timeoutMs, signal);
  let payload: any = null;
- try { payload = await response.json(); } catch { payload = null; }
+ try { payload = await withTimeout(response.json(), timeoutMs, signal); } catch (error) { if (error instanceof DocumentParseRefusal) throw error; payload = null; }
  throwFor(response, payload);
  return payload;
 }
@@ -50,7 +99,7 @@ export class PaddleOcrDocumentParse implements DocumentParseProvider {
  readonly descriptor = PADDLE_DESCRIPTOR;
  constructor(private readonly fetcher: FetchLike = fetch, private readonly timeoutMs = 300000) {}
 
- async parse(request: DocumentParseRequest, credentials: Record<string, string>): Promise<DocumentParseProviderResult> {
+ async parse(request: DocumentParseRequest, credentials: Record<string, string>, signal?: AbortSignal): Promise<DocumentParseProviderResult> {
   const started = Date.now();
   const mode = MODES.find(candidate => candidate.id === request.mode);
   if (mode === undefined) throw new DocumentParseRefusal('DOCUMENT_PARSE_MODE_UNKNOWN', 'unknown PaddleOCR mode ' + request.mode);
@@ -63,7 +112,7 @@ export class PaddleOcrDocumentParse implements DocumentParseProvider {
   const headers: Record<string, string> = {authorization: 'bearer ' + token};
   let submitted: any;
   if (request.url) {
-   submitted = await json(this.fetcher, JOB_URL, {method: 'POST', headers: {...headers, 'content-type': 'application/json'}, body: JSON.stringify({fileUrl: request.url, model, optionalPayload: options})});
+   submitted = await json(this.fetcher, JOB_URL, {method: 'POST', headers: {...headers, 'content-type': 'application/json'}, body: JSON.stringify({fileUrl: request.url, model, optionalPayload: options})}, timeoutMs, signal);
   } else {
    const info = await stat(request.path!);
    if (info.size > mode.maxBytes!) throw new DocumentParseRefusal('DOCUMENT_PARSE_TOO_LARGE', 'PaddleOCR accepts up to 200MB');
@@ -72,7 +121,7 @@ export class PaddleOcrDocumentParse implements DocumentParseProvider {
    form.set('model', model);
    form.set('optionalPayload', JSON.stringify(options));
    form.set('file', new Blob([bytes as unknown as BlobPart], {type: 'application/octet-stream'}), basename(request.path!));
-   submitted = await json(this.fetcher, JOB_URL, {method: 'POST', headers, body: form});
+   submitted = await json(this.fetcher, JOB_URL, {method: 'POST', headers, body: form}, timeoutMs, signal);
   }
   const jobId = String(submitted?.data?.jobId ?? '');
   if (jobId.length === 0) throw new DocumentParseRefusal('DOCUMENT_PARSE_PROVIDER_ERROR', 'PaddleOCR returned no job id');
@@ -81,20 +130,23 @@ export class PaddleOcrDocumentParse implements DocumentParseProvider {
   let pages: {extracted: number; total: number} | null = null;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() <= deadline) {
-   const answer = await json(this.fetcher, JOB_URL + '/' + encodeURIComponent(jobId), {headers: {...headers}});
+   const remaining = Math.max(1, deadline - Date.now());
+   const answer = await json(this.fetcher, JOB_URL + '/' + encodeURIComponent(jobId), {headers: {...headers}}, Math.min(timeoutMs, remaining), signal);
    const data = answer?.data ?? {};
    state = String(data.state ?? '');
    const progress = data.extractProgress;
    if (progress && typeof progress === 'object') pages = {extracted: Number(progress.extractedPages) || 0, total: Number(progress.totalPages) || 0};
    if (state === 'done') { jsonUrl = typeof data.resultUrl?.jsonUrl === 'string' ? data.resultUrl.jsonUrl : null; break; }
    if (state === 'failed') throw new DocumentParseRefusal('DOCUMENT_PARSE_TASK_FAILED', String(data.errorMsg ?? 'PaddleOCR task failed'));
-   await sleep(1500);
+   await sleep(Math.min(1500, Math.max(1, deadline - Date.now())), signal);
   }
   if (state !== 'done') throw new DocumentParseRefusal('DOCUMENT_PARSE_TIMEOUT', 'PaddleOCR task did not finish in time');
   if (jsonUrl === null) throw new DocumentParseRefusal('DOCUMENT_PARSE_PROVIDER_ERROR', 'PaddleOCR returned no result URL');
-  const response = await this.fetcher(jsonUrl);
+  const response = await httpRequest(this.fetcher, jsonUrl, {}, timeoutMs, signal);
   if (!response.ok) throw new DocumentParseRefusal('DOCUMENT_PARSE_RESULT_DOWNLOAD_FAILED', 'PaddleOCR result download failed');
-  const lines = (await response.text()).trim().split('\n').filter(Boolean);
+  let body: string;
+  try { body = await withTimeout(response.text(), timeoutMs, signal); } catch (error) { if (error instanceof DocumentParseRefusal) throw error; throw new DocumentParseRefusal('DOCUMENT_PARSE_RESULT_DOWNLOAD_FAILED', 'PaddleOCR result download failed'); }
+  const lines = body.trim().split('\n').filter(Boolean);
   const layout: any[] = [];
   const artifacts: {name: string; url: string; mediaType: string | null}[] = [];
   for (const line of lines) {

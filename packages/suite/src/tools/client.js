@@ -20,6 +20,7 @@
  */
 import * as React from 'react';
 import {ActionGroup,Badge,Button,CapsuleSwitch,Disclosure,EmptyState,Field,FormGrid,IconButton,KeyValueList,ListRow,NumberInput,PageHead,SearchInput,SectionTabs,Select,SheetHead,StatusLine,Switch,TextArea,TextInput,injectStyles,showConfirm,showToast} from '@omnisurge/dsh-ui';
+import {CLIENT_ACTION_TIMEOUT_MS,CLIENT_READ_TIMEOUT_MS,RemoteTimeoutError,boundedRemoteCall,fetchWithTimeout,withTimeout} from '../remote-timeout.js';
 
 /** Sidebar id and main-panel key are the same value: the shell dispatches one by the other. */
 export const TOOLS_PANEL_ID='omnisurge-skills-mcp';
@@ -59,6 +60,7 @@ const en={
   notConnected:"Suite not connected; refresh to retry.",
   componentNotStarted:"The Suite component did not start here; refresh.",
   answerUnreadable:"Suite reply unreadable; refresh.",
+  readTimedOut:"Reading took too long; check the connection and retry.",
   summaryPending:'Not read yet',
   details:'Details',
   whenToUse:'When to use',
@@ -226,6 +228,7 @@ const en={
   mcpHttpOnlyClientHint:'This row is loaded by an HTTP-only client. To use stdio, delete it and add a new row.',
   mcpRuntimeUnknown:'Status unknown',
   mcpOauthLogin:'Sign in',
+  mcpOauthStarting:'Starting sign-in…',
   mcpOauthLogout:'Sign out',
   mcpOauthPasteHint:'Open the authorization link, finish the sign-in in the browser, then paste the code here.',
   mcpOauthConnected:'Connected',
@@ -243,6 +246,7 @@ const en={
   mcpOauthSubmitted:'Signed in',
   mcpOauthLoggedOut:'Signed out',
   mcpOauthLoginFailed:"Could not start sign-in; see diagnostic code, then retry.",
+  mcpOauthTimeout:"Sign-in did not answer in time; try again.",
   mcpOauthSubmitFailed:"Code refused; check it and retry; see diagnostic code.",
   mcpOauthLogoutFailed:"Sign-out failed; see diagnostic code, then retry.",
   mcpProtocolV2:'v2',
@@ -277,6 +281,7 @@ const zh={
   notConnected:"尚未连接套件，请刷新重试。",
   componentNotStarted:"组件未启动，请刷新。",
   answerUnreadable:"套件回复无法读取，请刷新重试。",
+  readTimedOut:"读取超时，请检查连接后重试。",
   summaryPending:'尚未读取',
   details:'详情',
   whenToUse:'使用时机',
@@ -444,6 +449,7 @@ const zh={
   mcpHttpOnlyClientHint:'该行由只支持 HTTP 的客户端加载。要用 stdio，请删除后重新添加。',
   mcpRuntimeUnknown:'状态未知',
   mcpOauthLogin:'登录',
+  mcpOauthStarting:'正在发起登录…',
   mcpOauthLogout:'登出',
   mcpOauthPasteHint:'打开授权链接，在浏览器完成登录后，把授权码粘贴到这里。',
   mcpOauthWaiting:'等待授权中…',
@@ -461,6 +467,7 @@ const zh={
   mcpOauthSubmitted:'已登录',
   mcpOauthLoggedOut:'已登出',
   mcpOauthLoginFailed:"无法开始登录；机器码见诊断，请重试。",
+  mcpOauthTimeout:"登录请求超时；请重试。",
   mcpOauthSubmitFailed:"授权码被拒绝；请核对重试，机器码见诊断。",
   mcpOauthLogoutFailed:"登出失败；机器码见诊断，请重试。",
   mcpProtocolV2:'v2',
@@ -590,6 +597,7 @@ const skillsSentence=(t,issue)=>issue===null?null:
   issue.kind==='mount'?t('componentNotStarted'):
   issue.kind==='registry'?t('registryUnavailable'):
   issue.kind==='answer'?t('answerUnreadable'):
+  issue.kind==='timeout'?t('readTimedOut'):
   t('componentNotStarted');
 const mcpSentence=(t,issue)=>issue===null?null:
   issue.kind==='namespace'?t('notConnected'):
@@ -598,6 +606,7 @@ const mcpSentence=(t,issue)=>issue===null?null:
   issue.kind==='patch-unreadable'?t('mcpPatchUnreadable'):
   issue.kind==='catalog-unreadable'?t('mcpCatalogUnreadable'):
   issue.kind==='answer'?t('answerUnreadable'):
+  issue.kind==='timeout'?t('readTimedOut'):
   t('componentNotStarted');
 /** The four server states the Host reports; an unknown value is shown verbatim, never guessed into a state. */
 const MCP_STATE_KEYS=new Map([['running','mcpStateRunning'],['failed','mcpStateFailed'],['disabled','mcpStateDisabled'],['pending','mcpStatePending']]);
@@ -756,23 +765,31 @@ const mcpRedactCode=(raw,code)=>{
   const secret=String(code).trim();
   return secret.length===0?text:text.split(secret).join('<code>');
 };
+/** Every control-plane request is bounded: a local route that never answers must not keep a sign-in page
+ * in its starting state forever. The budget covers the fetch and the body read separately. */
+export const MCP_OAUTH_REQUEST_TIMEOUT_MS=15000;
 /** One control-plane call. POST carries a JSON body (and, for /login, the mode); GET is the read-only status
  * poll (ADR-052 D2) and therefore sends neither a body nor a content type. */
-const mcpOauthCall=async(serverName,action,{method='POST',body=null}={})=>{
-  const response=method==='GET'
-    ?await fetch(mcpOauthPath(serverName,action),{method:'GET'})
-    :await fetch(mcpOauthPath(serverName,action),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body??{})});
-  const text=await response.text();
-  let value=null;
-  try{value=text.length>0?JSON.parse(text):null;}catch{value=null;}
-  if(!response.ok){
-    const detail=value!==null&&typeof value==='object'&&typeof value.error==='string'?value.error:text;
-    throw failure('refused','OAUTH_CONTROL '+action+' '+String(response.status)+' → '+detail);
+export const mcpOauthCall=async(serverName,action,{method='POST',body=null,timeoutMs=MCP_OAUTH_REQUEST_TIMEOUT_MS,signal}={})=>{
+  try{
+    const response=method==='GET'
+      ?await fetchWithTimeout(fetch,mcpOauthPath(serverName,action),{method:'GET'},timeoutMs,{code:'OAUTH_CONTROL_TIMEOUT',message:'OAUTH_CONTROL '+action+' timed out',signal})
+      :await fetchWithTimeout(fetch,mcpOauthPath(serverName,action),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body??{})},timeoutMs,{code:'OAUTH_CONTROL_TIMEOUT',message:'OAUTH_CONTROL '+action+' timed out',signal});
+    const text=await withTimeout(response.text(),timeoutMs,{code:'OAUTH_CONTROL_TIMEOUT',message:'OAUTH_CONTROL '+action+' body timed out',signal});
+    let value=null;
+    try{value=text.length>0?JSON.parse(text):null;}catch{value=null;}
+    if(!response.ok){
+      const detail=value!==null&&typeof value==='object'&&typeof value.error==='string'?value.error:text;
+      throw failure('refused','OAUTH_CONTROL '+action+' '+String(response.status)+' → '+detail);
+    }
+    return value;
+  }catch(failed){
+    if(failed instanceof RemoteTimeoutError)throw failure('timeout','OAUTH_CONTROL '+action+' '+failed.code,'OAUTH_CONTROL_TIMEOUT');
+    throw failed;
   }
-  return value;
 };
-const mcpOauthPost=(serverName,action,body)=>mcpOauthCall(serverName,action,{method:'POST',body});
-const mcpOauthStatus=serverName=>mcpOauthCall(serverName,'status',{method:'GET'});
+const mcpOauthPost=(serverName,action,body,options={})=>mcpOauthCall(serverName,action,{...options,method:'POST',body});
+const mcpOauthStatus=(serverName,options={})=>mcpOauthCall(serverName,'status',{...options,method:'GET'});
 /**
  * The authorization face of a StatusView (ADR-052 D2). `authorization` is authoritative; the older top-level
  * `authorizationUrl`/`prefer` pair is read only as a compatibility fallback for a Host that has not published
@@ -868,7 +885,7 @@ const noopSubscribe=()=>()=>{};
 const zeroRevision=()=>0;
 
 /** The whole page: one head, two tabs, and each tab's own read chain. */
-function ToolsPanel(props){
+export function ToolsPanel(props){
   const t=typeof props.t==='function'?props.t:key=>typeof en[key]==='string'?en[key]:key;
   const tSkills=typeof props.tSkills==='function'?props.tSkills:key=>typeof skillsEn[key]==='string'?skillsEn[key]:key;
   const panel=props.panel??DETACHED;
@@ -1247,6 +1264,9 @@ function McpTab(props){
   const oauthPollTimer=React.useRef(null);
   const oauthPollToken=React.useRef(0);
   const oauthSessionRef=React.useRef(null);
+  // The start request is the one OAuth step the page itself holds open: its controller is what makes the
+  // starting state cancellable instead of a dead spinner (P2-20).
+  const oauthStartAbort=React.useRef(null);
   React.useEffect(()=>{oauthSessionRef.current=oauthSession;},[oauthSession]);
   const stopOauthWait=()=>{
     oauthPollToken.current+=1;
@@ -1256,7 +1276,7 @@ function McpTab(props){
   // timer is not enough — a read already in flight returns to a live closure whose session ref still points at
   // the old session, so it would schedule the next round for a page that no longer exists. Bumping the generation
   // is what turns that answer into a no-op (review B3).
-  React.useEffect(()=>()=>{stopOauthWait();},[]);
+  React.useEffect(()=>()=>{stopOauthWait();if(oauthStartAbort.current!==null){oauthStartAbort.current.abort();oauthStartAbort.current=null;}},[]);
   // ADR-046 task-72: when a purpose editor closes, return keyboard focus to the value button that opened it.
   // The trigger is re-rendered by this same state transition, so the effect reads the row after commit.
   React.useEffect(()=>{
@@ -1522,25 +1542,39 @@ function McpTab(props){
     if(oauthSession!==null)return;
     stopOauthWait();
     setOauthSession({rowId:id,serverName,authorizationUrl:null,prefer:null,waiting:false,code:'',phase:'starting',issue:null});
+    const controller=new AbortController();
+    oauthStartAbort.current=controller;
     try{
       // ADR-052 D1/D3: ask for the auto flow and defer the wait. The Host resolves auto to loopback on a GUI
       // platform (it opens the listener and the browser) and answers at once; only a no-GUI host resolves to
       // paste, and only then does this page offer the code box.
-      const view=await mcpOauthPost(serverName,'login',{prefer:'auto',deferWait:true});
+      const view=await mcpOauthPost(serverName,'login',{prefer:'auto',deferWait:true},{signal:controller.signal});
       const authorization=mcpAuthorizationOf(view);
       if(authorization.authorizationUrl===null)throw failure('answer','OAUTH_CONTROL login answered without an authorizationUrl');
       const waiting=authorization.state==='waiting';
       setOauthSession({rowId:id,serverName,authorizationUrl:authorization.authorizationUrl,prefer:authorization.prefer,waiting,code:'',phase:null,issue:null});
       if(waiting)startOauthWait(id,serverName,server.authorizationTimeoutMs);
     }catch(failed){
-      setOauthSession({rowId:id,serverName,authorizationUrl:null,prefer:null,waiting:false,code:'',phase:null,issue:{sentence:t('mcpOauthLoginFailed'),raw:mutationRaw(failed)}});
+      if(controller.signal.aborted)return;
+      const sentence=codeOf(failed)==='OAUTH_CONTROL_TIMEOUT'?t('mcpOauthTimeout'):t('mcpOauthLoginFailed');
+      setOauthSession({rowId:id,serverName,authorizationUrl:null,prefer:null,waiting:false,code:'',phase:null,issue:{sentence,raw:mutationRaw(failed)}});
+    }finally{
+      if(oauthStartAbort.current===controller)oauthStartAbort.current=null;
     }
   };
   /** ADR-052 D2: cancel ends the Host's wait (it closes the loopback listener and writes the tombstone) and the
    * row returns to an actionable needs_login. The button never guesses: a refusal is shown with its raw reason. */
   const cancelOauthLogin=async()=>{
     const session=oauthSession;
-    if(session===null||session.phase!==null)return;
+    if(session===null||(session.phase!==null&&session.phase!=='starting'))return;
+    // While the start request is still the only thing this page holds, cancelling aborts it locally and
+    // clears the session; there is no server-side wait to end yet, so the user gets an immediate retry path.
+    if(session.phase==='starting'){
+      if(oauthStartAbort.current!==null){oauthStartAbort.current.abort();oauthStartAbort.current=null;}
+      setOauthSession(null);
+      showToast({text:t('mcpOauthCancelled'),kind:'mcp-oauth',closeLabel:t('closeToast')});
+      return;
+    }
     setOauthSession({...session,phase:'cancelling',issue:null});
     stopOauthWait();
     try{
@@ -1688,6 +1722,12 @@ function McpTab(props){
     // a second failure-flavoured line on top (ADR-031 D4).
     if(connected&&runtime.state==='failed'&&typeof runtime.error==='string'&&runtime.error.length>0){
       detail.push(h(Disclosure,{key:'runtime-raw','data-testid':'mcp-runtime-raw-'+id,title:t('rawDetails')},h('pre',{className:'omni-ui-excerpt'},runtime.error)));
+    }
+    if(session!==null&&session.phase==='starting'){
+      detail.push(h('div',{key:'oauth-starting',className:'omni-ui-stack','data-testid':'mcp-login-starting-'+serverName},
+        h(StatusLine,{tone:'muted',role:'status','data-testid':'mcp-login-starting-status-'+serverName},t('mcpOauthStarting')),
+        h(ActionGroup,null,
+          h(Button,{variant:'ghost',onClick:()=>{void cancelOauthLogin();},'data-testid':'mcp-login-cancel-'+serverName},t('mcpOauthCancel')))));
     }
     if(session!==null&&session.authorizationUrl!==null){
       const pasteOnly=session.prefer==='paste';
@@ -2004,7 +2044,7 @@ export function applyToolsPanel(ctx,options={}){
   // One unary call: the documented RemoteResult envelope is the only answer shape. The three transport
   // facts stay distinct -- not mounted, carrier/owned-Remote failure, unreadable answer -- and a Host
   // refusal keeps its machine code for the raw disclosure instead of becoming prose.
-  const call=async(method,...args)=>{
+  const callInternal=async(method,args,signal,timeoutMs=CLIENT_ACTION_TIMEOUT_MS)=>{
     const namespace=wire.namespace;
     if(!namespace||typeof namespace[method]!=='function'){
       const mount=mountFact();
@@ -2012,8 +2052,11 @@ export function applyToolsPanel(ctx,options={}){
       throw failure(mount===null?'namespace':'mount',message);
     }
     let result;
-    try{result=await namespace[method](...args);}
-    catch(issue){throw failure('refused','SUITE_CARRIER_FAILED '+method+' \u2192 '+reason(issue));}
+    try{result=await boundedRemoteCall(namespace,method,args,{timeoutMs,code:'SUITE_REMOTE_TIMEOUT',message:'SUITE_REMOTE_TIMEOUT '+method,signal});}
+    catch(issue){
+      if(issue instanceof RemoteTimeoutError)throw failure('timeout','SUITE_REMOTE_TIMEOUT '+method+' '+issue.code,'SUITE_REMOTE_TIMEOUT');
+      throw failure('refused','SUITE_CARRIER_FAILED '+method+' \u2192 '+reason(issue));
+    }
     if(!result||typeof result!=='object'||typeof result.ok!=='boolean')throw failure('answer','SUITE_RESULT_INVALID '+method+' did not answer a RemoteResult envelope');
     if(result.ok!==true){
       const code=codeOf(result.error);
@@ -2025,8 +2068,11 @@ export function applyToolsPanel(ctx,options={}){
     }
     return result.value;
   };
-  const readSkills=async()=>{
-    const value=await call(SKILLS_METHOD,{});
+  // Writes keep their natural duration: a restart or a profile mutation may legitimately outlive the read
+  // budget. Only the page's reads (and the OAuth control plane) are bounded (P2-17).
+  const call=(method,...args)=>callInternal(method,args,undefined,0);
+  const readSkills=async signal=>{
+    const value=await callInternal(SKILLS_METHOD,[{}],signal,CLIENT_READ_TIMEOUT_MS);
     if(!value||typeof value!=='object'||!Array.isArray(value.skills))throw failure('answer','SUITE_RESULT_INVALID '+SKILLS_METHOD+' answered without a skills array');
     const roots=value.roots!==null&&typeof value.roots==='object'?value.roots:{};
     return {skills:value.skills,complete:value.complete===true,roots:{
@@ -2034,16 +2080,16 @@ export function applyToolsPanel(ctx,options={}){
       ...(typeof roots.project==='string'&&roots.project.length>0?{project:roots.project}:{}),
     }};
   };
-  const readMcpServers=async()=>{
-    const value=await call(MCP_METHOD);
+  const readMcpServers=async signal=>{
+    const value=await callInternal(MCP_METHOD,[],signal,CLIENT_READ_TIMEOUT_MS);
     if(!value||typeof value!=='object'||!Array.isArray(value.servers))throw failure('answer','SUITE_RESULT_INVALID '+MCP_METHOD+' answered without a servers array');
     const issue=value.issue&&typeof value.issue==='object'&&typeof value.issue.code==='string'
       ?{code:value.issue.code,raw:typeof value.issue.raw==='string'?value.issue.raw:''}
       :null;
     return {servers:value.servers,reload:value.reload==='live'?'live':'manual',authority:value.authority==='official'?'official':'unsupported',issue};
   };
-  const readMcpPurposes=async()=>{
-    const value=await call(MCP_PURPOSES_METHOD);
+  const readMcpPurposes=async signal=>{
+    const value=await callInternal(MCP_PURPOSES_METHOD,[],signal,CLIENT_READ_TIMEOUT_MS);
     if(!value||typeof value!=='object'||typeof value.routing!=='boolean'||!Number.isFinite(value.revision)||!value.purposes||typeof value.purposes!=='object')throw failure('answer','SUITE_RESULT_INVALID '+MCP_PURPOSES_METHOD+' answered without a purpose snapshot');
     return {
       routing:value.routing,
@@ -2055,9 +2101,9 @@ export function applyToolsPanel(ctx,options={}){
   };
   /** One user-triggered MCP read: the server list and the purpose snapshot are independent facts, so a purpose
    * read that is refused keeps the list (and vice versa) instead of blanking the whole tab. */
-  const readMcpTab=async()=>{
-    const servers=await readMcpServers();
-    try{return {servers,purposes:await readMcpPurposes(),purposesIssue:null};}
+  const readMcpTab=async signal=>{
+    const servers=await readMcpServers(signal);
+    try{return {servers,purposes:await readMcpPurposes(signal),purposesIssue:null};}
     catch(failed){return {servers,purposes:null,purposesIssue:failed&&failed.failure?failed.failure:{kind:'refused',raw:String(failed&&failed.message?failed.message:failed)}};}
   };
 
@@ -2071,7 +2117,7 @@ export function applyToolsPanel(ctx,options={}){
     const controller=new AbortController();
     controllers.add(controller);
     const settle=()=>{controllers.delete(controller);};
-    const pending=tab==='skills'?readSkills():readMcpTab();
+    const pending=tab==='skills'?readSkills(controller.signal):readMcpTab(controller.signal);
     pending.then(value=>{
       settle();
       if(disposed||controller.signal.aborted)return;

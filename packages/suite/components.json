@@ -38,5 +38,24 @@
     },
     "runtime": null,
     "export": "./agent-teams"
+  },
+  {
+    "id": "compaction-budget",
+    "source": "packages/suite/src",
+    "rowId": "omnisurge-compaction-budget",
+    "display": {
+      "en": "Compaction budget",
+      "zh": "压缩摘要预算"
+    },
+    "runtime": {
+      "service": "omnisurgeCompactionBudgetStatus",
+      "versionField": "version",
+      "dispatch": null
+    },
+    "export": "./compaction-budget",
+    "effect": {
+      "service": "omnisurgeCompactionBudgetStatus",
+      "method": "snapshot"
+    }
   }
 ]

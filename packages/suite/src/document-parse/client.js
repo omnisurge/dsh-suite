@@ -1,5 +1,9 @@
 import * as React from 'react';
 import {ActionGroup,Badge,Button,Field,Select,SettingsCard,StatusLine,Switch,TextInput} from '@omnisurge/dsh-ui';
+import {CREDENTIAL_SAVE_BLOCKED,CREDENTIAL_SAVE_EMPTY,CREDENTIAL_SAVE_FAILED,CREDENTIAL_SAVE_OK,CREDENTIAL_SAVE_PARTIAL,credentialRolesText,saveCredentialRoles} from '../credential-save.js';
+
+const fill=(template,values)=>String(template).replace(/\{(\w+)\}/g,(match,key)=>(key in values?String(values[key]):match));
+const roleLabel=role=>role==='apiKey'?'API Key':role==='token'?'Token':role;
 
 /** The second multimodal subcard (ADR-086). It follows the handwrite card's provider-card anatomy:
  * title row with status + configure/test actions, inset body, then the shared credentials note. */
@@ -47,13 +51,35 @@ export function DocumentParseCard({t,wire}) {
   const state=caps?.providerStates?.[option.id];
   setSaveNotice(null);
   if(!state){setSave({provider:option.id,phase:'failed'});setSaveNotice({tone:'warn',text:t('documentParseSaveFailed')});return;}
-  const values=Object.entries(state.refs??{}).map(([role])=>drafts[option.id]?.[role]).filter(value=>typeof value==='string'&&value.length>0);
-  if(values.length===0){setSave({provider:option.id,phase:'failed',code:'EMPTY'});setSaveNotice({tone:'warn',text:t('saveEmpty')});return;}
+  const entries=Object.entries(state.refs??{}).map(([role,ref])=>({role,ref,value:drafts[option.id]?.[role]}));
   setSave({provider:option.id,phase:'busy'});
-  try{
-   for(const [role,ref] of Object.entries(state.refs??{})){const value=drafts[option.id]?.[role];if(typeof value==='string'&&value.length>0)await wire.setCredential(ref,value);}
-   setCaps(await wire.documentParseCapabilities());setDrafts(current=>({...current,[option.id]:{}}));setSave({provider:option.id,phase:'done'});setSaveNotice({tone:'ok',text:t('documentParseSaved')});setExpanded(null);
-  }catch{setSave({provider:option.id,phase:'failed'});setSaveNotice({tone:'warn',text:t('documentParseSaveFailed')});}
+  const outcome=await saveCredentialRoles(entries,{describe:wire.describeCredentials,set:wire.setCredential});
+  if(outcome.status===CREDENTIAL_SAVE_EMPTY){setSave({provider:option.id,phase:'failed',code:'EMPTY'});setSaveNotice({tone:'warn',text:t('saveEmpty')});return;}
+  if(outcome.status===CREDENTIAL_SAVE_BLOCKED){
+   setSave({provider:option.id,phase:'failed',code:'PRECHECK',roles:outcome.blockedRoles});
+   setSaveNotice({tone:'warn',text:fill(t('documentParseSaveBlocked'),{roles:credentialRolesText(outcome.blockedRoles,roleLabel)})});
+   return;
+  }
+  if(outcome.status===CREDENTIAL_SAVE_FAILED){
+   setSave({provider:option.id,phase:'failed',failedRole:outcome.failedRole});
+   setSaveNotice({tone:'warn',text:fill(t('documentParseSaveFailedRole'),{role:roleLabel(outcome.failedRole)})});
+   return;
+  }
+  const refresh=async()=>{try{setCaps(await wire.documentParseCapabilities());}catch{}};
+  if(outcome.status===CREDENTIAL_SAVE_PARTIAL){
+   setSave({provider:option.id,phase:'partial',roles:outcome.savedRoles,failedRole:outcome.failedRole});
+   setSaveNotice({tone:'warn',text:fill(t('documentParseSavePartial'),{saved:credentialRolesText(outcome.savedRoles,roleLabel),failed:roleLabel(outcome.failedRole)})});
+   const saved=new Set(outcome.savedRoles);
+   setDrafts(current=>({...current,[option.id]:Object.fromEntries(Object.entries(current[option.id]??{}).filter(([role])=>!saved.has(role)))}));
+   await refresh();
+   return;
+  }
+  if(outcome.status===CREDENTIAL_SAVE_OK){
+   await refresh();
+   setDrafts(current=>({...current,[option.id]:{}}));setSave({provider:option.id,phase:'done'});setSaveNotice({tone:'ok',text:fill(t('documentParseSaveDoneRoles'),{roles:credentialRolesText(outcome.savedRoles,roleLabel)})});setExpanded(null);
+   return;
+  }
+  setSave({provider:option.id,phase:'failed',code:outcome.reason??'FAILED'});setSaveNotice({tone:'warn',text:t('documentParseSaveFailed')});
  };
  const testProvider=async option=>{
   const mode=selectedMode(option);

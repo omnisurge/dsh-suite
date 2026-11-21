@@ -13,6 +13,8 @@ export const GROUP={
   'search/client-flow.js':'client',
   'tools/client.js':'client',
   'teams/client.js':'client',
+  'compaction-budget/client.js':'client',
+  'compaction-budget-settings.ts':'host',
   // ADR-036：OCR 设置卡（配置面）。Client 侧只用官方 remote 与库组件，不碰 node:*。
   'ocr/client.js':'client',
   // ADR-086：文档解析设置卡。Client 只走官方 remote 与库组件，不碰 node:*。
@@ -26,6 +28,12 @@ export const GROUP={
   'effort-slider/client/styles.ts':'client',
   'effort-slider/client/assets.ts':'client',
 
+  // ADR-047 D3 / ADR-079: a pure Client/Host shared decision helper. Kept as .mjs so the Node
+  // regression test and the Client esbuild bundle execute the exact same bytes.
+  'upgrade-receipt.mjs':'shared',
+  // P2-17/P2-20 and P2-19: pure browser helpers shared by Client pages; no node:* and no Host-only imports.
+  'remote-timeout.js':'shared',
+  'credential-save.js':'shared',
   'ambient.ts':'shared',
   'build-protocol.d.ts':'shared',
   'loopback-origin.ts':'shared',
@@ -73,6 +81,8 @@ export const GROUP={
   // ADR-058 / ADR-054：极限模式的判定与团队诊断都是纯 Host 读逻辑（无 node:*、无 Client 依赖），
   // 但它们的 Remote 边界类型在 types.ts 里，跨线缆时才类型化。
   'limit-mode.ts':'host',
+  // ADR-097：团队模式的行发现与提示词决定是 Host-only 纯规则；Client 只经由 Remote 读状态/保存。
+  'team-mode.ts':'host',
   // profile patch 的读写是 Host-only（node:fs + yaml），与 MCP 行的 patch 写入器同一条纪律。
   // ADR-093：团队成员卡退役后，这条自定义行的唯一 Host 读入口（极限模式配置）。
   'agent-teams-row.ts':'shared',
@@ -98,6 +108,12 @@ export const GROUP={
   'search/setup.ts':'host',
   'search/skill.ts':'host',
   'searxng.ts':'host',
+  // ADR-099/100: retired guard and optional single-owner summary delegation are Host-only.
+  'compaction-budget.ts':'host',
+  'compaction-budget-core.ts':'host',
+  'compaction-budget-provenance.ts':'host',
+  'compaction-budget-status.ts':'shared',
+  'compaction-guard.ts':'host',
   'tar.ts':'host',
   'tool.ts':'host',
   'upgrade.ts':'host',

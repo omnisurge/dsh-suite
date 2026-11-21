@@ -12,6 +12,14 @@ export interface LimitModeStatus {
  text:string;
 }
 
+/** ADR-097：团队模式“新会话默认开启”的 Host 事实。`defaultEnabled` 的唯一权威是官方
+ * `@deepseek-ai/dsh-agent-team` 行；这个类型只是跨 Remote 的只读快照与保存回执。 */
+export interface TeamModeStatus {
+ available:boolean;
+ code:string|null;
+ defaultEnabled:boolean;
+}
+
 /** ADR-093: the Agent Teams member-cap card is retired (the official Subagent page owns depth, capacity and model selection); no member diagnostics or team-config types live here. Limit mode and environment notes keep their own types. */
 /** 极限模式的写入补丁（本插件自己那一行的 `config.limitMode`）；三个键都可选。 */
 /** ADR-061：环境笔记（本插件自己的笔记文件 + 一段系统提示）。文本由用户负责，套件不校验内容。 */
@@ -103,8 +111,9 @@ export interface McpServerEntry {
  headerCount:number;
  envCount:number;
  /** stdio 行的启动方式（ADR-055）：编辑表单要能让用户核对与微调。它不是秘值——秘值是 headers/env 的值与
-  * 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑的 stdio 行**
-  * 才带这三个键（bundle 行的启动方式归它的作者，不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。 */
+  * 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑且非官方
+  * manager 托管的 stdio 行**才带这三个键（bundle/loader 行的启动方式归它的作者，官方 manager 行归官方
+  * config.servers，均不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。 */
  command?:string;
  args?:string[];
  cwd?:string;
@@ -224,6 +233,21 @@ export interface SkillsCatalog {skills:SkillCatalogEntry[];complete:boolean;root
 
 /** A declared runtime probe: the component's own loaded module answers with the version it was built
  * from, and optionally proves the strict protocol actually dispatches. Data, never per-plugin code. */
+export type ComponentEffectState = 'covered'|'waiting'|'partial'|'rejected'|'unconfirmed'|'policy-disabled'|'retired';
+/** Read-only, current live binding coverage; null counts mean enumeration was incomplete. */
+export interface ComponentEffectSnapshot {
+ protocol:1;
+ scope:'live-agent-bindings';
+ state:ComponentEffectState;
+ complete:boolean;
+ total:number|null;
+ covered:number;
+ waiting:number;
+ rejected:number;
+ unknown:number|null;
+ reasons:string[];
+ policy?:{checkpointTokens:number;safetyTokens:number;timeoutMs:number}|null;
+}
 export interface ComponentRuntimeSpec {
  service:string;
  versionField:string;
@@ -237,11 +261,12 @@ export interface ComponentDefinition {
  rowId:string;
  display:{en:string;zh:string};
  runtime:ComponentRuntimeSpec|null;
+ effect?:{service:string;method:string};
 }
 
 /** Derived from official inventory and the declared runtime probe; never independently persisted.
- * `nextAction` is the single source the summary line and the card both derive from, so one state can
- * never look ready in one place and blocked in another. */
+ * state owns the effect label; nextAction only owns the suggested action. All adapters project this
+ * same snapshot so waiting/retired with no action can never masquerade as ready. */
 export interface ComponentStatus {
  id:string;
  display:{en:string;zh:string};
@@ -253,7 +278,8 @@ export interface ComponentStatus {
  loadedVersion:string|null;
  /** The Suite-owned row state; enabling it is the official switch's fact. */
  rowEnabled:boolean;
- state:'ready'|'restart-required'|'disabled'|'unconfirmed'|'owner-missing';
+ state:'ready'|'restart-required'|'disabled'|'config-only'|'unconfirmed'|'owner-missing'|ComponentEffectState;
+ effect?:ComponentEffectSnapshot;
  /** The one remaining user action, or 'none'. 'enable-row' is performed on the official plugin page. */
  nextAction:'none'|'restart'|'enable-row'|'check-runtime'|'check-owner';
  /** Raw diagnostic for the developer view; never the primary user-facing message. */
@@ -314,7 +340,12 @@ export interface UpgradeCandidate {
 }
 export interface UpgradeStatus {
  mode:'release'|'source';
+ /** The running Suite manifest. May be unreadable during an official replacement; distinct from the disk. */
  currentVersion:string;
+ /** The version the profile actually holds on disk, or null when it cannot be read. The Client uses this
+  * to keep an earlier durable install record from becoming a permanent restart banner after an external
+  * (official CLI) update. */
+ onDiskVersion?:string|null;
  releaseDirectory:string;
  latest:UpgradeCandidate|null;
  refusals:Array<{directory:string;code:string;diagnostic:string|null}>;

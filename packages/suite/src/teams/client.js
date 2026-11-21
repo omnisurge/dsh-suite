@@ -7,7 +7,8 @@ import {
 import limits from '../limits.json' with { type: 'json' };
 
 /**
- * Agent Teams 设置：两张独立设置卡（ADR-093 退役成员上限卡后）。
+ * Agent Teams 设置：三张独立设置卡（ADR-093 退役成员上限卡后；ADR-097 增加团队模式卡）。
+ * - TeamModeCard 团队模式：新会话默认开启的官方 defaultEnabled 开关，走官方 configEditor。
  * - ExtremeCard  极限模式：只一个开关（规则 deepseek+flash 与提示词内置），configForms 即时生效。
  * - NotesCard    环境笔记：profile 级、所有会话注入的一段系统提示。
  *
@@ -71,6 +72,15 @@ const en = {
   extremeDesc: "Only for DeepSeek Flash. When on, a fixed prompt is added so the model works as if its token budget were unlimited.",
   enableLabel: 'Enable extreme mode',
   extremeHint: 'The matching rule (deepseek + flash) and the prompt text are built in and not shown.',
+  teamTitle: 'Team mode',
+  teamSummary: 'New sessions start with team mode',
+  teamDesc: 'New sessions start with Agent Teams enabled. Existing sessions and resumed sessions keep their own choice.',
+  teamEnableLabel: 'Start new sessions with team mode on',
+  teamCurrentOn: 'Current default: on',
+  teamCurrentOff: 'Current default: off',
+  teamHint: 'Only new sessions are affected. Existing sessions and resumed sessions keep their choice.',
+  teamUnavailable: 'The official Agent Teams setting is unavailable; nothing was changed.',
+  teamSaveFailed: 'The default was not saved.',
   currentModel: 'Model', modelUnknown: 'model unknown', modelUnreadable: 'cannot read the current session',
   limitRuleLabel: 'Match rule (name contains)', limitRuleNone: 'none', sampleLabel: 'Sample model',
   matched: "matched — prompt used", notMatched: "not matched — prompt not added",
@@ -96,6 +106,15 @@ const zh = {
   extremeDesc: "仅对 DeepSeek Flash 生效。开启后会添加固定提示，让模型按“token 预算不受限、无需节省”的方式工作。",
   enableLabel: '启用极限模式',
   extremeHint: '匹配规则（deepseek + flash）与提示词内容内置，不在界面暴露。',
+  teamTitle: '团队模式',
+  teamSummary: '新会话默认开启团队模式',
+  teamDesc: '新建会话会默认开启 Agent Teams；已有会话和恢复的会话保持各自原有选择。',
+  teamEnableLabel: '新会话默认开启团队模式',
+  teamCurrentOn: '当前默认：开启',
+  teamCurrentOff: '当前默认：关闭',
+  teamHint: '只影响新建会话；已有会话和恢复的会话保持原有选择。',
+  teamUnavailable: '官方 Agent Teams 设置不可用，未做修改。',
+  teamSaveFailed: '默认值未保存。',
   currentModel: '模型', modelUnknown: '模型未知', modelUnreadable: '读不到当前会话',
   limitRuleLabel: '匹配规则（模型名需含）', limitRuleNone: '无', sampleLabel: '取样模型',
   matched: "已匹配，提示已添加", notMatched: "当前模型不匹配，不添加提示",
@@ -202,6 +221,54 @@ function ExtremeCard({ t, wire, limitForm, view }){
       receipt));
 }
 
+function TeamModeCard({ t, wire, view }){
+  const call = React.useMemo(() => makeCall(wire), [wire]);
+  const st = loadState();
+  const [status,setStatus]=React.useState(null);
+  const [enabled,setEnabled]=React.useState(false);
+  const [save,setSave]=React.useState(null);
+  const load = React.useCallback(async () => {
+    st.setPhase('loading');
+    try {
+      const value = await budget(call('teamModeStatus'), 'teamModeStatus');
+      if (!st.alive.current) return;
+      setStatus(value); setEnabled(!!(value && value.defaultEnabled === true)); setSave(null); st.setPhase('ready');
+    } catch (failure) { if (!st.alive.current) return; st.setIssue(REASON(failure)); st.setPhase('failed'); }
+  }, [call]);
+  React.useEffect(() => { void load(); }, [load]);
+  const saveDefault = async () => {
+    if (!status || status.available !== true) { setSave({ state: 'refused', code: 'TEAM_MODE_UNAVAILABLE' }); return; }
+    if (enabled === (status.defaultEnabled === true)) { setSave({ state: 'unchanged' }); return; }
+    setSave({ state: 'saving' });
+    try {
+      const written = await call('saveTeamModeDefault', enabled);
+      if (!st.alive.current) return;
+      if (!written || written.available !== true) { setSave({ state: 'refused', code: written && written.code ? written.code : 'TEAM_MODE_WRITE_FAILED' }); return; }
+      setStatus(written); setEnabled(!!(written.defaultEnabled === true));
+      setSave(written.code ? { state: 'refused', code: written.code } : { state: 'saved' });
+    } catch (failure) { if (st.alive.current) setSave({ state: 'refused', code: REASON(failure) }); }
+  };
+  if (st.phase === 'loading') return h(Shell, { t, view, summary: t('teamSummary') }, h(Loading, { t }));
+  if (st.phase === 'failed') return h(Shell, { t, view, summary: t('teamSummary') }, h(LoadFailed, { t, issue: st.issue, onRetry: () => void load() }));
+  const available = status && status.available === true;
+  const persisted = !!(status && status.defaultEnabled === true);
+  const receipt = save === null ? null
+    : save.state === 'saved' ? h(StatusLine, { tone: 'ok', 'data-testid': 'team-default-receipt' }, t('saved'))
+    : save.state === 'unchanged' ? h('p', { className: 'omni-ui-hint' }, t('unchanged'))
+    : save.state === 'refused' ? h(StatusLine, { tone: 'warn', role: 'alert', 'data-testid': 'team-default-save-failed' }, t('teamSaveFailed')) : null;
+  return h(Shell, { t, view, summary: t('teamSummary') },
+    h(SettingsCard, { title: t('teamTitle'), description: t('teamDesc') },
+      available
+        ? h(React.Fragment, null,
+            h(Switch, { label: t('teamEnableLabel'), 'data-testid': 'team-default-switch', checked: enabled, onChange: (event) => { setEnabled(event.target.checked); setSave(null); } }),
+            h(StatusLine, { tone: persisted ? 'ok' : 'warn', 'data-testid': 'team-default-status' }, persisted ? t('teamCurrentOn') : t('teamCurrentOff')),
+            h('p', { className: 'omni-ui-hint' }, t('teamHint')),
+            h(ActionGroup, null,
+              h(Button, { variant: 'primary', 'data-testid': 'team-default-save', busy: save !== null && save.state === 'saving', onClick: () => void saveDefault() }, t('save'))))
+        : h(StatusLine, { tone: 'warn', 'data-testid': 'team-default-unavailable' }, t('teamUnavailable')),
+      receipt));
+}
+
 function NotesCard({ t, wire, view }){
   const call = React.useMemo(() => makeCall(wire), [wire]);
   const st = loadState();
@@ -259,9 +326,10 @@ export function apply(ctx) {
     const t = inner.locale.bind(NS);
     const limitForm = inner.configForms.get(NS);
     return inner.configForms.whileServed([NS], () => {
+      const a = registerSettingsPluginCard(inner, { id: NS + '-team', order: 30, label: () => t('teamTitle'), locale: NS, inject: () => ({ t, wire }) }, TeamModeCard);
       const b = registerSettingsPluginCard(inner, { id: NS + '-limit', order: 31, label: () => t('extremeTitle'), locale: NS, inject: () => ({ t, wire, limitForm }) }, ExtremeCard);
       const c = registerSettingsPluginCard(inner, { id: NS + '-notes', order: 32, label: () => t('notesTitle'), locale: NS, inject: () => ({ t, wire }) }, NotesCard);
-      return () => { b(); c(); };
+      return () => { a(); b(); c(); };
     });
-  }), 'omnisurge: two settings cards for extreme mode / notes (ADR-093 retired the members card)');
+  }), 'omnisurge: three settings cards for team mode / extreme mode / notes (ADR-097, ADR-093 retired the members card)');
 }

@@ -8,6 +8,12 @@
       name: '@omnisurge/dsh-suite/agent-teams'
       disabled: true
       config: {}
+    # ADR-113: the retired guard is no longer a declared row; only the inert tombstone export remains.
+    # ADR-100: the separate budget summary hook below is optional and leaves transactions official.
+    - id: omnisurge-compaction-budget
+      name: '@omnisurge/dsh-suite/compaction-budget'
+      disabled: true
+      config: {}
     - id: omnisurge-web-search-searxng
       name: '@omnisurge/dsh-suite/searxng'
       disabled: true

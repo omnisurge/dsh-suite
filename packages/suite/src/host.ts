@@ -23,7 +23,7 @@ import {profileStateDirectory,writeProfileState} from './recovery.js';
 import type {UpgradeInstallRecord} from './types.js';
 import {resolveDshHome} from './dsh-home.js';
 import {SUITE_DEVELOPMENT_PROTOCOL,CAPABILITY_OWNERS,REQUIRED_CAPABILITIES} from './build-protocol.js';
-import {ComponentInventory,readReleaseComponents,SUITE_PACKAGE} from './components.js';
+import {ComponentInventory,readReleaseComponents,validateSourceComponentManifest,SUITE_PACKAGE} from './components.js';
 import type {ComponentRuntimeProbe} from './components.js';
 import {createOcrService,type OcrService} from './ocr-service.js';
 import {OcrRefusal} from './ocr-contract.js';
@@ -40,7 +40,9 @@ import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,probeMcpServer,rea
 import {PURPOSE_SECTION_NAME,PURPOSE_SECTION_ORDER,createPurposeStore,purposeUnavailable} from './mcp-purpose.js';
 import {LIMIT_MODE_ORDER,LIMIT_MODE_SECTION,firstReadableSelection,limitModeSectionText,matchesLimitModels,normalizeLimitMode,selectionOf} from './limit-mode.js';
 import type {LimitModeConfig} from './limit-mode.js';
-import {ENVIRONMENT_NOTES_ORDER,ENVIRONMENT_NOTES_SECTION,appendEnvironmentEntry,notesPathOf,notesSectionTextSync,readNotes,writeNotes} from './environment-notes.js';
+import {TEAM_MODE_ORDER,TEAM_MODE_SECTION,officialAgentTeamEntryOf,teamModeDefaultOf,teamModeSectionText} from './team-mode.js';
+import type {AgentTeamEntryLike} from './team-mode.js';
+import {ENVIRONMENT_NOTES_ORDER,ENVIRONMENT_NOTES_SECTION,appendEnvironmentNote,notesPathOf,notesSectionTextSync,readNotes,writeNotes} from './environment-notes.js';
 import {agentTeamsRowOf} from './agent-teams-row.js';
 import {MANAGED_ROW_PREFIX,discoverManagedAuthority,managedCatalog} from './mcp-managed.js';
 import type {PurposeStore} from './mcp-purpose.js';
@@ -49,7 +51,7 @@ import {createSkill,readSkill,removeSkill,updateSkill} from './skills-manage.js'
 import type {SkillContext,SkillRegistryLike} from './skills-manage.js';
 import type {SkillsCatalog,McpProbeResult,McpPurposeServer,McpPurposeSnapshot,McpPurposeWriteResult,McpServerCatalog,McpServerDraft,McpServerMutation,SkillDocument,SkillDraft,SkillMutation,SkillScope} from './types.js';
 import type {OcrCapabilities,OcrImageAttachment,OcrRecognizeResult,OcrRenderResult} from './ocr-types.js';
-import type {ComponentDefinition,ComponentSetStatus,DevelopmentOperation,DevelopmentStatus,EnvironmentNotesState,HealRecord,HostRuntimeBuild,LimitModeStatus,UpgradeResult,UpgradeStatus} from './types.js';
+import type {ComponentDefinition,ComponentSetStatus,DevelopmentOperation,DevelopmentStatus,EnvironmentNotesState,HealRecord,HostRuntimeBuild,LimitModeStatus,TeamModeStatus,UpgradeResult,UpgradeStatus} from './types.js';
 export type {ComponentDefinition,ComponentStatus,ComponentSetStatus,RecoveryReceipt,UpgradeStatus,UpgradeResult,BuildCapabilities,BuildResult,ClientRuntimeBuild,DevelopmentOperation,DevelopmentStatus,HostRuntimeBuild} from './types.js';
 /**
  * Everything that touches the plugin API lives here on purpose: this module is imported dynamically by the
@@ -62,6 +64,15 @@ export type {ComponentDefinition,ComponentStatus,ComponentSetStatus,RecoveryRece
 export interface ReleaseFetcher {ensure(request?:{currentVersion?:string}):Promise<ReleaseFetchOutcome>;}
 export type ReleaseFetcherFactory=(options:ReleaseFetcherOptions)=>ReleaseFetcher;
 export function startHost(ctx:Context,config?:SuiteConfig,releaseFetcher?:ReleaseFetcherFactory):void{new SuiteDevelopment(ctx,config,releaseFetcher);}
+/** The optional official config editor service; it is read with ctx.get, never declared as a required
+ * inject, so a host without it still boots the Suite and the new card degrades honestly. */
+interface ConfigEditorEntryLike{options?:{id?:unknown;name?:unknown;config?:unknown;};}
+interface ConfigEditorConfigurationLike{entry?:ConfigEditorEntryLike;inherited?:Record<string,unknown>;override?:Record<string,unknown>;}
+interface ConfigEditorLike{
+ entries?:()=>Iterable<ConfigEditorEntryLike>;
+ configuration?:()=>Iterable<ConfigEditorConfigurationLike>;
+ edit?:(entry:ConfigEditorEntryLike,change:(current:Record<string,unknown>,inherited:Record<string,unknown>)=>Record<string,unknown>)=>Promise<unknown>;
+}
 declare module '@deepseek-ai/cordis' {interface Context {omnisurgeSuiteDev:SuiteDevelopment;}}
 /** Read what the loaded business Host advertises; a missing or legacy advertisement is never treated as ready. */
 function runtimeBuild(provided:unknown):HostRuntimeBuild|null{
@@ -142,6 +153,12 @@ export class SuiteDevelopment extends TypertRemoteService {
     if(runtime===null)return null;
     const advertised=ctx.get(runtime.service) as Record<string,unknown>|undefined,value=advertised?.[runtime.versionField];
     return typeof value==='string'&&value.length>0&&!value.startsWith('__')?value:null;
+   },
+   effectSnapshot:async definition=>{
+    const spec=definition.effect;
+    if(!spec)return null;
+    const reporter=ctx.get(spec.service) as {snapshot?:()=>unknown}|undefined;
+    return typeof reporter?.snapshot==='function'?reporter.snapshot() as import('./types.js').ComponentEffectSnapshot:null;
    },
    dispatchConfirmed:async definition=>{
     const dispatch=definition.runtime?.dispatch;
@@ -285,6 +302,7 @@ export class SuiteDevelopment extends TypertRemoteService {
   this.registerPurposeSection(ctx);
   this.registerLimitModeSection(ctx);
   this.registerEnvironmentNotesSection(ctx);
+  this.registerTeamModeSection(ctx);
   this.registerDocumentParseSection(ctx);
   registerComponentTool(ctx,{componentsStatus:()=>this.componentsStatusCore()});
   registerUpgradeTool(ctx,{
@@ -316,11 +334,7 @@ export class SuiteDevelopment extends TypertRemoteService {
   // Source-linked development reads the repository's own declaration; both origins describe the same
   // module set, and a module that is not a Suite subpath is refused where it is read.
   const declared=JSON.parse(await readFile(join(root,'packages/suite/components.json'),'utf8'));
-  if(!Array.isArray(declared)||declared.length===0)throw Error('COMPONENT_MANIFEST_INVALID');
-  return declared.map((item:{id:string;export?:string;rowId:string;display?:{en?:string;zh?:string};runtime?:ComponentDefinition['runtime']})=>{
-   if(!item.export)throw Error('COMPONENT_MANIFEST_INVALID');
-   return {id:item.id,module:SUITE_PACKAGE+'/'+item.export.replace(/^\.\//,''),rowId:item.rowId,display:{en:String(item.display?.en??item.id),zh:String(item.display?.zh??item.id)},runtime:item.runtime??null};
-  });
+  return validateSourceComponentManifest(declared).map(item=>({id:item.id,module:item.module,rowId:item.rowId,display:item.display,runtime:item.runtime,...(item.effect?{effect:item.effect}:{})}));
  }
  private async carriedVersion():Promise<string>{
   const manifest=JSON.parse(await readFile(join(await this.packageRoot(),'package.json'),'utf8'));
@@ -509,6 +523,32 @@ export class SuiteDevelopment extends TypertRemoteService {
    },'omnisurge:limit-mode');
   });
  }
+ /** ADR-097：团队模式的 Lead 决策提示。只在团队模式开启且当前 agent 是根会话时注入；
+  * 官方 TEAM_POLICY 已负责机制说明，这里只补“何时主动组队”的产品偏好。 */
+ private registerTeamModeSection(ctx:Context):void{
+  type PromptSectionHost={section(input:{name:string;order:number;text:(context?:unknown)=>string;interpolate:boolean}):()=>void;getSectionOrder?:(name:string)=>number;};
+  const injectable=ctx as unknown as {inject(keys:string[],callback:(promptCtx:{effect:(fn:()=>unknown,name?:string)=>unknown;systemPrompt:PromptSectionHost})=>void):void;};
+  injectable.inject(['systemPrompt'],promptCtx=>{
+   promptCtx.effect(()=>{
+    try{
+     let order=TEAM_MODE_ORDER;
+     try{const official=promptCtx.systemPrompt.getSectionOrder?.('TEAM_POLICY');if(typeof official==='number'&&Number.isFinite(official))order=official+1;}catch{/* keep the documented fallback */}
+     return promptCtx.systemPrompt.section({
+      name:TEAM_MODE_SECTION,
+      order,
+      interpolate:false,
+      text:(context?:unknown)=>{
+       const agent=(context as {agent?:unknown}|undefined)?.agent;
+       return teamModeSectionText(this.agentTeamsEnabled(agent),this.isRootAgent(agent));
+      },
+     });
+    }catch(error){
+     ctx.logger?.warn?.('SUITE_TEAM_MODE_SECTION_UNAVAILABLE',{message:String((error as Error)?.message??error)});
+     return ()=>{};
+    }
+   },'omnisurge:team-mode-guidance');
+  });
+ }
  /** ADR-061：环境笔记段的注册。与 mcp-purpose 同一纪律：注册失败只记 warn，绝不因为一段笔记让会话起不来。 */
  private registerEnvironmentNotesSection(ctx:Context):void{
   type PromptSectionHost={section(input:{name:string;order:number;text:()=>string;interpolate:boolean}):()=>void;};
@@ -567,15 +607,109 @@ export class SuiteDevelopment extends TypertRemoteService {
   private async rememberEnvironment(kind:string,name:string,detail:string):Promise<{saved:boolean;code:string|null;bytes:number}> {
    const path=notesPathOf(this.profileDir());
    if(path===null)return {saved:false,code:'ENVIRONMENT_NOTES_PROFILE_UNKNOWN',bytes:0};
-   const current=await readNotes(path);
-   if(!current.available)return {saved:false,code:current.code,bytes:current.bytes};
-   const text=appendEnvironmentEntry(current.text??'',kind,name,detail);
-   const written=await writeNotes(path,text);
-   if(written.code!==null)return {saved:false,code:written.code,bytes:written.bytes};
+   // The whole read→append→write is one queue task: two tools appending different facts must not each write
+   // a copy based on the same old file (which would silently lose one of them).
+   const written=await appendEnvironmentNote(path,kind,name,detail);
+   if(!written.available)return {saved:false,code:written.code,bytes:written.bytes};
    return {saved:true,code:null,bytes:written.bytes};
   }
 /** 读一次运行期服务；缺服务返回 undefined，由调用方决定怎么降级，不在这里抛。 */
  private lookup(name:string):unknown{return (this.ctx as unknown as {get(name:string):unknown}).get(name);}
+/** ADR-097：官方团队服务是唯一状态源；读不到就返回 false（不注入提示），不猜。 */
+ private agentTeamsEnabled(agent:unknown):boolean{
+  const service=this.lookup('agentTeams') as {isEnabled?:(caller:unknown)=>boolean}|undefined;
+  if(typeof service?.isEnabled!=='function')return false;
+  try{return service.isEnabled(agent)===true;}catch{return false;}
+ }
+/** ADR-097：只给根会话（Team Lead）注入额外提示，避免 teammate 继续拉团队。 */
+ private isRootAgent(agent:unknown):boolean{
+  const service=this.lookup('subagents') as {rootOf?:(caller:unknown)=>unknown}|undefined;
+  if(typeof service?.rootOf!=='function')return false;
+  try{return service.rootOf(agent)===agent;}catch{return false;}
+ }
+/** 官方 configEditor 是可选服务：不存在时卡片显示不可用，不让整行插件依赖它。 */
+ private configEditorService():ConfigEditorLike|undefined{
+  const service=this.lookup('configEditor') as ConfigEditorLike|undefined;
+  return service!==undefined&&service!==null&&typeof service.entries==='function'&&typeof service.edit==='function'?service:undefined;
+ }
+ private officialAgentTeamEntry(editor:ConfigEditorLike):AgentTeamEntryLike|null{
+  return officialAgentTeamEntryOf(editor.entries?.());
+ }
+ /** 只把用户显式覆盖项写回 profile patch；官方 bundle 的默认值不能复制成用户覆盖，
+  *  否则未来官方默认值变化会被旧的显式值盖住。 */
+ private officialAgentTeamLayer(editor:ConfigEditorLike,entry:ConfigEditorEntryLike):{found:boolean;inherited:Record<string,unknown>;override:Record<string,unknown>;effective:Record<string,unknown>;readError:boolean}{
+  let inherited:Record<string,unknown>={};
+  let override:Record<string,unknown>={};
+  let found=false;
+  let readError=false;
+  const configuration=editor.configuration;
+  if(typeof configuration==='function'){
+   try{
+    for(const row of configuration.call(editor)){
+     const candidate=row?.entry;
+     // Match both id and package name. A legacy @deepseek-ai/dsh-experimental-agent-team row may share the
+     // same id but has an incompatible schema (maxMembers etc.); its override must never be copied into the
+     // official @deepseek-ai/dsh-agent-team row.
+     if(candidate?.options?.id!==entry.options?.id||candidate?.options?.name!==entry.options?.name)continue;
+     found=true;
+     if(row.inherited&&typeof row.inherited==='object')inherited={...row.inherited};
+     if(row.override&&typeof row.override==='object')override={...row.override};
+     break;
+    }
+   }catch{ readError=true; }
+  }
+  const raw=entry.options?.config&&typeof entry.options.config==='object'&&!Array.isArray(entry.options.config)?{...entry.options.config as Record<string,unknown>}:{};
+  return {found,inherited,override,effective:{...inherited,...raw,...override},readError};
+ }
+ private teamModeStatusCore(editor:ConfigEditorLike|undefined=this.configEditorService()):TeamModeStatus{
+  if(editor===undefined)return {available:false,code:'TEAM_MODE_CONFIG_UNAVAILABLE',defaultEnabled:false};
+  let entry:AgentTeamEntryLike|null;
+  try{entry=this.officialAgentTeamEntry(editor);}
+  catch{return {available:false,code:'TEAM_MODE_AGENT_TEAM_UNREADABLE',defaultEnabled:false};}
+  if(entry===null)return {available:false,code:'TEAM_MODE_AGENT_TEAM_UNAVAILABLE',defaultEnabled:false};
+  const layer=this.officialAgentTeamLayer(editor,entry as ConfigEditorEntryLike);
+  if(layer.readError)return {available:false,code:'TEAM_MODE_AGENT_TEAM_UNREADABLE',defaultEnabled:false};
+  return {available:true,code:null,defaultEnabled:layer.effective.defaultEnabled===true};
+ }
+ /** ADR-097：读官方 agent-team 的 defaultEnabled；这是新会话默认值的唯一权威。 */
+ @Remote
+ async teamModeStatus():Promise<TeamModeStatus>{return this.teamModeStatusCore();}
+ /** ADR-097：只通过官方 configEditor 编辑 active 官方行；失败返回可读机器码，不手改 profile。 */
+ @Remote
+ async saveTeamModeDefault(enabled:boolean):Promise<TeamModeStatus>{
+  const editor=this.configEditorService();
+  const current=this.teamModeStatusCore(editor);
+  if(!current.available)return current;
+  let entry:AgentTeamEntryLike|null;
+  try{entry=this.officialAgentTeamEntry(editor as ConfigEditorLike);}
+  catch{return {available:false,code:'TEAM_MODE_AGENT_TEAM_UNREADABLE',defaultEnabled:false};}
+  if(entry===null)return {available:false,code:'TEAM_MODE_AGENT_TEAM_UNAVAILABLE',defaultEnabled:false};
+  try{
+   const edit=editor?.edit;
+   if(typeof edit!=='function')return {available:false,code:'TEAM_MODE_CONFIG_UNAVAILABLE',defaultEnabled:false};
+   const layer=this.officialAgentTeamLayer(editor as ConfigEditorLike,entry as ConfigEditorEntryLike);
+   // When configuration() exposed the row, write only its explicit override plus defaultEnabled. If it did
+   // not (older or minimal host), fall back to the loader's current value instead of freezing a guessed layer.
+   await edit.call(editor,entry,(value)=>({...(layer.found?layer.override:value),defaultEnabled:enabled===true}));
+  }catch{
+   return {available:true,code:'TEAM_MODE_WRITE_FAILED',defaultEnabled:current.defaultEnabled};
+  }
+  let next=this.teamModeStatusCore();
+  if(!next.available)return next;
+  // Some loaders reconcile the patch asynchronously; the write can be durable while entry.options.config
+  // still carries the previous value for a turn. Re-read a few times and accept a matching explicit override
+  // from configuration(); otherwise report unconfirmed rather than claiming a save.
+  for(let attempt=0;attempt<3&&next.defaultEnabled!==(enabled===true);attempt+=1){
+   await new Promise(resolve=>setTimeout(resolve,50));
+   next=this.teamModeStatusCore();
+  }
+  if(next.defaultEnabled!==(enabled===true)){
+   const after=this.officialAgentTeamLayer(editor as ConfigEditorLike,entry as ConfigEditorEntryLike);
+   if(after.found&&after.override.defaultEnabled===enabled)return {available:true,code:null,defaultEnabled:enabled===true};
+   return {available:true,code:'TEAM_MODE_WRITE_UNCONFIRMED',defaultEnabled:next.defaultEnabled};
+  }
+  return next;
+ }
  @Remote
  async limitModeStatus():Promise<LimitModeStatus>{
   const config=this.limitModeConfig();

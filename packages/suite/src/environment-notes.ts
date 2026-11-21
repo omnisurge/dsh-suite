@@ -8,8 +8,9 @@
  * - `interpolate:false`：用户写什么就是什么，`{{`/`}}` 不被展开。
  * - 大小上限固定（32 KiB），超了拒绝写入而不是悄悄截断；只读文本，不碰凭据与会话。
  */
+import {randomUUID} from 'node:crypto';
 import {readFileSync,statSync} from 'node:fs';
-import {mkdir,readFile,rename,writeFile} from 'node:fs/promises';
+import {mkdir,readFile,rename,unlink,writeFile} from 'node:fs/promises';
 import {dirname,join} from 'node:path';
 // 上限只有一处声明（limits.json）：页面计数、Host 写入闸门读同一份。
 import limits from './limits.json' with {type:'json'};
@@ -43,19 +44,52 @@ export function notesSectionText(notes:EnvironmentNotes):string{
  return text.length===0?'':text;
 }
 
-/** 写：先校验再落盘；原子替换（临时文件 + rename），失败保持原文件字节不变。 */
-export async function writeNotes(path:string|null,text:string):Promise<EnvironmentNotes>{
- if(path===null)return {available:false,code:'ENVIRONMENT_NOTES_PROFILE_UNKNOWN',text:'',bytes:0,path:null};
+/** 同一路径的所有写入与读-改-写共用一条进程内队列。randomUUID 只让并发写不再互相覆盖临时文件；
+ *  多个 remember_environment 若各自先读旧内容再各写一份，仍会静默丢掉别人的事实，所以队列必须覆盖
+ *  完整的 read→append→write，而不是只包最后的写盘。 */
+const notesQueues=new Map<string,Promise<void>>();
+export function withNotesLock<T>(path:string|null,task:()=>Promise<T>):Promise<T>{
+ if(path===null)return task();
+ const prior=notesQueues.get(path)??Promise.resolve();
+ const run=prior.then(task,task);
+ const tail=run.then(()=>undefined,()=>undefined);
+ notesQueues.set(path,tail);
+ void tail.then(()=>{if(notesQueues.get(path)===tail)notesQueues.delete(path);});
+ return run;
+}
+
+/** 落盘本身不再排队：调用方必须已持有 withNotesLock。临时名唯一；失败时清掉临时文件并保持原文件字节不变。 */
+async function writeNotesFile(path:string,text:string):Promise<EnvironmentNotes>{
  if(typeof text!=='string')return {available:false,code:'ENVIRONMENT_NOTES_INVALID',text:'',bytes:0,path};
  const bytes=Buffer.byteLength(text,'utf8');
  if(bytes>ENVIRONMENT_NOTES_MAX_BYTES)return {available:false,code:'ENVIRONMENT_NOTES_TOO_LARGE',text:'',bytes,path};
- await mkdir(dirname(path),{recursive:true});
- const temporary=path+'.tmp-'+process.pid;
+ const temporary=path+'.tmp-'+randomUUID();
  try{
+  await mkdir(dirname(path),{recursive:true});
   await writeFile(temporary,text,'utf8');
   await rename(temporary,path);
- }catch{return {available:false,code:'ENVIRONMENT_NOTES_WRITE_FAILED',text:'',bytes,path};}
+ }catch{
+  await unlink(temporary).catch(()=>undefined);
+  return {available:false,code:'ENVIRONMENT_NOTES_WRITE_FAILED',text:'',bytes,path};
+ }
  return {available:true,code:null,text,bytes,path};
+}
+
+/** 写：先校验再落盘；原子替换（临时文件 + rename），失败保持原文件字节不变。 */
+export async function writeNotes(path:string|null,text:string):Promise<EnvironmentNotes>{
+ if(path===null)return {available:false,code:'ENVIRONMENT_NOTES_PROFILE_UNKNOWN',text:'',bytes:0,path:null};
+ return withNotesLock(path,()=>writeNotesFile(path,text));
+}
+
+/** 结构化追加一条环境事实（ADR-065）的完整入口：同路径的读→拼→写在一个队列任务里完成，
+ *  并发调用不会各自基于同一份旧文本覆盖彼此。 */
+export async function appendEnvironmentNote(path:string|null,kind:string,name:string,detail:string):Promise<EnvironmentNotes>{
+ if(path===null)return {available:false,code:'ENVIRONMENT_NOTES_PROFILE_UNKNOWN',text:'',bytes:0,path:null};
+ return withNotesLock(path,async()=>{
+  const current=await readNotes(path);
+  if(!current.available)return current;
+  return writeNotesFile(path,appendEnvironmentEntry(current.text??'',kind,name,detail));
+ });
 }
 
 /** 提示段求值是同步的：按 mtime 缓存，文件没变就不读盘；任何异常都退化成"没有这一段"。 */

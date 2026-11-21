@@ -41,31 +41,162 @@ import {
   orderSlotEntries,
 } from './slot-host.js'
 
-export const inject = ['slots', 'remote', 'remote.session']
+export const EFFORT_SLIDER_LOCALE_NS = 'omnisurge.effort-slider'
+
+/**
+ * Effort slider copy. The namespace is registered from apply(); `en` and `zh` must stay
+ * key-identical because the copy inventory gate pairs them by key and placeholder.
+ */
+export const en = {
+  'level.off': 'Off',
+  'level.minimal': 'Minimal',
+  'level.low': 'Low',
+  'level.medium': 'Medium',
+  'level.high': 'High',
+  'level.xhigh': 'Very high',
+  'level.max': 'Max',
+  'toast.dismiss': 'Dismiss',
+  'effort.caption': 'Thinking effort',
+  'effort.ariaLabel': 'Reasoning effort',
+  'effort.title': 'Reasoning effort · {name}',
+  'effort.titleError': 'Reasoning effort could not be set: {error}',
+  'effort.rangeLow': 'Low',
+  'effort.rangeHigh': 'High',
+  'effort.default': 'Default',
+  'effort.error.noLevels': 'The current model does not provide reasoning effort levels',
+  'effort.error.notApplied': 'The reasoning effort change did not take effect',
+  'effort.toast.failed': 'Could not change the reasoning effort. {error}',
+  'chat.status.loading': 'Reading the chat route…',
+  'chat.status.failed': 'The chat route could not be read',
+  'chat.status.stale': 'The chat route has expired',
+  'chat.status.followDefault': 'Using the default',
+  'chat.effort.unspecified': 'Effort not specified',
+  'chat.phase.planned': 'Planned',
+  'chat.phase.sessionOverride': 'Session override',
+  'chat.phase.fallback': 'Fallback route',
+  'chat.phase.appDefault': 'App default',
+  'chat.phase.inherited': 'Inherited',
+  'chat.phase.stale': 'Expired',
+  'chat.ariaLabel': 'Chat route {title}',
+  'chat.unavailable': 'The conversation surface is not ready yet',
+  'model.placeholder': 'Select a model',
+  'model.loadFailed': 'Could not load the model list. {error}',
+  'model.selectFailed': 'Could not switch models.',
+  'model.selectFailedWithError': 'Could not switch models. {error}',
+  'model.ariaLabel': 'Model {model}',
+  'model.loading': 'Loading models…',
+  'model.empty': 'No models available',
+  'model.menuAriaLabel': 'Model and reasoning effort',
+  'model.back': 'Select a model',
+  'model.triggerAriaLabel': 'Model {model}, reasoning effort {effort}',
+  'team.saveFailed': 'Could not save the agent team setting: {error}',
+  'team.confirmDisableTitle': 'Turn off agent team collaboration?',
+  'team.confirmDisableText': 'Turning off agent team collaboration during a conversation stops shared task tools and team coordination instructions.',
+  'team.cancel': 'Cancel',
+  'team.confirmDisable': 'Turn off',
+  'team.switchLabel': 'Enable agent team collaboration',
+  'team.unavailable': 'The agent team collaboration channel is unavailable',
+  'team.saveFailedShort': 'Save failed',
+  'catalog.unavailable': 'The model list is unavailable',
+  'model.channelUnavailable': 'The model channel is unavailable',
+} as const
+
+export const zh = {
+  'level.off': '关闭',
+  'level.minimal': '极低',
+  'level.low': '低',
+  'level.medium': '中',
+  'level.high': '高',
+  'level.xhigh': '极高',
+  'level.max': '最大',
+  'toast.dismiss': '忽略',
+  'effort.caption': '思考强度',
+  'effort.ariaLabel': '推理强度',
+  'effort.title': '推理强度 · {name}',
+  'effort.titleError': '推理强度设置失败：{error}',
+  'effort.rangeLow': '低',
+  'effort.rangeHigh': '高',
+  'effort.default': '默认',
+  'effort.error.noLevels': '当前模型未提供推理强度档位',
+  'effort.error.notApplied': '推理强度切换未生效',
+  'effort.toast.failed': '没能改推理强度。{error}',
+  'chat.status.loading': '正在读取 Chat 路由…',
+  'chat.status.failed': 'Chat 路由读取失败',
+  'chat.status.stale': 'Chat 路由已过期',
+  'chat.status.followDefault': '跟随默认',
+  'chat.effort.unspecified': '未指定强度',
+  'chat.phase.planned': '计划',
+  'chat.phase.sessionOverride': '会话覆盖',
+  'chat.phase.fallback': '后备路由',
+  'chat.phase.appDefault': '宿主默认',
+  'chat.phase.inherited': '继承',
+  'chat.phase.stale': '过期',
+  'chat.ariaLabel': 'Chat 路由 {title}',
+  'chat.unavailable': '会话界面尚未就绪',
+  'model.placeholder': '选择模型',
+  'model.loadFailed': '没能加载模型清单。{error}',
+  'model.selectFailed': '没能切换模型。',
+  'model.selectFailedWithError': '没能切换模型。{error}',
+  'model.ariaLabel': '模型 {model}',
+  'model.loading': '正在加载模型…',
+  'model.empty': '没有可用模型',
+  'model.menuAriaLabel': '模型与推理强度',
+  'model.back': '选择模型',
+  'model.triggerAriaLabel': '模型 {model}，推理强度 {effort}',
+  'team.saveFailed': '智能体团队协作设置保存失败：{error}',
+  'team.confirmDisableTitle': '确认停用智能体团队协作？',
+  'team.confirmDisableText': '对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。',
+  'team.cancel': '取消',
+  'team.confirmDisable': '确认停用',
+  'team.switchLabel': '启用智能体团队协作',
+  'team.unavailable': '智能体团队协作通道不可用',
+  'team.saveFailedShort': '保存失败',
+  'catalog.unavailable': '模型清单不可用',
+  'model.channelUnavailable': '模型通道不可用',
+} as const
+
+export type EffortSliderCopyKey = keyof typeof zh
+export type EffortSliderTranslate = (key: EffortSliderCopyKey, vars?: Record<string, unknown>) => string
+
+const fillCopy = (template: string, vars?: Record<string, unknown>): string => {
+  if (vars === undefined) return template
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match))
+}
+
+/** Translate through the shipped dictionaries; the fallback keeps the previous Chinese copy without a locale service. */
+export function effortSliderTranslate(locale: 'en' | 'zh', key: EffortSliderCopyKey, vars?: Record<string, unknown>): string {
+  const table = locale === 'en' ? en : zh
+  return fillCopy(table[key], vars)
+}
+
+export const defaultEffortSliderTranslate: EffortSliderTranslate = (key, vars) => effortSliderTranslate('zh', key, vars)
+
+export const inject = ['slots', 'remote', 'remote.session', 'locale']
 
 const SLOT = MODEL_SLOT
 const CHAT_ROUTE_REQUEST_TIMEOUT_MS = 1_500
 
-const LEVEL_NAMES: Record<string, string> = {
-  off: '关闭',
-  minimal: '极低',
-  low: '低',
-  medium: '中',
-  high: '高',
-  xhigh: '极高',
-  max: '最大',
+const LEVEL_KEYS: Record<string, EffortSliderCopyKey> = {
+  off: 'level.off',
+  minimal: 'level.minimal',
+  low: 'level.low',
+  medium: 'level.medium',
+  high: 'level.high',
+  xhigh: 'level.xhigh',
+  max: 'level.max',
 }
 
-function levelName(level: string): string {
-  return LEVEL_NAMES[level] ?? level
+function levelName(level: string, t: EffortSliderTranslate): string {
+  const key = LEVEL_KEYS[level]
+  return key === undefined ? level : t(key)
 }
 
-function toastPluginError(text: string): void {
+function toastPluginError(t: EffortSliderTranslate, text: string): void {
   showToast({
     kind: 'omnieff-error',
     tone: 'danger',
     text,
-    closeLabel: '忽略',
+    closeLabel: t('toast.dismiss'),
   })
 }
 
@@ -282,7 +413,8 @@ function drawRadiation(
   }
 }
 
-function EffortSlider({ directory, locked = false }: { directory: ModelDirectory; readonly locked?: boolean }) {
+function EffortSlider({ directory, locked = false, t }: { directory: ModelDirectory; readonly locked?: boolean; readonly t?: EffortSliderTranslate }) {
+  const tr = t ?? defaultEffortSliderTranslate
   const directoryState = useSyncExternalStore(
     (notify) => directory.store.subscribe(notify),
     () => directory.store.getSnapshot(),
@@ -440,17 +572,19 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
         const freshLevels = sliderLevels(fresh)
         const index = clampIndex(raw, freshLevels.length)
         const next = freshLevels[index]?.id
-        if (next === undefined) throw new Error('当前模型未提供推理强度档位')
+        if (next === undefined) throw new Error(tr('effort.error.noLevels'))
 
         previewRef.current = index
         setPreview(index)
         setEffort(next)
 
-        await directory.select({
+        const selected = await directory.select({
           provider: models.current.provider,
           model: models.current.model,
           reasoningEffort: next,
         })
+        const acceptedSelection = remoteSelectAccepted(selected)
+        if (!acceptedSelection.ok) throw new Error(acceptedSelection.error ?? tr('effort.error.notApplied'))
 
         const snapshot = directory.store.getSnapshot()
         const accepted = effortIndex(freshLevels, snapshot.current?.reasoningEffort)
@@ -551,8 +685,8 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
 
   useEffect(() => {
     if (!available || error === null) return
-    toastPluginError(`没能改推理强度。${error}`)
-  }, [available, error])
+    toastPluginError(tr, tr('effort.toast.failed', { error }))
+  }, [available, error, tr])
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (locked || committingRef.current) return
@@ -578,12 +712,12 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
   if (!available) return null
 
   const count = levels.length
-  const effortName = levels[effortIndex(levels, effort)]?.name ?? levelName(effort)
+  const effortName = levels[effortIndex(levels, effort)]?.name ?? levelName(effort, tr)
   const currentIndex = effortIndex(levels, effort)
   const isTop = currentIndex === count - 1
   const progress = preview / (count - 1) * 100
   const style = { '--omnieff-progress': progress + '%' } as CSSProperties
-  const title = error === null ? '推理强度 · ' + effortName : '推理强度设置失败：' + error
+  const title = error === null ? tr('effort.title', { name: effortName }) : tr('effort.titleError', { error })
 
   return (
     <div
@@ -591,7 +725,7 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
       title={title}
     >
       <div className="omnieff-effort-head">
-        <span className="omnieff-effort-caption">思考强度</span>
+        <span className="omnieff-effort-caption">{tr('effort.caption')}</span>
         <span className="omnieff-effort-current">{effortName}</span>
       </div>
       <div
@@ -625,7 +759,7 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
           // Keep the range focusable while our own commit is in flight: disabling it
           // blurs the official menu root, whose onBlur closes the whole menu.
           aria-disabled={busy ? 'true' : undefined}
-          aria-label="推理强度"
+          aria-label={tr('effort.ariaLabel')}
           aria-valuetext={effortName}
           onChange={(event) => {
             if (locked || committingRef.current) return
@@ -656,8 +790,8 @@ function EffortSlider({ directory, locked = false }: { directory: ModelDirectory
         <span className="omnieff-effort-knob" aria-hidden="true" />
       </div>
       <div className="omnieff-effort-endpoints" aria-hidden="true">
-        <span>低</span>
-        <span>高</span>
+        <span>{tr('effort.rangeLow')}</span>
+        <span>{tr('effort.rangeHigh')}</span>
       </div>
       {error === null ? null : <span className="omnieff-effort-sr" role="status">{error}</span>}
     </div>
@@ -682,7 +816,8 @@ function useChatBodyGate(): ChatChromeState {
   return chat
 }
 
-function ChatReadOnlySeat({ sessionId }: { readonly sessionId: SessionId }) {
+function ChatReadOnlySeat({ sessionId, t }: { readonly sessionId: SessionId; readonly t?: EffortSliderTranslate }) {
+  const tr = t ?? defaultEffortSliderTranslate
   const [snapshot, setSnapshot] = useState<ReturnType<typeof parseChatRouteSnapshot> | null>(null)
   const [status, setStatus] = useState<'loading' | 'ready' | 'unavailable'>('loading')
   const acceptedRef = useRef<ReturnType<typeof parseChatRouteSnapshot>>(undefined)
@@ -761,29 +896,29 @@ function ChatReadOnlySeat({ sessionId }: { readonly sessionId: SessionId }) {
   //    把正常说成了故障（Windows 那条误报的直接来源）；
   //  - 客户端 status='unavailable' = 取不到/解析失败——**这才是真异常**。
   const model = status === 'loading'
-    ? '正在读取 Chat 路由…'
+    ? tr('chat.status.loading')
     : status === 'unavailable'
-      ? 'Chat 路由读取失败'
+      ? tr('chat.status.failed')
       : snapshot?.status === 'stale'
-        ? 'Chat 路由已过期'
+        ? tr('chat.status.stale')
         : snapshot?.status === 'unavailable'
-          ? '跟随默认'
+          ? tr('chat.status.followDefault')
           : route === undefined
-            ? 'Chat 路由读取失败'
+            ? tr('chat.status.failed')
             : `${route.provider}/${route.model}`
-  const effort = route?.effort === '' ? '未指定强度' : route?.effort
+  const effort = route?.effort === '' ? tr('chat.effort.unspecified') : route?.effort
   const phase = snapshot?.status === 'planned'
-    ? '计划'
+    ? tr('chat.phase.planned')
     : snapshot?.status === 'resolved'
       ? snapshot.routeKind === 'explicit'
-        ? '会话覆盖'
+        ? tr('chat.phase.sessionOverride')
         : snapshot.routeKind === 'fallback'
-          ? '后备路由'
+          ? tr('chat.phase.fallback')
           : snapshot.routeKind === 'host-default'
-            ? '宿主默认'
-            : '继承'
+            ? tr('chat.phase.appDefault')
+            : tr('chat.phase.inherited')
       : snapshot?.status === 'stale'
-        ? '过期'
+        ? tr('chat.phase.stale')
         : undefined
   const detail = [phase, effort].filter((item): item is string => item !== undefined).join(' · ')
   const title = detail === '' ? model : `${model} · ${detail}`
@@ -793,7 +928,7 @@ function ChatReadOnlySeat({ sessionId }: { readonly sessionId: SessionId }) {
       data-chat-readonly="true"
       data-chat-route-status={status === 'ready' ? snapshot?.status ?? status : status}
       role="status"
-      aria-label={`Chat 路由 ${title}`}
+      aria-label={tr('chat.ariaLabel', { title })}
       title={title}
     >
       <span className="omnieff-model-name">{model}</span>
@@ -802,9 +937,112 @@ function ChatReadOnlySeat({ sessionId }: { readonly sessionId: SessionId }) {
   )
 }
 
+interface TeamModeBinding {
+  /** Whether the official agentTeams remote is reachable right now. */
+  readonly available: () => boolean
+  readonly subscribe: (listener: () => void) => () => void
+  /** Save the Team selection through the official agentTeams remote. */
+  readonly select: (enabled: boolean) => Promise<string | null>
+  /** Called by the mounted row that owns this binding; an in-use binding is never evicted. */
+  readonly retain?: () => void
+  /** Called when that row unmounts; the binding becomes an idle cache entry again. */
+  readonly release?: () => void
+}
+
+/**
+ * Idle session bindings a long-lived Client keeps. A mounted row retains its own binding, so this cap
+ * only bounds sessions nobody is using: a history of 257 sessions cannot grow the map without limit,
+ * and an open Team switch can never lose the binding it subscribed to.
+ */
+export const TEAM_MODE_BINDING_CACHE_LIMIT = 64
+
+interface TeamModeBindingEntry {
+  readonly key: string
+  binding: TeamModeBinding
+  refs: number
+}
+
+/**
+ * Session-keyed binding cache with an idle-only LRU bound.
+ *
+ * Map insertion order is the LRU order (oldest first); `touch` re-inserts at the young end and `trim`
+ * only removes `refs === 0` entries. The size may therefore exceed the limit while that many rows are
+ * mounted, which is the correct trade: evicting an in-use binding would hand the same session two live
+ * bindings and lose the one the switch subscribed to. Exported so the focused test can pin the bound and
+ * the in-use guarantee without mounting the whole slot.
+ */
+export class TeamModeBindingCache {
+  private readonly entries = new Map<string, TeamModeBindingEntry>()
+
+  constructor(private readonly limit: number = TEAM_MODE_BINDING_CACHE_LIMIT) {}
+
+  get size(): number {
+    return this.entries.size
+  }
+
+  /** Return the cached binding for a session, creating and trimming one when it is absent. */
+  for(sessionId: string, create: () => TeamModeBinding): TeamModeBinding {
+    const key = String(sessionId)
+    const cached = this.entries.get(key)
+    if (cached !== undefined) {
+      this.touch(cached)
+      return cached.binding
+    }
+    const entry: TeamModeBindingEntry = {
+      key,
+      refs: 0,
+      binding: {
+        ...create(),
+        retain: () => this.retain(entry),
+        release: () => this.release(entry),
+      },
+    }
+    this.entries.set(key, entry)
+    this.trim()
+    return entry.binding
+  }
+
+  /** Drop every binding; the contribution's owner calls this when it is disposed. */
+  clear(): void {
+    this.entries.clear()
+  }
+
+  private retain(entry: TeamModeBindingEntry): void {
+    entry.refs += 1
+    const current = this.entries.get(entry.key)
+    // A render can hold a binding the cache evicted before React ran the mount effect; re-admit it so
+    // the row that is now using it is protected from the next trim. If a newer binding already owns the
+    // slot, keep the detached one usable but never let it replace the current cache entry.
+    if (current === undefined) this.entries.set(entry.key, entry)
+    else if (current !== entry) return
+    this.touch(entry)
+    this.trim()
+  }
+
+  private release(entry: TeamModeBindingEntry): void {
+    entry.refs = Math.max(0, entry.refs - 1)
+    this.trim()
+  }
+
+  private touch(entry: TeamModeBindingEntry): void {
+    this.entries.delete(entry.key)
+    this.entries.set(entry.key, entry)
+  }
+
+  private trim(): void {
+    if (this.entries.size <= this.limit) return
+    for (const [key, entry] of this.entries) {
+      if (this.entries.size <= this.limit) break
+      if (entry.refs === 0) this.entries.delete(key)
+    }
+  }
+}
+
 interface ModelSeatProps {
   readonly locked: boolean
   readonly sessionId: SessionId
+  /** Effort slider copy seat; absent only in standalone renders without a locale service. */
+  readonly t?: EffortSliderTranslate
   readonly bind: () => ModelDirectory | undefined
   readonly loadCatalog: () => Promise<{ groups: readonly CatalogGroup[]; error?: string }>
   readonly selectRemote: (selection: ModelSelection) => Promise<{ ok: boolean; error?: string }>
@@ -812,18 +1050,21 @@ interface ModelSeatProps {
   readonly useProjection?: (name: 'agentTeam' | 'modelSelection') => { readonly enabled?: boolean; readonly lastUsed?: unknown } | undefined
   readonly useSession?: (selector: (snapshot: { readonly subagent?: unknown }) => unknown) => unknown
   readonly useSessions?: (selector: (state: { readonly byId?: Record<string, { readonly origin?: string }> }) => unknown) => unknown
-  /** Save the Team selection through the official agentTeams remote. */
+  /** Live binding to the official agentTeams remote; it may arrive after modelDirectories. */
+  readonly teamMode?: TeamModeBinding
+  /** Direct test/fallback face; production uses teamMode so a late remote is visible. */
   readonly selectTeamMode?: (enabled: boolean) => Promise<string | null>
   /** Read-only slot ledger used to put the official ModelSelect and its child entries back. */
   readonly slotHost?: SlotHost
 }
 
 function ModelSeat(props: ModelSeatProps) {
+  const t = props.t ?? defaultEffortSliderTranslate
   const mode = useChatBodyGate()
-  if (mode === "unavailable") return <span className="omni-ui-heroChip" role="status">会话界面尚未就绪</span>
+  if (mode === "unavailable") return <span className="omni-ui-heroChip" role="status">{t('chat.unavailable')}</span>
   return mode === "chat"
-    ? <ChatReadOnlySeat sessionId={props.sessionId} />
-    : <WorkModelSeat key={props.sessionId} {...props} />
+    ? <ChatReadOnlySeat sessionId={props.sessionId} t={t} />
+    : <WorkModelSeat key={props.sessionId} {...props} t={t} />
 }
 
 function WorkModelSeat({ sessionId, locked, bind, loadCatalog, selectRemote, ...rest }: ModelSeatProps) {
@@ -841,7 +1082,7 @@ function WorkModelSeat({ sessionId, locked, bind, loadCatalog, selectRemote, ...
   }, [bind, controller])
 
   if (controller !== undefined) return <WorkModelReady controller={controller} sessionId={sessionId} locked={locked} {...rest} />
-  return <WorkModelRemoteSeat locked={locked} loadCatalog={loadCatalog} selectRemote={selectRemote} />
+  return <WorkModelRemoteSeat locked={locked} loadCatalog={loadCatalog} selectRemote={selectRemote} t={rest.t} />
 }
 
 function useMenuDismiss(open: boolean, rootRef: RefObject<HTMLDivElement | null>, close: () => void) {
@@ -859,11 +1100,14 @@ function WorkModelRemoteSeat({
   locked,
   loadCatalog,
   selectRemote,
+  t,
 }: {
   readonly locked: boolean
   readonly loadCatalog: () => Promise<{ groups: readonly CatalogGroup[]; error?: string }>
   readonly selectRemote: (selection: ModelSelection) => Promise<{ ok: boolean; error?: string }>
+  readonly t?: EffortSliderTranslate
 }) {
+  const tr = t ?? defaultEffortSliderTranslate
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [groups, setGroups] = useState<readonly CatalogGroup[]>([])
@@ -872,15 +1116,15 @@ function WorkModelRemoteSeat({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const close = useCallback(() => setOpen(false), [])
   useMenuDismiss(open, rootRef, close)
-  const modelLabel = current?.model ?? '选择模型'
+  const modelLabel = current?.model ?? tr('model.placeholder')
 
   const load = useCallback(async () => {
     setBusy(true)
     const loaded = await loadCatalog()
     setBusy(false)
     setGroups(loaded.groups)
-    if (loaded.error !== undefined) toastPluginError(`没能加载模型清单。${loaded.error}`)
-  }, [loadCatalog])
+    if (loaded.error !== undefined) toastPluginError(tr, tr('model.loadFailed', { error: loaded.error }))
+  }, [loadCatalog, tr])
 
   const choose = async (provider: string, model: string, defaultEffort?: string) => {
     const selection = {
@@ -896,7 +1140,7 @@ function WorkModelRemoteSeat({
       setOpen(false)
       return
     }
-    toastPluginError(accepted.error === undefined ? '没能切换模型。' : `没能切换模型。${accepted.error}`)
+    toastPluginError(tr, accepted.error === undefined ? tr('model.selectFailed') : tr('model.selectFailedWithError', { error: accepted.error }))
   }
 
   return (
@@ -905,7 +1149,7 @@ function WorkModelRemoteSeat({
         ref={triggerRef}
         type="button"
         className="omnieff-model-trigger"
-        aria-label={'模型 ' + modelLabel}
+        aria-label={tr('model.ariaLabel', { model: modelLabel })}
         aria-haspopup="menu"
         aria-expanded={open}
         title={modelLabel}
@@ -923,9 +1167,9 @@ function WorkModelRemoteSeat({
         <span className="omnieff-model-chevron" aria-hidden="true" />
       </button>
       {open ? (
-        <div className="omnieff-model-menu" role="menu" aria-label="选择模型" aria-busy={busy}>
+        <div className="omnieff-model-menu" role="menu" aria-label={tr('model.menuAriaLabel')} aria-busy={busy}>
           <div className="omnieff-model-pane">
-            {busy && groups.length === 0 ? <div className="omnieff-model-status">正在加载模型…</div> : null}
+            {busy && groups.length === 0 ? <div className="omnieff-model-status">{tr('model.loading')}</div> : null}
             {groups.map((group) => (
               <section key={group.id}>
                 <div className="omnieff-model-group-title">{group.name}</div>
@@ -953,7 +1197,7 @@ function WorkModelRemoteSeat({
                 })}
               </section>
             ))}
-            {!busy && groups.length === 0 ? <div className="omnieff-model-status">没有可用模型</div> : null}
+            {!busy && groups.length === 0 ? <div className="omnieff-model-status">{tr('model.empty')}</div> : null}
           </div>
         </div>
       ) : null}
@@ -961,29 +1205,40 @@ function WorkModelRemoteSeat({
   )
 }
 
-function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, useSessions, selectTeamMode }: Pick<ModelSeatProps, 'sessionId' | 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void }) {
+function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: Pick<ModelSeatProps, 'sessionId' | 't' | 'useProjection' | 'useSession' | 'useSessions' | 'teamMode' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void }) {
+  const tr = t ?? defaultEffortSliderTranslate
   const addressed = useSession === undefined ? false : useSession(snapshot => snapshot.subagent !== null && snapshot.subagent !== undefined) === true
   const listed = useSessions === undefined ? false : useSessions(state => state.byId?.[sessionId]?.origin === 'subagent') === true
   const mode = useProjection === undefined ? undefined : useProjection('agentTeam')
   const selection = useProjection === undefined ? undefined : useProjection('modelSelection')
+  const binding = teamMode ?? alwaysTeamMode
+  const teamModeAvailable = useSyncExternalStore(binding.subscribe, binding.available)
+  const select = teamMode === undefined ? selectTeamMode : binding.select
   const [pending, setPending] = useState(false)
-  if (addressed || listed || mode === undefined || selectTeamMode === undefined) return null
+  // The idle cache may only evict bindings nobody is using. This row owns its binding for as long as it
+  // is mounted; closing the menu (or losing the seat) releases it back to the idle LRU. Hooks run before
+  // the early return below so a hidden switch keeps a stable hook order.
+  useEffect(() => {
+    teamMode?.retain?.()
+    return () => { teamMode?.release?.() }
+  }, [teamMode])
+  if (addressed || listed || mode === undefined || !teamModeAvailable || select === undefined) return null
   const change = (enabled: boolean) => {
     setPending(true)
-    void selectTeamMode(enabled).then(failure => {
-      if (failure !== null) toastPluginError('智能体团队协作设置保存失败：' + failure)
+    void select(enabled).then(failure => {
+      if (failure !== null) toastPluginError(tr, tr('team.saveFailed', { error: failure }))
     }, error => {
-      toastPluginError('智能体团队协作设置保存失败：' + (error instanceof Error ? error.message : String(error)))
+      toastPluginError(tr, tr('team.saveFailed', { error: error instanceof Error ? error.message : String(error) }))
     }).finally(() => setPending(false))
   }
   const choose = (enabled: boolean) => {
     if (!enabled && selection !== undefined && (selection.lastUsed ?? null) !== null) {
       onDismiss()
       showConfirm({
-        title: '确认停用智能体团队协作？',
-        text: '对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。',
-        cancelLabel: '取消',
-        confirmLabel: '确认停用',
+        title: tr('team.confirmDisableTitle'),
+        text: tr('team.confirmDisableText'),
+        cancelLabel: tr('team.cancel'),
+        confirmLabel: tr('team.confirmDisable'),
         tone: 'danger',
         onConfirm: () => change(false),
       })
@@ -994,7 +1249,7 @@ function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, 
   return (
     <>
       <div className="omnieff-menu-separator" />
-      <Switch className="omnieff-team-row" label="启用智能体团队协作" checked={mode.enabled === true} disabled={locked || pending || selection === undefined} onChange={event => choose(event.currentTarget.checked)} />
+      <Switch className="omnieff-team-row" label={tr('team.switchLabel')} checked={mode.enabled === true} disabled={locked || pending || selection === undefined} onChange={event => choose(event.currentTarget.checked)} />
     </>
   )
 }
@@ -1004,7 +1259,9 @@ type WorkModelReadyProps = {
   readonly sessionId: SessionId
   readonly locked: boolean
   readonly slotHost?: SlotHost
-} & Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'selectTeamMode'>
+  /** Effort slider copy seat; the official slot runtime supplies it from the locale namespace. */
+  readonly t?: EffortSliderTranslate
+} & Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'teamMode' | 'selectTeamMode'>
 
 type RenderSlotOptions = { readonly fallback?: ReactNode }
 
@@ -1018,6 +1275,11 @@ type SlotStandardProps = {
 const fallbackProjection: NonNullable<ModelSeatProps['useProjection']> = () => undefined
 const fallbackSession: NonNullable<ModelSeatProps['useSession']> = () => false
 const fallbackSessions: NonNullable<ModelSeatProps['useSessions']> = () => false
+const alwaysTeamMode: TeamModeBinding = {
+  available: () => true,
+  subscribe: () => () => undefined,
+  select: async () => null,
+}
 
 function useSlotEntries(host: SlotHost, key: string, winners: boolean): readonly SlotEntry[] {
   const read = useCallback(
@@ -1067,16 +1329,18 @@ function renderSlotEntries(
 ): ReactNode {
   return orderSlotEntries(entries).map((entry, index) => (
     <React.Fragment key={String(entry.options.id ?? entry.locale ?? 'entry') + ':' + index}>
-      {renderSlotEntry(entry, sessionId, owner, host, standard)}
+      <OfficialSeatBoundary fallback={null} resetKey={entry}>
+        {renderSlotEntry(entry, sessionId, owner, host, standard)}
+      </OfficialSeatBoundary>
     </React.Fragment>
   ))
 }
 
-function EffortSliderOption({ controller, locked }: { readonly controller?: ModelDirectory; readonly locked: boolean }) {
+function EffortSliderOption({ controller, locked, t }: { readonly controller?: ModelDirectory; readonly locked: boolean; readonly t?: EffortSliderTranslate }) {
   if (controller === undefined) return null
   return (
     <div className="omnieff-advanced">
-      <EffortSlider directory={controller} locked={locked} />
+      <EffortSlider directory={controller} locked={locked} t={t} />
     </div>
   )
 }
@@ -1084,6 +1348,8 @@ function EffortSliderOption({ controller, locked }: { readonly controller?: Mode
 interface OfficialSeatBoundaryProps {
   readonly fallback: ReactNode
   readonly children: ReactNode
+  /** Changes when the official entry is replaced; a failed boundary then retries the new entry. */
+  readonly resetKey?: unknown
 }
 
 interface OfficialSeatBoundaryState {
@@ -1109,6 +1375,10 @@ function OfficialSeatBoundary(props: OfficialSeatBoundaryProps): ReactNode {
         console.warn('[effort-slider] official ModelSelect rejected the seat entry; using the local menu', error)
       }
 
+      componentDidUpdate(previous: OfficialSeatBoundaryProps): void {
+        if (this.state.failed && previous.resetKey !== this.props.resetKey) this.setState({ failed: false })
+      }
+
       render(): ReactNode {
         return this.state.failed ? this.props.fallback : this.props.children
       }
@@ -1118,7 +1388,7 @@ function OfficialSeatBoundary(props: OfficialSeatBoundaryProps): ReactNode {
   return <Boundary {...props} />
 }
 
-function OfficialModelSeat({ controller, sessionId, locked, slotHost, useProjection, useSession, useSessions, selectTeamMode }: WorkModelReadyProps & { readonly slotHost: SlotHost }) {
+function OfficialModelSeat({ controller, sessionId, locked, slotHost, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: WorkModelReadyProps & { readonly slotHost: SlotHost }) {
   const entries = useSlotEntries(slotHost, MODEL_SLOT, false)
   const official = entries.find(isOfficialModelEntry)
   const state = useSyncExternalStore(
@@ -1132,10 +1402,10 @@ function OfficialModelSeat({ controller, sessionId, locked, slotHost, useProject
   // resolvable selection exists. Keep the existing full menu in that state so
   // the Team switch remains reachable; the official entry takes over as soon
   // as the current model is present in the loaded catalog.
-  const fallback = <FallbackWorkModelReady controller={controller} sessionId={sessionId} locked={locked} useProjection={useProjection} useSession={useSession} useSessions={useSessions} selectTeamMode={selectTeamMode} />
+  const fallback = <FallbackWorkModelReady controller={controller} sessionId={sessionId} locked={locked} useProjection={useProjection} useSession={useSession} useSessions={useSessions} teamMode={teamMode} selectTeamMode={selectTeamMode} t={t} />
   if (official === undefined || !currentChoice) return fallback
   return (
-    <OfficialSeatBoundary key={String(official.options.id ?? official.locale ?? 'model') + ':' + String(sessionId)} fallback={fallback}>
+    <OfficialSeatBoundary key={String(official.options.id ?? official.locale ?? 'model') + ':' + String(sessionId)} fallback={fallback} resetKey={official}>
       <OfficialModelSeatBody
         entry={official}
         controller={controller}
@@ -1253,13 +1523,20 @@ export function WorkModelReady(props: WorkModelReadyProps) {
     : <OfficialModelSeat {...props} slotHost={props.slotHost} />
 }
 
-function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, selectTeamMode }: WorkModelReadyProps) {
+function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: WorkModelReadyProps) {
+  const tr = t ?? defaultEffortSliderTranslate
   const directory = controller.store
   const load = useCallback(() => {
     void controller.load().then(() => undefined, () => undefined)
   }, [controller])
   const select = useCallback(
-    (selection: ModelSelection) => controller.select(selection).then(() => true, () => false),
+    async (selection: ModelSelection) => {
+      try {
+        return remoteSelectAccepted(await controller.select(selection))
+      } catch (error) {
+        return {ok: false as const, error: error instanceof Error ? error.message : undefined}
+      }
+    },
     [controller],
   )
   const state = useSyncExternalStore(
@@ -1275,9 +1552,9 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
   const effortName = (() => {
     const index = effectiveEffortIndex(levels, state.current?.reasoningEffort, choice?.reasoning?.defaultEffort)
     const level = index >= 0 ? levels[index] : undefined
-    return level === undefined ? '默认' : (level.name ?? levelName(level.id))
+    return level === undefined ? tr('effort.default') : (level.name ?? levelName(level.id, tr))
   })()
-  const modelLabel = choice?.name ?? state.current?.model ?? '选择模型'
+  const modelLabel = choice?.name ?? state.current?.model ?? tr('model.placeholder')
   const busy = state.status === 'loading' || state.status === 'selecting'
 
   useEffect(() => {
@@ -1286,8 +1563,8 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
 
   useEffect(() => {
     if (state.error === null) return
-    toastPluginError(`没能切换模型。${state.error}`)
-  }, [state.error])
+    toastPluginError(tr, tr('model.selectFailedWithError', { error: state.error }))
+  }, [state.error, tr])
 
   useEffect(() => {
     if (!open) return
@@ -1317,7 +1594,11 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
       model,
       ...(defaultEffort === undefined ? {} : { reasoningEffort: defaultEffort }),
     })
-    if (accepted) setModelsOpen(false)
+    if (accepted.ok) {
+      setModelsOpen(false)
+      return
+    }
+    toastPluginError(tr, accepted.error === undefined ? tr('model.selectFailed') : tr('model.selectFailedWithError', { error: accepted.error }))
   }
 
   return (
@@ -1326,7 +1607,7 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
         ref={triggerRef}
         type="button"
         className="omnieff-model-trigger"
-        aria-label={'模型 ' + modelLabel + '，推理强度 ' + effortName}
+        aria-label={tr('model.triggerAriaLabel', { model: modelLabel, effort: effortName })}
         aria-haspopup="menu"
         aria-expanded={open}
         title={modelLabel + ' · ' + effortName}
@@ -1346,15 +1627,15 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
       </button>
 
       {open ? (
-        <div className="omnieff-model-menu" role="menu" aria-label="模型与推理强度" aria-busy={busy}>
+        <div className="omnieff-model-menu" role="menu" aria-label={tr('model.menuAriaLabel')} aria-busy={busy}>
           {modelsOpen ? (
             <div className="omnieff-model-pane">
               <button type="button" className="omnieff-model-back" onClick={() => setModelsOpen(false)}>
                 <span aria-hidden="true">‹</span>
-                <span>选择模型</span>
+                <span>{tr('model.back')}</span>
               </button>
               {state.status === 'loading' && state.groups.length === 0 ? (
-                <div className="omnieff-model-status">正在加载模型…</div>
+                <div className="omnieff-model-status">{tr('model.loading')}</div>
               ) : null}
               {state.groups.map((group) => (
                 <section key={group.id}>
@@ -1384,14 +1665,14 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
                 </section>
               ))}
               {state.status === 'ready' && state.groups.every((group) => group.models.length === 0) ? (
-                <div className="omnieff-model-status">没有可用模型</div>
+                <div className="omnieff-model-status">{tr('model.empty')}</div>
               ) : null}
             </div>
           ) : (
             <>
               {levels.length >= 2 ? (
                 <div className="omnieff-advanced">
-                  <EffortSlider directory={controller} locked={locked || busy} />
+                  <EffortSlider directory={controller} locked={locked || busy} t={tr} />
                 </div>
               ) : null}
               <div className="omnieff-menu-separator" />
@@ -1406,7 +1687,7 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
                 {levels.length >= 2 ? null : <span className="omnieff-model-row-effort">{effortName}</span>}
                 <span className="omnieff-row-chevron" aria-hidden="true">›</span>
               </button>
-              <TeamModeRow sessionId={sessionId} locked={locked || busy} onDismiss={() => close(false)} useProjection={useProjection} useSession={useSession} useSessions={useSessions} selectTeamMode={selectTeamMode} />
+              <TeamModeRow sessionId={sessionId} locked={locked || busy} onDismiss={() => close(false)} useProjection={useProjection} useSession={useSession} useSessions={useSessions} teamMode={teamMode} selectTeamMode={selectTeamMode} t={tr} />
             </>
           )}
         </div>
@@ -1449,17 +1730,49 @@ function createSlotHost(scope: unknown, root: unknown): SlotHost {
 }
 
 export function apply(ctx: ClientContext) {
+  ctx.effect(() => ctx.locale.register(EFFORT_SLIDER_LOCALE_NS, { en, zh }), 'effort-slider: locale dictionaries')
+  const t = ctx.locale.bind(EFFORT_SLIDER_LOCALE_NS)
   // The official agent-team Client plugin owns this Remote face. Read it through a declared inject
-  // scope; the seat only presents the same projection and writes through the same endpoint.
+  // scope; the seat only presents the same projection and writes through the same endpoint. The
+  // service can arrive after modelDirectories, so the binding reads the live variable at call time
+  // and notifies the rendered switch when the service is attached or detached.
   let teamRemote: AgentTeamsRemote | undefined
+  const teamModeListeners = new Set<() => void>()
+  const teamModeBindings = new TeamModeBindingCache()
+  const announceTeamMode = () => { for (const listener of teamModeListeners) listener() }
   ctx.inject(['remote', 'remote.agentTeams'], (scope) => {
     const service = scope.get('remote.agentTeams') as AgentTeamsRemote | undefined
     if (service === undefined) return
     teamRemote = service
+    announceTeamMode()
     return () => {
-      if (teamRemote === service) teamRemote = undefined
+      if (teamRemote === service) {
+        teamRemote = undefined
+        announceTeamMode()
+      }
     }
   })
+  // Bindings are session-keyed but must not accumulate for the lifetime of the Client. The cache keeps
+  // only idle history bounded (TEAM_MODE_BINDING_CACHE_LIMIT); the row that is actually rendered retains
+  // its binding, so the Team switch never loses the live face it subscribed to.
+  const teamModeFor = (sessionId: SessionId): TeamModeBinding =>
+    teamModeBindings.for(String(sessionId), () => ({
+      available: () => teamRemote !== undefined,
+      subscribe: (listener) => {
+        teamModeListeners.add(listener)
+        return () => teamModeListeners.delete(listener)
+      },
+      select: async (enabled: boolean) => {
+        const service = teamRemote
+        if (service === undefined) return t('team.unavailable')
+        try {
+          const result = await service.setEnabled(sessionId, enabled)
+          return result.ok ? null : (result.error?.message ?? t('team.saveFailedShort'))
+        } catch (error) {
+          return error instanceof Error ? error.message : String(error)
+        }
+      },
+    }))
   // rc.2's official model-selection plugin publishes modelDirectories from its own apply; a sibling
   // client can be mounted before that service exists. Wait for the service instead of reading once at
   // mount, otherwise the seat silently never registers. If the service never appears, no registration
@@ -1480,7 +1793,8 @@ export function apply(ctx: ClientContext) {
           id: 'omnisurge-effort-slider',
           order: -10,
           registrant: '@omnisurge/dsh-effort-slider',
-          inject: (sessionId: SessionId) => ({ controller: bindDirectory(sessionId) }),
+          locale: EFFORT_SLIDER_LOCALE_NS,
+          inject: (sessionId: SessionId) => ({ controller: bindDirectory(sessionId), t }),
         },
         EffortSliderOption,
       ),
@@ -1495,6 +1809,13 @@ export function apply(ctx: ClientContext) {
       return () => style.remove()
     }, 'effort-slider: styles')
 
+    // The binding cache is plugin-scoped memory: when this contribution goes away, its idle history and
+    // its listener set go with it instead of outliving the slot owner.
+    scope.effect(() => () => {
+      teamModeBindings.clear()
+      teamModeListeners.clear()
+    }, 'effort-slider: team mode bindings')
+
     scope.slots.inject(SLOT, () =>
       scope.slots.register(
         {
@@ -1505,36 +1826,31 @@ export function apply(ctx: ClientContext) {
           // keep their read-only seat.
           priority: -1,
           registrant: '@omnisurge/dsh-effort-slider',
+          locale: EFFORT_SLIDER_LOCALE_NS,
           inject: (sessionId: SessionId) => ({
             sessionId,
+            t,
             bind: () => bindDirectory(sessionId),
             slotHost,
             loadCatalog: async () => {
-              if (sessionRemote?.modelCatalog === undefined) return { groups: [], error: '模型清单不可用' }
+              if (sessionRemote?.modelCatalog === undefined) return { groups: [], error: t('catalog.unavailable') }
               try {
-                return unwrapCatalog(await sessionRemote.modelCatalog())
+                return unwrapCatalog(await sessionRemote.modelCatalog(), t('catalog.unavailable'))
               } catch (error) {
-                return { groups: [], error: error instanceof Error ? error.message : '模型清单不可用' }
+                return { groups: [], error: error instanceof Error ? error.message : t('catalog.unavailable') }
               }
             },
             selectRemote: async (selection: ModelSelection) => {
-              if (sessionRemote?.selectModel === undefined) return { ok: false, error: '模型通道不可用' }
+              if (sessionRemote?.selectModel === undefined) return { ok: false, error: t('model.channelUnavailable') }
               try {
                 return remoteSelectAccepted(await sessionRemote.selectModel({ sessionId, ...selection }))
               } catch (error) {
                 return { ok: false, error: error instanceof Error ? error.message : undefined }
               }
             },
-            // Do not publish a write face that cannot reach the official owner: the seat uses its
-            // absence to hide the switch, instead of offering a control that can only fail.
-            selectTeamMode: teamRemote === undefined ? undefined : async (enabled: boolean) => {
-              try {
-                const result = await teamRemote.setEnabled(sessionId, enabled)
-                return result.ok ? null : (result.error?.message ?? '保存失败')
-              } catch (error) {
-                return error instanceof Error ? error.message : String(error)
-              }
-            },
+            // The live binding hides the switch until the official owner is reachable and makes a
+            // late-mounted remote visible without re-registering the seat.
+            teamMode: teamModeFor(sessionId),
           }),
         },
         ModelSeat,

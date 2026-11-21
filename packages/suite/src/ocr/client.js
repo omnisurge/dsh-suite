@@ -1,6 +1,8 @@
 import * as React from 'react';
 import {ActionGroup,Badge,Button,CapsuleSwitch,EmptyState,Field,SettingsCard,StatusLine,Switch,TextInput,registerSettingsPluginCard} from '@omnisurge/dsh-ui';
 import {DocumentParseCard} from '../document-parse/client.js';
+import {CLIENT_ACTION_TIMEOUT_MS,CLIENT_READ_TIMEOUT_MS,withTimeout} from '../remote-timeout.js';
+import {CREDENTIAL_SAVE_BLOCKED,CREDENTIAL_SAVE_EMPTY,CREDENTIAL_SAVE_FAILED,CREDENTIAL_SAVE_OK,CREDENTIAL_SAVE_PARTIAL,credentialRolesText,saveCredentialRoles} from '../credential-save.js';
 
 /** The multimodal capability card. The host draws the outer settings card; this component is its body.
  * Supplier selection belongs to the agent at recognition time; the card only configures which suppliers
@@ -31,7 +33,7 @@ const en={
  credentialHint:'Paste the value from the supplier console. Stored by reference, never in the configuration file.',
  credentialPresent:'saved',credentialAbsent:'not set',save:'Save credentials',saveBusy:'Saving…',
  officialLinkHint:'Need a key?',openService:'Open the OCR console',openKeys:'Request an API key',
- saveDone:'Saved. Values are in the credential store; this page will not show them again.',saveFailed:'The credential store refused the write.',saveEmpty:'Enter at least one credential before saving.',
+ saveDone:'Saved. Values are in the credential store; this page will not show them again.',saveDoneRoles:'Saved {roles}. Values are in the credential store; this page will not show them again.',saveFailed:'The credential store refused the write.',saveEmpty:'Enter at least one credential before saving.',saveBlocked:'Nothing was saved: these credential values cannot be written from this page ({roles}).',saveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',savePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',
  usageTitle:'Usage',
  quotaValue:'{calls} calls · {pages} pages · {lines} lines on this machine. Remaining quota is shown in the supplier console.',
  providerUsage:'This machine: {calls} calls · {pages} pages · {lines} lines',
@@ -44,7 +46,7 @@ const en={
  statusTestFailed:'The status test did not complete: {code}. Check the credentials, then try again.',
  channelAccurate:'High precision',channelHandwriting:'Handwriting',
  switchLabel:'Turn this capability on',switchHint:'Off by default: recognition sends the page to the supplier and spends your quota. Turn it on only when you need it.',switchFailed:'Could not change the switch.',
- loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',loadFailedNamespace:'The page is not connected to the Host service ({code}). Reopen the settings panel and try again.',
+ loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',loadFailedNamespace:'The page is not connected to the Host service ({code}). Reopen the settings panel and try again.',loading:'Reading current state…',
  summaryReady:'Ready {ready} · Not configured {missing}',
  summaryOn:'On (ready {ready} · not configured {missing})',summaryOff:'Switched off',
  caveat:'Handwriting recognition is limited by loose or joined strokes and cannot reproduce the page exactly. The assistant in the conversation recovers most unclear passages from context, but for names, numbers and acceptance conclusions, check the page image yourself.',
@@ -66,7 +68,7 @@ const zh={
  credentialHint:'把供应商控制台里的值粘进来。按引用保存，不写进配置文件。',
  credentialPresent:'已保存',credentialAbsent:'未设置',save:'保存凭据',saveBusy:'保存中…',
  officialLinkHint:'还没有密钥？',openService:'开通服务',openKeys:'申请 API 密钥',
- saveDone:'已保存。值在凭据库里，这个页面不会再显示它。',saveFailed:'凭据库拒绝了这次写入。',saveEmpty:'请至少填写一项凭据再保存。',
+ saveDone:'已保存。值在凭据库里，这个页面不会再显示它。',saveDoneRoles:'已保存 {roles}。值在凭据库里，这个页面不会再显示它。',saveFailed:'凭据库拒绝了这次写入。',saveEmpty:'请至少填写一项凭据再保存。',saveBlocked:'没有写入任何值：这些凭据在当前页面不可写（{roles}）。',saveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',savePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',
  usageTitle:'用量',
  quotaValue:'本机已调用 {calls} 次 · {pages} 页 · {lines} 行。剩余额度以供应商控制台为准。',
  providerUsage:'本机：{calls} 次 · {pages} 页 · {lines} 行',
@@ -79,32 +81,35 @@ const zh={
  statusTestFailed:'状态测试没有完成：{code}。请检查凭据后重试。',
  channelAccurate:'高精度',channelHandwriting:'手写体',
  switchLabel:'启用这项能力',switchHint:'默认关闭：识别会把页面发到供应商并消耗你的额度。需要时再打开。',switchFailed:'开关没有改成功。',
- loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',loadFailedNamespace:'页面没有连接到后台服务（{code}），请重新打开设置面板后再试。',
+ loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',loadFailedNamespace:'页面没有连接到后台服务（{code}），请重新打开设置面板后再试。',loading:'正在读取当前状态…',
  summaryReady:'可用 {ready} · 未配置 {missing}',
  summaryOn:'已启用（可用 {ready} · 未配置 {missing}）',summaryOff:'开关已关闭',
  caveat:'手写识别受书写潦草与连笔限制，无法百分百还原原文。对话中的助手能凭上下文补回大部分读不通的地方，但人名、数字、验收结论这类关键内容，仍建议你对着原图确认。',
 };
+/** Exposed for the mount fixture only: the card is registered with this same dictionary pair. */
+export const OCR_LOCALE={en,zh};
 Object.assign(en,{
  documentParseTitle:'Document parsing',documentParseSubtitle:'Parse PDF and image documents into Markdown, JSON or artifacts.',documentParseSwitch:'Turn document parsing on',documentParseSwitchHint:'Off by default: a parse sends the document to the selected provider and may spend its quota.',
  providerMineru:'MinerU',providerPaddleOcr:'PaddleOCR',documentParseMode:'Mode',documentParseConfigured:'Configured',documentParseNotConfigured:'Not configured',
  modeMineruAgent:'Agent, no token (default)',modeMineruApi:'API, requires API key',modePaddleVl16:'PaddleOCR-VL-1.6',modePaddleOcrv6:'PP-OCRv6',modePaddleStructureAsync:'PP-StructureV3 async',
- documentParseSave:'Save credentials',documentParseSaveBusy:'Saving…',documentParseSaved:'Saved. The value is held by the credential store.',documentParseSaveFailed:'The credential store refused the write.',documentParseCredentialHint:'Stored by reference; this page never shows the value again.',
+ documentParseSave:'Save credentials',documentParseSaveBusy:'Saving…',documentParseSaved:'Saved. The value is held by the credential store.',documentParseSaveDoneRoles:'Saved {roles}. The value is held by the credential store.',documentParseSaveFailed:'The credential store refused the write.',documentParseSaveBlocked:'Nothing was saved: these credential references cannot be written from this page ({roles}).',documentParseSaveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',documentParseSavePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',documentParseCredentialHint:'Stored by reference; this page never shows the value again.',
  documentParseUsage:'This machine: {calls} tasks · {pages} pages',documentParseUsageEmpty:'No parse tasks recorded on this machine yet',documentParseTest:'Test status',documentParseTestHint:'A test calls the selected provider with the public demo PDF and may spend quota.',documentParseTestUnsupported:'Add a sample file in the conversation before testing.',documentParseTestRunning:'Testing…',documentParseTestDone:'Last test: {mode} · {pages} · {seconds}s',documentParseTestPageUnit:'page(s)',documentParseTestPagesUnknown:'page count unavailable',documentParseTestFailed:'Last test failed: {code}',documentParseTestNeedEnabled:'Turn document parsing on before running a test.',documentParseSwitchFailed:'The document parsing switch could not be changed. Try again.',documentParseTestTimeout:'The status test timed out after {seconds} seconds; try again later.',documentParseTestTimeoutAgent:'MinerU public Agent queue stayed pending for {seconds} seconds; switch to the API mode or try again later.',documentParseLastError:'Last attempt: {code}',documentParseLoadFailed:'Could not read document parsing status ({code}).',documentParseProviderAccessHint:'At parse time the assistant chooses one configured provider and mode; unconfigured providers do not participate. MinerU Agent is a shared token-free queue and may wait; when an API key is configured, the API mode is preferred.',documentParseCaveat:'Document parsing quality depends on the source layout; verify names, numbers and conclusions against the original.',documentParseNeedKey:'Need a key?',documentParseMineruKey:'Get a MinerU API Key',documentParsePaddleKey:'Get a PaddleOCR Token',
 });
 Object.assign(zh,{
  documentParseTitle:'文档解析',documentParseSubtitle:'把 PDF 和图片文档解析为 Markdown、JSON 或可下载结果。',documentParseSwitch:'启用文档解析',documentParseSwitchHint:'默认关闭：解析会把文档发到所选供应商，可能消耗其额度。',
  providerMineru:'MinerU',providerPaddleOcr:'PaddleOCR',documentParseMode:'模式',documentParseConfigured:'已配置',documentParseNotConfigured:'未配置',
  modeMineruAgent:'Agent 免密（默认）',modeMineruApi:'API 精准（需 API Key）',modePaddleVl16:'PaddleOCR-VL-1.6',modePaddleOcrv6:'PP-OCRv6',modePaddleStructureAsync:'PP-StructureV3 异步',
- documentParseSave:'保存凭据',documentParseSaveBusy:'保存中…',documentParseSaved:'已保存，值由凭据服务持有。',documentParseSaveFailed:'凭据服务拒绝了这次写入。',documentParseCredentialHint:'只保存引用；本页不会再次显示凭据值。',
+ documentParseSave:'保存凭据',documentParseSaveBusy:'保存中…',documentParseSaved:'已保存，值由凭据服务持有。',documentParseSaveDoneRoles:'已保存 {roles}，值由凭据服务持有。',documentParseSaveFailed:'凭据服务拒绝了这次写入。',documentParseSaveBlocked:'没有写入任何值：这些凭据引用在当前页面不可写（{roles}）。',documentParseSaveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',documentParseSavePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',documentParseCredentialHint:'只保存引用；本页不会再次显示凭据值。',
  documentParseUsage:'本机：{calls} 个任务 · {pages} 页',documentParseUsageEmpty:'本机暂无文档解析记录',documentParseTest:'测试状态',documentParseTestHint:'测试会用公开示例 PDF 调用所选供应商，可能消耗额度。',documentParseTestUnsupported:'请先在对话中提供一份样本文档。',documentParseTestRunning:'测试中…',documentParseTestDone:'最近测试：{mode} · {pages} · {seconds} 秒',documentParseTestPageUnit:'页',documentParseTestPagesUnknown:'页数未提供',documentParseTestFailed:'最近测试失败：{code}',documentParseTestNeedEnabled:'请先启用文档解析再测试。',documentParseSwitchFailed:'文档解析开关没有改成功，请重试。',documentParseTestTimeout:'状态测试 {seconds} 秒未返回，请稍后重试。',documentParseTestTimeoutAgent:'MinerU 公共免密队列 {seconds} 秒未返回，请切换到 API 精准模式或稍后重试。',documentParseLastError:'最近一次：{code}',documentParseLoadFailed:'读不到文档解析状态（{code}）。',documentParseProviderAccessHint:'解析时由助手在已接入的供应商和模式中选择；未接入的不参与。MinerU Agent 是公共免密队列，可能长时间排队；配置 API Key 后优先使用 API 精准模式。',documentParseCaveat:'文档解析结果受版面质量影响；人名、数字、验收结论等关键内容请对照原文确认。',documentParseNeedKey:'还没有密钥？',documentParseMineruKey:'获取 MinerU API Key',documentParsePaddleKey:'获取 PaddleOCR Token',
 });
 const fill=(template,values)=>String(template).replace(/\{(\w+)\}/g,(match,key)=>(key in values?String(values[key]):match));
 const roleLabel=role=>role==='apiKey'?'API Key':role==='secretId'?'SecretId':role==='secretKey'?'SecretKey':role;
 const channelLabel=(channel,t)=>channel==='handwriting'?t('channelHandwriting'):t('channelAccurate');
-function OcrCard({t,wire,view}){
+export function OcrCard({t,wire,view}){
  const [caps,setCaps]=React.useState(null);
  const [issue,setIssue]=React.useState(null);
  const [loadCode,setLoadCode]=React.useState(null);
+ const [loadPhase,setLoadPhase]=React.useState('loading');
  const [axis,setAxis]=React.useState('input');
  const [expanded,setExpanded]=React.useState(null);
  const [drafts,setDrafts]=React.useState({});
@@ -115,7 +120,7 @@ function OcrCard({t,wire,view}){
  const [toggling,setToggling]=React.useState(false);
  React.useEffect(()=>{
   let cancelled=false;
-  wire.capabilities().then(value=>{if(!cancelled)setCaps(value);}).catch(failure=>{if(!cancelled){setIssue('loadFailed');setLoadCode(failure&&failure.code?String(failure.code):null);}});
+  wire.capabilities().then(value=>{if(!cancelled){setCaps(value);setLoadPhase('ready');}},failure=>{if(!cancelled){setIssue('loadFailed');setLoadCode(failure&&failure.code?String(failure.code):null);setLoadPhase('failed');}});
   return()=>{cancelled=true;};
  },[wire]);
  React.useEffect(()=>{
@@ -129,7 +134,7 @@ function OcrCard({t,wire,view}){
   const ready=states.length>0?states.filter(state=>state.configured===true).length:(caps?.configured===true?1:0);
   const missing=states.length>0?states.length-ready:(caps?.configured===true?0:1);
   const loadText=()=>loadCode==='OCR_NAMESPACE_UNAVAILABLE'?fill(t('loadFailedNamespace'),{code:loadCode}):loadCode===null?t('loadFailed'):fill(t('loadFailedCode'),{code:loadCode});
-  const line=caps===null?loadText():caps.enabled===true?fill(t('summaryOn'),{ready,missing}):t('summaryOff');
+  const line=caps===null?(loadPhase==='loading'?t('loading'):loadText()):caps.enabled===true?fill(t('summaryOn'),{ready,missing}):t('summaryOff');
   return React.createElement('p',{className:'omni-ui-hint','data-testid':'ocr-summary'},line);
  }
  const providers=caps&&Array.isArray(caps.providers)&&caps.providers.length>0?caps.providers:[{id:caps?.provider??'tencent',displayKey:'providerTencent',channels:['accurate','handwriting']}];
@@ -145,17 +150,35 @@ function OcrCard({t,wire,view}){
   const state=providerState(option);
   setSaveNotice(null);
   if(state===null){setSave({provider:option.id,phase:'failed'});setSaveNotice({tone:'warn',text:t('saveFailed')});return;}
-  const values=Object.entries(state.refs).map(([role])=>drafts[option.id]?.[role]).filter(value=>typeof value==='string'&&value.length>0);
-  if(values.length===0){setSave({provider:option.id,phase:'failed',code:'EMPTY'});setSaveNotice({tone:'warn',text:t('saveEmpty')});return;}
+  const entries=Object.entries(state.refs).map(([role,ref])=>({role,ref,value:drafts[option.id]?.[role]}));
   setSave({provider:option.id,phase:'busy'});
-  try{
-   for(const [role,ref] of Object.entries(state.refs)){
-    const value=drafts[option.id]?.[role];
-    if(typeof value==='string'&&value.length>0)await wire.set(ref,value);
-   }
-   const next=await wire.capabilities();
-   setCaps(next);setDrafts(current=>({...current,[option.id]:{}}));setSave({provider:option.id,phase:'done'});setSaveNotice({tone:'ok',text:t('saveDone')});setExpanded(null);
-  }catch{setSave({provider:option.id,phase:'failed'});setSaveNotice({tone:'warn',text:t('saveFailed')});}
+  const outcome=await saveCredentialRoles(entries,{describe:wire.describeCredentials,set:wire.set});
+  if(outcome.status===CREDENTIAL_SAVE_EMPTY){setSave({provider:option.id,phase:'failed',code:'EMPTY'});setSaveNotice({tone:'warn',text:t('saveEmpty')});return;}
+  if(outcome.status===CREDENTIAL_SAVE_BLOCKED){
+   setSave({provider:option.id,phase:'failed',code:'PRECHECK',roles:outcome.blockedRoles});
+   setSaveNotice({tone:'warn',text:fill(t('saveBlocked'),{roles:credentialRolesText(outcome.blockedRoles,roleLabel)})});
+   return;
+  }
+  if(outcome.status===CREDENTIAL_SAVE_FAILED){
+   setSave({provider:option.id,phase:'failed',failedRole:outcome.failedRole});
+   setSaveNotice({tone:'warn',text:fill(t('saveFailedRole'),{role:roleLabel(outcome.failedRole)})});
+   return;
+  }
+  const refresh=async()=>{try{const next=await wire.capabilities();setCaps(next);}catch{}};
+  if(outcome.status===CREDENTIAL_SAVE_PARTIAL){
+   setSave({provider:option.id,phase:'partial',roles:outcome.savedRoles,failedRole:outcome.failedRole});
+   setSaveNotice({tone:'warn',text:fill(t('savePartial'),{saved:credentialRolesText(outcome.savedRoles,roleLabel),failed:roleLabel(outcome.failedRole)})});
+   const saved=new Set(outcome.savedRoles);
+   setDrafts(current=>({...current,[option.id]:Object.fromEntries(Object.entries(current[option.id]??{}).filter(([role])=>!saved.has(role)))}));
+   await refresh();
+   return;
+  }
+  if(outcome.status===CREDENTIAL_SAVE_OK){
+   await refresh();
+   setDrafts(current=>({...current,[option.id]:{}}));setSave({provider:option.id,phase:'done'});setSaveNotice({tone:'ok',text:fill(t('saveDoneRoles'),{roles:credentialRolesText(outcome.savedRoles,roleLabel)})});setExpanded(null);
+   return;
+  }
+  setSave({provider:option.id,phase:'failed',code:outcome.reason??'FAILED'});setSaveNotice({tone:'warn',text:t('saveFailed')});
  };
  const credentialForm=(option,state)=>React.createElement('div',{className:'omni-ui-stack','data-testid':'ocr-credentials-'+option.id},
   Object.entries(state.refs).map(([role,ref])=>React.createElement(Field,{key:role,label:roleLabel(role),hint:t('credentialHint')},
@@ -234,6 +257,27 @@ function OcrCard({t,wire,view}){
   React.createElement('div',{'data-testid':'ocr-axis-switch'},React.createElement(CapsuleSwitch,{options:[{id:'input',label:t('axisInput')},{id:'output',label:t('axisOutput')}],value:axis,onChange:setAxis,'aria-label':t('axisLabel')})),
   body);
 }
+/** The page-side transport seam. Exported for the mount fixture: the production apply() passes the live
+ * namespace and the official credential service, while a fixture can pass a stalled namespace and prove
+ * that every read settles with a readable timeout instead of a permanent loading state. */
+export function createOcrWire({namespace,credentials,readTimeoutMs=CLIENT_READ_TIMEOUT_MS,actionTimeoutMs=CLIENT_ACTION_TIMEOUT_MS}){
+ const unwrap=result=>{if(result&&result.ok===true)return result.value;const code=result&&result.error&&(result.error.code||result.error.name);const failure=new Error(typeof code==='string'?code:'REMOTE_FAILED');failure.code=typeof code==='string'?code:'REMOTE_FAILED';throw failure;};
+ const remote=()=>{const value=typeof namespace==='function'?namespace():namespace;if(value===undefined||value===null)throw Object.assign(new Error('OCR_NAMESPACE_UNAVAILABLE'),{code:'OCR_NAMESPACE_UNAVAILABLE'});return value;};
+ const credential=()=>{if(credentials===undefined||credentials===null||typeof credentials.set!=='function')throw Object.assign(new Error('OCR_CREDENTIALS_UNAVAILABLE'),{code:'OCR_CREDENTIALS_UNAVAILABLE'});return credentials;};
+ const bounded=(operation,task,timeoutMs)=>withTimeout(task,timeoutMs,{code:'OCR_REMOTE_TIMEOUT',message:'OCR_REMOTE_TIMEOUT '+operation});
+ return {
+  capabilities:async()=>JSON.parse(JSON.stringify(unwrap(await bounded('capabilities',()=>remote().ocrCapabilities(),readTimeoutMs)))),
+  recentImages:async()=>{const value=typeof namespace==='function'?namespace():namespace;if(value===undefined||value===null||typeof value.ocrRecentImages!=='function')return [];return JSON.parse(JSON.stringify(unwrap(await bounded('recentImages',()=>value.ocrRecentImages(),readTimeoutMs))));},
+  recognize:async input=>JSON.parse(JSON.stringify(unwrap(await bounded('recognize',()=>remote().ocrRecognize(input),actionTimeoutMs)))),
+  set:async(reference,value)=>{unwrap(await bounded('credential-set',()=>credential().set(reference,value),actionTimeoutMs));},
+  setCredential:async(reference,value)=>{unwrap(await bounded('credential-set',()=>credential().set(reference,value),actionTimeoutMs));},
+  describeCredentials:async references=>JSON.parse(JSON.stringify(unwrap(await bounded('credential-describe',()=>{const service=credential();if(typeof service.describe!=='function')throw Object.assign(new Error('OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'),{code:'OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'});return service.describe(references);},readTimeoutMs)))),
+  setEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await bounded('setEnabled',()=>remote().ocrSetEnabled(enabled),actionTimeoutMs)))),
+  documentParseCapabilities:async()=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParseCapabilities',()=>remote().documentParseCapabilities(),readTimeoutMs)))),
+  documentParse:async input=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParse',()=>remote().documentParse(input),300000)))),
+  documentParseSetEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParseSetEnabled',()=>remote().documentParseSetEnabled(enabled),actionTimeoutMs)))),
+ };
+}
 export function apply(ctx){
  ctx.effect(()=>ctx.locale.register(NS,{en,zh}),'omnisurge: OCR card locale');
  const namespaceRef={current:null};
@@ -243,19 +287,7 @@ export function apply(ctx){
  },'omnisurge: hold the OCR Remote namespace while the Host serves it');
  ctx.inject(['slots','locale','remote','remote.credentials'],inner=>{
   const t=inner.locale.bind(NS);
-  const unwrap=result=>{if(result&&result.ok===true)return result.value;const code=result&&result.error&&(result.error.code||result.error.name);const failure=new Error(typeof code==='string'?code:'REMOTE_FAILED');failure.code=typeof code==='string'?code:'REMOTE_FAILED';throw failure;};
-  const remote=()=>{const namespace=namespaceRef.current;if(namespace===undefined||namespace===null)throw Object.assign(new Error('OCR_NAMESPACE_UNAVAILABLE'),{code:'OCR_NAMESPACE_UNAVAILABLE'});return namespace;};
-  const wire={
-   capabilities:async()=>JSON.parse(JSON.stringify(unwrap(await remote().ocrCapabilities()))),
-   recentImages:async()=>{const namespace=namespaceRef.current;if(namespace===undefined||namespace===null||typeof namespace.ocrRecentImages!=='function')return [];return JSON.parse(JSON.stringify(unwrap(await namespace.ocrRecentImages())));},
-   recognize:async input=>JSON.parse(JSON.stringify(unwrap(await remote().ocrRecognize(input)))),
-   set:async(reference,value)=>{unwrap(await inner.remote.credentials.set(reference,value));},
-   setCredential:async(reference,value)=>{unwrap(await inner.remote.credentials.set(reference,value));},
-   setEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await remote().ocrSetEnabled(enabled)))),
-   documentParseCapabilities:async()=>JSON.parse(JSON.stringify(unwrap(await remote().documentParseCapabilities()))),
-   documentParse:async input=>JSON.parse(JSON.stringify(unwrap(await remote().documentParse(input)))),
-   documentParseSetEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await remote().documentParseSetEnabled(enabled)))),
-  };
+  const wire=createOcrWire({namespace:()=>namespaceRef.current,credentials:inner.remote.credentials});
   registerSettingsPluginCard(inner,{id:NS,order:40,label:()=>t('title'),locale:NS,inject:()=>({t,wire})},OcrCard);
  });
 }

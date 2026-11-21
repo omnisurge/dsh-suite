@@ -2,6 +2,7 @@ import {createHash} from 'node:crypto';
 import {mkdir,mkdtemp,readFile,readdir,realpath,rm,writeFile} from 'node:fs/promises';
 import {isAbsolute,join,resolve} from 'node:path';
 import {readTarGz} from './tar.js';
+import {validateReleaseComponentManifest} from './components.js';
 import type {ComponentDefinition,UpgradeCandidate,UpgradeInstallRecord,UpgradeResult,UpgradeStatus} from './types.js';
 // ADR-068: the fetcher's outcome and the facts the canonical candidate check returns to it. Type-only: the
 // fetcher imports this module's value exports (the version comparison and the checksum parser), so the two
@@ -167,7 +168,7 @@ export class SuiteUpgrade {
   // currentVersion stays the *running* version. An unreadable old package means "running version unknown",
   // not "runs the bytes now on disk": the Client decides "installed, restart required" from lastInstall,
   // and conflating the two would make the restart banner disappear before the app actually restarts.
-  const base={mode,currentVersion:currentVersion??'',releaseDirectory:directory,lastInstall};
+  const base={mode,currentVersion:currentVersion??'',onDiskVersion:onDisk,releaseDirectory:directory,lastInstall};
   if(currentVersion===null&&onDisk===null)return {...base,latest:null,refusals:[{directory,code:'UPGRADE_CURRENT_UNREADABLE',diagnostic:'the current Suite manifest and the profile-installed version are both unreadable'}],canUpgrade:false};
   // Candidate discovery compares against what the profile will load, so the disk is the right proxy here.
   const effectiveVersion=currentVersion??onDisk!;
@@ -295,14 +296,14 @@ export class SuiteUpgrade {
   if(!acceptedRuntimes.includes(runningRuntime))throw Error('UPGRADE_RUNTIME_UNVERIFIED: '+runningRuntime+' is not one of '+acceptedRuntimes.join(', '));
   const componentBytes=files.get('package/components/manifest.json');
   if(!componentBytes)throw Error('UPGRADE_COMPONENTS_MISSING');
-  const componentManifest=JSON.parse(Buffer.from(componentBytes).toString('utf8'));
-  if(componentManifest?.protocol!==2||!Array.isArray(componentManifest.components)||componentManifest.components.length===0)throw Error('UPGRADE_COMPONENTS_INVALID');
-  const components:VerifiedComponent[]=[];
-  for(const item of componentManifest.components){
-   if(!item||typeof item.id!=='string'||typeof item.module!=='string'||typeof item.rowId!=='string')throw Error('UPGRADE_COMPONENTS_INVALID');
-   if(item.module!==SUITE_PACKAGE&&!item.module.startsWith(SUITE_PACKAGE+'/'))throw Error('UPGRADE_COMPONENT_MODULE_NOT_OWNED: '+item.id);
-   components.push({definition:{id:item.id,module:item.module,rowId:item.rowId,display:{en:String(item.display?.en??item.id),zh:String(item.display?.zh??item.id)},runtime:item.runtime??null}});
+  let declaredComponents;
+  try{declaredComponents=validateReleaseComponentManifest(JSON.parse(Buffer.from(componentBytes).toString('utf8')));}
+  catch(error){
+   const message=String((error as Error)?.message??error);
+   if(message.startsWith('COMPONENT_MODULE_NOT_OWNED'))throw Error('UPGRADE_COMPONENT_MODULE_NOT_OWNED'+message.slice('COMPONENT_MODULE_NOT_OWNED'.length));
+   throw Error('UPGRADE_COMPONENTS_INVALID');
   }
+  const components:VerifiedComponent[]=declaredComponents.map(definition=>({definition}));
   return {version:manifest.version,filename,directory:root,suitePath:join(root,filename),suiteSha256:digest,suiteBytes:bytes.length,components};
  }
  /** ADR-068 D2: the candidate check exposed, never copied. The release fetcher must produce directories this

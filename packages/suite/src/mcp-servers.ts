@@ -13,7 +13,9 @@
  * embedded in an error message; the catalog carries counts only. */
 import {RemoteError} from '@deepseek-ai/dsh-typert-protocol';
 import type {} from '@deepseek-ai/dsh-typert-protocol/types';
-import {copyFile,mkdir,open,readFile,rename,unlink,writeFile} from 'node:fs/promises';
+import {execFileSync} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
+import {copyFile,mkdir,open,readFile,rename,stat,unlink,writeFile} from 'node:fs/promises';
 import {dirname,join} from 'node:path';
 import {isMap,isSeq,parseDocument} from 'yaml';
 import {MANAGED_ROW_PREFIX,managedCatalogRead,managedEntryFromDraft,managedProbe,managedStatusOf,managedWrite} from './mcp-managed.js';
@@ -369,6 +371,9 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
   const headers=config.headers;
   const env=config.env;
   const state=stateOf(entry);
+  // F2a: on rc.2 only the Suite's own clients still own a profile-patch row. Historical official-client
+  // static rows and bundle-provided rows are listed read-only; the Host write path enforces the same rule.
+  const editable=authority==='official'&&profileRowIds.has(entry.options.id)&&clientSource==='suite';
   servers.push({
    name,
    transport,
@@ -377,12 +382,10 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    rowId:entry.options.id,
    origin:profileRowIds.has(entry.options.id)?'profile':'loaded',
    managed:false,
-   // F2a: on rc.2 only the Suite's own clients still own a profile-patch row. Historical official-client
-   // static rows and bundle-provided rows are listed read-only; the Host write path enforces the same rule.
-   editable:authority==='official'&&profileRowIds.has(entry.options.id)&&clientSource==='suite',
+   editable,
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
-   ...stdioFactsOf(transport,config),
+   ...stdioFactsOf(transport,config,editable),
    clientPackage,
    clientSource,
    kind:kindOf(clientPackage),
@@ -406,6 +409,7 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
   // A patch row the Loader has no entry for is either switched off or not mounted yet: neither has a live
   // client, so neither may offer a check (ADR-031 D3).
   const state:McpServerState=row.disabled?'disabled':'pending';
+  const editable=authority==='official'&&clientSource==='suite';
   servers.push({
    name,
    transport:transportOf(row.config)??'streamable-http',
@@ -414,10 +418,10 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
    rowId:row.rowId,
    origin:'profile',
    managed:false,
-   editable:authority==='official'&&clientSource==='suite',
+   editable,
    headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
    envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
-   ...stdioFactsOf(transportOf(row.config)??'streamable-http',row.config),
+   ...stdioFactsOf(transportOf(row.config)??'streamable-http',row.config,editable),
    clientPackage,
    clientSource,
    kind:kindOf(clientPackage),
@@ -448,7 +452,8 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
     editable:true,
     headerCount:headers&&typeof headers==='object'&&!Array.isArray(headers)?Object.keys(headers).length:0,
     envCount:env&&typeof env==='object'&&!Array.isArray(env)?Object.keys(env).length:0,
-    ...stdioFactsOf(transport,row.entry),
+    // A managed row's launch line is owned by the official manager's config.servers; like every non
+    // profile-owned row it keeps command/args/cwd out of the Remote catalog.
     clientPackage:OFFICIAL_CLIENT,
     clientSource:'official',
     kind:'static',
@@ -557,25 +562,152 @@ export async function probeMcpServer(ctx:McpServerContext,rowId:string):Promise<
  const runtime=await availability.reader(clientPackage,name,'probe');
  return {rowId,name,runtime:runtime===null?null:normalizeRuntime(runtime)};
 }
+/** MCP 写锁的归属事实：pid 定位进程、start 区分同一 pid 的新进程（PID 复用）、time/ttl 说明锁龄。
+ *  坏锁/空锁/读不懂的锁一律按 live 处理（fail-closed），绝不删除；stale 只在能证明 owner 已死，
+ *  或 pid 活着但进程实例已不是锁的 owner 时回收。回收本身用 rename 做成一次性认领，避免两个进程
+ *  同时删除后各自建立一把“自己的”锁。 */
+const LOCK_TTL_MS=120_000;
+const LOCK_WAIT_MS=1_000;
+const LOCK_RETRY_MS=50;
+interface LockRecord {pid:number;start:string|null;time:number;ttl:number;token:string;}
+type LockAttempt={acquired:true;token:string}|{acquired:false;retry:boolean};
+
+function processAlive(pid:number):boolean{
+ try{process.kill(pid,0);return true;}catch(error){return codeOf(error)==='EPERM';}
+}
+
+/** The process-instance token: /proc starttime on Linux, `ps -o lstart=` on macOS. A PID alone can be
+ *  reused; the start fact stops a recycled PID from keeping an old lock alive forever. */
+async function processStartOf(pid:number):Promise<string|null>{
+ if(process.platform==='linux'){
+  try{
+   const text=await readFile('/proc/'+String(pid)+'/stat','utf8');
+   const close=text.lastIndexOf(')');
+   if(close<0)return null;
+   const fields=text.slice(close+1).trim().split(/\s+/u);
+   // After the comm field, index 0 is field 3 (state); starttime is field 22.
+   return typeof fields[19]==='string'?fields[19]:null;
+  }catch{return null;}
+ }
+ if(process.platform==='darwin'){
+  try{
+   const printed=execFileSync('ps',['-p',String(pid),'-o','lstart='],{encoding:'utf8'}).trim();
+   return printed.length>0?printed:null;
+  }catch{return null;}
+ }
+ return null;
+}
+
+async function readLockRecord(lock:string):Promise<{record:LockRecord|null;missing:boolean}>{
+ try{
+  const text=await readFile(lock,'utf8');
+  const value=JSON.parse(text) as Record<string,unknown>;
+  const pid=typeof value.pid==='number'&&Number.isInteger(value.pid)&&value.pid>0?value.pid:null;
+  const start=typeof value.start==='string'?value.start:typeof value.start==='number'?String(value.start):null;
+  const time=typeof value.time==='number'&&Number.isFinite(value.time)?value.time:null;
+  const ttl=typeof value.ttl==='number'&&Number.isFinite(value.ttl)&&value.ttl>0?value.ttl:null;
+  const token=typeof value.token==='string'&&value.token.length>0?value.token:null;
+  if(pid===null||time===null||ttl===null||token===null)return {record:null,missing:false};
+  return {record:{pid,start,time,ttl,token},missing:false};
+ }catch(error){
+  // Empty (a legacy lock file) or unparseable is deliberately not stale: an unknown owner is treated live.
+  return {record:null,missing:codeOf(error)==='ENOENT'};
+ }
+}
+
+async function lockIsStale(record:LockRecord):Promise<boolean>{
+ if(record.pid===process.pid)return false;
+ if(!processAlive(record.pid))return true;
+ const actual=await processStartOf(record.pid);
+ if(actual!==null&&record.start!==null)return actual!==record.start;
+ // No process-instance fact to compare (old lock/unsupported platform): only an expired TTL may abandon it.
+ return Date.now()-record.time>record.ttl;
+}
+
+/** Claim a stale lock by renaming it away; rename is the one step at most one contender can win. The inode
+ *  check makes sure we moved the very file we judged stale — a replacement created between read and rename
+ *  is put back and reported as busy instead of being deleted. */
+async function claimStaleLock(lock:string,record:LockRecord):Promise<boolean>{
+ let before;
+ try{before=await stat(lock);}catch{return false;}
+ const claimed=lock+'.stale-'+randomUUID();
+ try{
+  await rename(lock,claimed);
+ }catch(error){
+  if(codeOf(error)==='ENOENT')return false;
+  throw error;
+ }
+ try{
+  const after=await stat(claimed);
+  // Both the inode and the token must be the ones judged stale: a replacement (or an in-place rewrite)
+  // between inspection and rename is a live lock and must be put back, never deleted.
+  const moved=await readLockRecord(claimed);
+  if(before.ino!==after.ino||before.dev!==after.dev||moved.record===null||moved.record.token!==record.token){
+   await rename(claimed,lock).catch(()=>undefined);
+   return false;
+  }
+ }catch{return false;}
+ await unlink(claimed).catch(()=>undefined);
+ return true;
+}
+
+async function tryAcquireLock(lock:string):Promise<LockAttempt>{
+ const token=randomUUID();
+ let handle:Awaited<ReturnType<typeof open>>|undefined;
+ try{
+  handle=await open(lock,'wx',0o600);
+ }catch(error){
+  // A lock that cannot even be created (permissions, read-only profile dir) is a write refusal, not a crash:
+  // the caller must never see a raw fs error instead of a code it can explain.
+  if(codeOf(error)!=='EEXIST')throw new RemoteError('mcp/write-locked','MCP_PROFILE_LOCK_BUSY: the profile patch lock could not be created',{});
+  const read=await readLockRecord(lock);
+  if(read.missing)return {acquired:false,retry:true};
+  if(read.record===null)return {acquired:false,retry:false};
+  if(!await lockIsStale(read.record))return {acquired:false,retry:false};
+  return {acquired:false,retry:await claimStaleLock(lock,read.record)};
+ }
+ try{
+  const record:LockRecord={pid:process.pid,start:await processStartOf(process.pid),time:Date.now(),ttl:LOCK_TTL_MS,token};
+  await handle.writeFile(JSON.stringify(record),'utf8');
+ }catch{
+  await handle.close().catch(()=>undefined);
+  await unlink(lock).catch(()=>undefined);
+  throw new RemoteError('mcp/write-locked','MCP_PROFILE_LOCK_BUSY: the profile patch lock could not be created',{});
+ }
+ await handle.close().catch(()=>undefined);
+ return {acquired:true,token};
+}
+
+/** Release only a lock whose token is still ours: if the lock was taken over (e.g. after an over-long
+ *  operation), the new owner's file must survive. */
+async function releaseLock(lock:string,token:string):Promise<void>{
+ try{
+  const text=await readFile(lock,'utf8');
+  const value=JSON.parse(text) as {token?:unknown};
+  if(value.token!==token)return;
+ }catch{return;}
+ await unlink(lock).catch(()=>undefined);
+}
+
 async function withPatchLock<T>(path:string,work:()=>Promise<T>):Promise<T> {
  const lock=path+LOCK_SUFFIX;
- let handle:Awaited<ReturnType<typeof open>>|undefined;
- for(let attempt=0;attempt<20&&!handle;attempt+=1){
-  try{
-   handle=await open(lock,'wx');
-  }catch(error){
-   // A lock that cannot even be created (permissions, read-only profile dir) is a write refusal, not a crash:
-   // the caller must never see a raw fs error instead of a code it can explain.
-   if(codeOf(error)!=='EEXIST')throw new RemoteError('mcp/write-locked','MCP_PROFILE_LOCK_BUSY: the profile patch lock could not be created',{});
-   await sleep(50);
+ const deadline=Date.now()+LOCK_WAIT_MS;
+ let token:string|null=null;
+ for(;;){
+  const attempt=await tryAcquireLock(lock);
+  if(attempt.acquired){token=attempt.token;break;}
+  if(attempt.retry){
+   if(Date.now()>=deadline)break;
+   continue;
   }
+  if(Date.now()>=deadline)break;
+  await sleep(LOCK_RETRY_MS);
  }
- if(!handle)throw new RemoteError('mcp/write-locked','MCP_PROFILE_LOCK_BUSY: another writer is editing the profile patch',{});
+ if(token===null)throw new RemoteError('mcp/write-locked','MCP_PROFILE_LOCK_BUSY: another writer is editing the profile patch',{});
  try{
   return await work();
  }finally{
-  await handle.close().catch(()=>undefined);
-  await unlink(lock).catch(()=>undefined);
+  await releaseLock(lock,token);
  }
 }
 
@@ -639,13 +771,13 @@ async function writePatchAtomic(path:string,text:string):Promise<void> {
 const AUTHORIZATION_TIMEOUT_MIN_MS=1000;
 const AUTHORIZATION_TIMEOUT_MAX_MS=600_000;
 /** The stdio launch facts an edit form may show (ADR-055, 0.2.0-13). A launch command is not a credential:
- * the secret in a stdio row is its env values, and those stay counts. Every row in this catalog is one this
- * profile may edit (a row outside the profile's own scope is not listed at all — the official editor's scope
- * rule, see `loadedEntries`), so "may show" and "is listed" are the same fact here; a second flag would be a
- * second copy of it. An HTTP row gets none of the three keys rather than three empty ones, so "absent" and
- * "empty" stay distinguishable on the page. */
-function stdioFactsOf(transport:McpServerTransport,config:Record<string,unknown>):{command?:string;args?:string[];cwd?:string} {
- if(transport!=='stdio')return {};
+ * the secret in a stdio row is its env values, and those stay counts. Only a row this profile owns **and may
+ * edit** carries the three keys; a bundle/loader row and an official-manager row keep their launch line at
+ * their owner, so a third-party command/args/cwd (API keys, private registry tokens, internal paths) never
+ * crosses the Host boundary. An HTTP row gets none of the three keys rather than three empty ones, so
+ * "absent" and "empty" stay distinguishable on the page. */
+function stdioFactsOf(transport:McpServerTransport,config:Record<string,unknown>,editable:boolean):{command?:string;args?:string[];cwd?:string} {
+ if(!editable||transport!=='stdio')return {};
  const command=typeof config.command==='string'?config.command:'';
  const args=Array.isArray(config.args)?config.args.filter((arg):arg is string=>typeof arg==='string'):[];
  const cwd=typeof config.cwd==='string'?config.cwd:'';
