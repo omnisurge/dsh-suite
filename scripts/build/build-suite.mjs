@@ -47,7 +47,7 @@ export async function buildSuite(root,state,env,signal){
   await run(process.execPath,[createRequire(join(root,'package.json')).resolve('typescript/bin/tsc'),'-p',join(business,'tsconfig.json'),'--outDir',lib],{cwd:root,env:compilerEnv,signal});
   // Every owned Client source is checked, not only the entry: the carried module's sources are what the
   // entry imports, and an esbuild failure is a worse diagnostic than the syntax error itself.
-  for(const name of ['client.js','search/client.js','search/client-flow.js','tools/client.js','compaction-budget/client.js'])await run(process.execPath,['--check',join(business,'src',name)],{cwd:root,env:compilerEnv,signal});
+  for(const name of ['client.js','suite/locale.js','suite/upgrade-flow.js','suite/capability-overview.js','shared/client-copy.js','shared/client-remote.js','shared/DiagnosticDisclosure.js','search/client.js','search/client-flow.js','tools/client.js','tools/locale.js','tools/skills-tab.js','tools/mcp-tab.js','tools/client-format.js','tools/oauth-control.js','compaction-budget/client.js'])await run(process.execPath,['--check',join(business,'src',name)],{cwd:root,env:compilerEnv,signal});
   // The loaded manager freezes a generated projection of the one canonical source.
   // Host modules that carry a third-party library are bundled in place: the profile loader resolves
   // '@deepseek-ai/*' for plugins but not arbitrary packages, and the Suite ships no runtime dependencies

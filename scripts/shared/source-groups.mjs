@@ -7,11 +7,19 @@
 /** 每个源文件的唯一归属。改归属是有意的架构动作，必须改这张表并说明理由。 */
 export const GROUP={
   'client.js':'client',
+  'suite/locale.js':'client',
+  'suite/upgrade-flow.js':'client',
+  'shared/DiagnosticDisclosure.js':'client',
   'failure-view.js':'client',
   'readiness.js':'client',
   'search/client.js':'client',
   'search/client-flow.js':'client',
   'tools/client.js':'client',
+  'tools/locale.js':'client',
+  'tools/skills-tab.js':'client',
+  'tools/mcp-tab.js':'client',
+  'tools/client-format.js':'client',
+  'tools/oauth-control.js':'client',
   'teams/client.js':'client',
   'compaction-budget/client.js':'client',
   'compaction-budget-settings.ts':'host',
@@ -34,6 +42,10 @@ export const GROUP={
   // P2-17/P2-20 and P2-19: pure browser helpers shared by Client pages; no node:* and no Host-only imports.
   'remote-timeout.js':'shared',
   'credential-save.js':'shared',
+  // ADR-117 D2/D5: canonical Client copy interpolation, Remote base, and read-only capability overview model.
+  'shared/client-copy.js':'shared',
+  'shared/client-remote.js':'shared',
+  'suite/capability-overview.js':'shared',
   'ambient.ts':'shared',
   'build-protocol.d.ts':'shared',
   'loopback-origin.ts':'shared',

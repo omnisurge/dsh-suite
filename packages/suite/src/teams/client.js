@@ -5,6 +5,8 @@ import {
 } from '@omnisurge/dsh-ui';
 // 卡片用的常量只有一处声明（limits.json）：Client 侧就地校验与 Host 侧 schema/写入闸门读同一份数据。
 import limits from '../limits.json' with { type: 'json' };
+import { fillTemplate as fill } from '../shared/client-copy.js';
+import { createRemoteCaller } from '../shared/client-remote.js';
 
 /**
  * Agent Teams 设置：三张独立设置卡（ADR-093 退役成员上限卡后；ADR-097 增加团队模式卡）。
@@ -24,7 +26,6 @@ export const inject = ['slots', 'locale', 'remote', 'configForms'];
 
 const h = React.createElement;
 const REASON = (issue) => (issue && issue.message ? issue.message : String(issue));
-const codeOf = (result) => (result && result.error && typeof result.error.code === 'string' ? result.error.code : null);
 const ROOT = 'omni-ui omni-ui-stack';
 const READ_TIMEOUT_MS = 15000;
 
@@ -36,42 +37,19 @@ const utf8Bytes = (text) => {
   if (typeof TextEncoder === 'function') return new TextEncoder().encode(text).length;
   return decodeURIComponent(encodeURIComponent(text)).length;
 };
-const fill = (template, values) => {
-  let text = template;
-  for (const [key, value] of Object.entries(values)) text = text.split('{' + key + '}').join(String(value));
-  return text;
-};
 
-function makeCall(wire) {
-  return async (method, ...args) => {
-    const namespace = wire.namespace;
-    if (!namespace || typeof namespace[method] !== 'function') throw new Error('SUITE_NAMESPACE_MISSING ' + method);
-    let result;
-    try { result = await namespace[method](...args); }
-    catch (issue) { throw new Error('SUITE_CARRIER_FAILED ' + method + ' → ' + REASON(issue)); }
-    if (!result || typeof result !== 'object' || typeof result.ok !== 'boolean') throw new Error('SUITE_RESULT_INVALID ' + method);
-    if (result.ok !== true) {
-      const code = codeOf(result);
-      throw new Error('SUITE_HOST_REFUSED ' + method + (code ? ' [' + code + ']' : ''));
-    }
-    return result.value;
-  };
-}
-
-// 单条读链预算：Remote 不收 signal，超时如实报“这块不可达”，不无限 Loading。
-const budget = (promise, method) => new Promise((resolve, reject) => {
-  const timer = setTimeout(() => reject(new Error('SUITE_READ_TIMEOUT ' + method)), READ_TIMEOUT_MS);
-  promise.then((value) => { clearTimeout(timer); resolve(value); }, (failure) => { clearTimeout(timer); reject(failure); });
-});
+const makeCall = (wire) => createRemoteCaller(wire, { timeoutMs: READ_TIMEOUT_MS });
+// Reads are bounded; writes stay unbounded so a slow profile write is never misreported as a read timeout.
+const makeWriteCall = (wire) => createRemoteCaller(wire, { timeoutMs: 0 });
 
 const en = {
   save: 'Save',
-  unchanged: 'No change.', refused: 'The save was refused',
+  unchanged: 'No change.', refused: 'Could not save changes. Please try again, or reopen plugin settings if it keeps failing.',
   extremeTitle: 'Extreme mode',
   extremeSummary: 'Extreme mode for DeepSeek Flash',
-  extremeDesc: "Only for DeepSeek Flash. When on, a fixed prompt is added so the model works as if its token budget were unlimited.",
+  extremeDesc: 'Applies only to DeepSeek Flash. When enabled, the model expands its thinking and responses fully without condensing length.',
   enableLabel: 'Enable extreme mode',
-  extremeHint: 'The matching rule (deepseek + flash) and the prompt text are built in and not shown.',
+  extremeHint: 'Model matching rules and built-in prompts are preconfigured and need no manual adjustment.',
   teamTitle: 'Team mode',
   teamSummary: 'New sessions start with team mode',
   teamDesc: 'New sessions start with Agent Teams enabled. Existing sessions and resumed sessions keep their own choice.',
@@ -87,25 +65,25 @@ const en = {
   notDeterminable: "cannot tell yet; adding the prompt depends on each session’s model",
   matchedButOff: "matched, but the switch is off (or the prompt is empty) — nothing added",
   limitUnavailable: "No system prompt support; extreme mode unavailable.",
-  stale: 'These settings changed elsewhere while you were editing. Nothing was overwritten — reload and retry.',
+  stale: 'These settings were updated elsewhere while you were editing. Nothing was saved to avoid overwriting; refresh and try again.',
   notesTitle: 'Environment notes',
   notesSummary: "Notes added to every session",
   notesDesc: 'These notes are added to every session’s system prompt so the model remembers your project conventions and environment.',
   notesBadge: 'all sessions',
   notesHint: "Applies from the next step without a restart; your text is added verbatim.",
-  notesTooLarge: "Too large: use at most {max} UTF-8 bytes.",
+  notesTooLarge: 'Content exceeds the length limit. Shorten it to {max} UTF-8 bytes or fewer before saving.',
   notesUnavailable: "Notes unreadable; reload to retry.",
   saved: 'Saved.', loadFailed: "This section could not be read", loadFailedNamespace: "The page is not connected to the background service. Reopen the plugin settings and try again.", loadFailedCarrier: "The background service is unavailable; no settings were changed. Reopen the plugin settings and try again.", loadFailedRefused: "The background service refused this read; no settings were changed. Reload and try again.", reload: 'Retry', loading: 'Loading…',
 };
 
 const zh = {
   save: '保存',
-  unchanged: '没有变化。', refused: '保存被拒绝',
+  unchanged: '没有变化。', refused: '这次保存没有成功，请重试；如果仍然失败，请重新打开插件设置。',
   extremeTitle: '极限模式',
   extremeSummary: 'DeepSeek Flash 的极限模式开关',
-  extremeDesc: "仅对 DeepSeek Flash 生效。开启后会添加固定提示，让模型按“token 预算不受限、无需节省”的方式工作。",
+  extremeDesc: '仅适用于 DeepSeek Flash。开启后，模型会在回答时充分展开思考与输出，不再刻意压缩篇幅。',
   enableLabel: '启用极限模式',
-  extremeHint: '匹配规则（deepseek + flash）与提示词内容内置，不在界面暴露。',
+  extremeHint: '适用模型匹配规则与内置提示词已由系统预设，无需手动调整。',
   teamTitle: '团队模式',
   teamSummary: '新会话默认开启团队模式',
   teamDesc: '新建会话会默认开启 Agent Teams；已有会话和恢复的会话保持各自原有选择。',
@@ -121,13 +99,13 @@ const zh = {
   notDeterminable: "暂时无法判断；是否添加提示取决于各会话的模型",
   matchedButOff: "模型已匹配，但开关已关（或提示为空），未添加提示",
   limitUnavailable: "当前应用不支持系统提示，极限模式无法使用。",
-  stale: '编辑期间配置已在别处改变。没有覆盖任何内容——请重新载入后再改一次。',
+  stale: '编辑期间该设置已在其他位置更新。为避免覆盖，本次修改未保存，请刷新后再试。',
   notesTitle: '环境笔记',
   notesSummary: "添加到所有会话的环境笔记",
   notesDesc: "这段笔记会添加到所有会话的系统提示中，让模型记住项目约定与环境信息。",
   notesBadge: '对所有会话生效',
   notesHint: "保存后从下一步生效，无需重启；你的原文会原样添加，不改写。",
-  notesTooLarge: '太长了：请控制在 {max} 字节（UTF-8）以内。',
+  notesTooLarge: '内容超出长度限制，请精简至 {max} 字节以内后再保存。',
   notesUnavailable: "无法读取笔记，请重新载入。",
   saved: '已保存。', loadFailed: "此分区无法读取", loadFailedNamespace: "页面没有连接到后台，未读取任何设置；请重新打开插件设置后再试。", loadFailedCarrier: "后台暂时不可用，未修改任何设置；请重新打开插件设置后再试。", loadFailedRefused: "后台拒绝了这次读取，未修改任何设置；请重新载入后再试。", reload: '重试', loading: '加载中…',
 };
@@ -162,7 +140,7 @@ function ExtremeCard({ t, wire, limitForm, view }){
   const load = React.useCallback(async () => {
     st.setPhase('loading');
     try {
-      const value = await budget(call('limitModeStatus'), 'limitModeStatus');
+      const value = await call('limitModeStatus');
       if (!st.alive.current) return;
       setStatus(value); st.setPhase('ready');
       const s = snapshot();
@@ -223,6 +201,7 @@ function ExtremeCard({ t, wire, limitForm, view }){
 
 function TeamModeCard({ t, wire, view }){
   const call = React.useMemo(() => makeCall(wire), [wire]);
+  const writeCall = React.useMemo(() => makeWriteCall(wire), [wire]);
   const st = loadState();
   const [status,setStatus]=React.useState(null);
   const [enabled,setEnabled]=React.useState(false);
@@ -230,7 +209,7 @@ function TeamModeCard({ t, wire, view }){
   const load = React.useCallback(async () => {
     st.setPhase('loading');
     try {
-      const value = await budget(call('teamModeStatus'), 'teamModeStatus');
+      const value = await call('teamModeStatus');
       if (!st.alive.current) return;
       setStatus(value); setEnabled(!!(value && value.defaultEnabled === true)); setSave(null); st.setPhase('ready');
     } catch (failure) { if (!st.alive.current) return; st.setIssue(REASON(failure)); st.setPhase('failed'); }
@@ -241,7 +220,7 @@ function TeamModeCard({ t, wire, view }){
     if (enabled === (status.defaultEnabled === true)) { setSave({ state: 'unchanged' }); return; }
     setSave({ state: 'saving' });
     try {
-      const written = await call('saveTeamModeDefault', enabled);
+      const written = await writeCall('saveTeamModeDefault', enabled);
       if (!st.alive.current) return;
       if (!written || written.available !== true) { setSave({ state: 'refused', code: written && written.code ? written.code : 'TEAM_MODE_WRITE_FAILED' }); return; }
       setStatus(written); setEnabled(!!(written.defaultEnabled === true));
@@ -271,6 +250,7 @@ function TeamModeCard({ t, wire, view }){
 
 function NotesCard({ t, wire, view }){
   const call = React.useMemo(() => makeCall(wire), [wire]);
+  const writeCall = React.useMemo(() => makeWriteCall(wire), [wire]);
   const st = loadState();
   const [notes,setNotes]=React.useState(null);
   const [text,setText]=React.useState('');
@@ -278,7 +258,7 @@ function NotesCard({ t, wire, view }){
   const load = React.useCallback(async () => {
     st.setPhase('loading');
     try {
-      const value = await budget(call('environmentNotes'), 'environmentNotes');
+      const value = await call('environmentNotes');
       if (!st.alive.current) return;
       setNotes(value); setText(typeof value.text === 'string' ? value.text : ''); st.setPhase('ready');
     } catch (failure) { if (!st.alive.current) return; st.setIssue(REASON(failure)); st.setPhase('failed'); }
@@ -287,7 +267,7 @@ function NotesCard({ t, wire, view }){
   const saveNotes = async () => {
     setSave({ state: 'saving' });
     try {
-      const written = await call('saveEnvironmentNotes', text);
+      const written = await writeCall('saveEnvironmentNotes', text);
       if (!st.alive.current) return;
       if (written && written.code) { setSave({ state: 'refused', code: written.code }); return; }
       setSave({ state: 'saved' });

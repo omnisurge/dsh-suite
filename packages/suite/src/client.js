@@ -10,8 +10,12 @@ import {apply as applyOcrCard, inject as OCR_CARD_INJECT} from './src/ocr/client
 import {apply as applyEffortSlider, inject as EFFORT_SLIDER_INJECT} from './src/effort-slider/client/index.tsx';
 import * as SEARCH_FLOW from './src/search/client-flow.js';
 import {renderTechnicalFailure} from './src/failure-view.js';
-import {CLIENT_READ_TIMEOUT_MS,RemoteTimeoutError,withTimeout} from './src/remote-timeout.js';
+import {fillTemplate} from './src/shared/client-copy.js';
+import {unwrapRemoteResult} from './src/shared/client-remote.js';
+import {buildCapabilityOverview} from './src/suite/capability-overview.js';
+import {createSuiteTransport} from './src/suite/upgrade-flow.js';
 import {UpgradeAnnouncer} from './src/ambient.ts';
+import {en,zh} from './src/suite/locale.js';
 import {convergeUpgradeReceipt} from './src/upgrade-receipt.mjs';
 import {VERIFIED_RUNTIMES,bootReleaseVersion,runtimeNoticeKey,runtimeVerdict} from './src/runtime-guard.ts';
 // A namespaced Remote service is read through `inject`: reading `remote.<namespace>` anywhere else throws
@@ -28,6 +32,7 @@ const observedRuntime=()=>bootReleaseVersion(globalThis.__DSH_BOOT__)??undefined
 const AMBIENT_INTERVAL_MS=600000;
 const AMBIENT_FIRST_DELAY_MS=5000;
 const AMBIENT_FIRST_ATTEMPTS=12;
+const MULTIMODAL_POLL_INTERVAL_MS=10000;
 const h=React.createElement,NS='omnisurge.suite.development';
 // ADR-068: the update source is the Host row's own configuration (Config.updateSource is .volatile()), so the
 // official settings form is the one write path. A settings namespace is the profile entry id, which for this
@@ -41,72 +46,6 @@ const UPDATE_CHANNELS=['stable','prerelease'];
 const FETCH_KEYS={FETCH_NETWORK_UNREACHABLE:'fetchNetworkUnreachable',FETCH_ASSET_MISSING:'fetchAssetMissing',FETCH_CHECKSUM_MISMATCH:'fetchChecksumMismatch',FETCH_COMPONENT_MANIFEST_MISMATCH:'fetchComponentManifestMismatch',FETCH_VERSION_STALE:'fetchVersionStale',FETCH_TOKEN_MISSING:'fetchTokenMissing',FETCH_ABORTED:'fetchAborted',FETCH_REDIRECT_REFUSED:'fetchRedirectRefused'};
 const isFetchCode=code=>typeof code==='string'&&Object.prototype.hasOwnProperty.call(FETCH_KEYS,code);
 
-  const en={title:'Suite development manager',intro:'This page does two things: install every declared component at its fixed identity, and verify and install a newer Suite. It never restarts the application.',source:'Source directory',host:'Loaded Host revision',client:'Loaded browser revision',target:'Published build revision',entry:'Build entry',protocol:'Build protocol',refresh:'Refresh status',build:'Build and hot update',restartBuild:'Build (Host restart required)',building:'Building…',waiting:'Published; waiting for actual runtime reload',applied:'Hot update applied in this Host and browser',restart:'Published; Host restart required',failed:'Build failed; see details (rejected compilation retains previous outputs)',builderStale:'Not proven ready: the loaded Host or browser Client was not produced by the current build protocol, or a required running capability is missing. Complete a full Suite build and reload once; this page never reports success for it.',idle:'Ready',confirm:'I understand that hot updates discard unsaved plugin drafts.',waitingHost:'Reading Host state…',
-  readFailed:'Reading Host state failed: {reason}',
-  upgradeModeLabel:'Run mode',modeRelease:'installed release',modeSource:'linked source',upgradeModeMismatch:'This Host calls itself a source checkout while the page sees no linked source ({mode} / not linked). Quit the application completely, reopen it, and retry; loaded bytes only change in a new process.',
-  upgradeChecking:'Checking…',componentsCardTitle:'Components',noticesCardTitle:'Suite status',upgradeCheckedNever:'Not checked yet',upgradeDetailRelease:'Release install \u00b7 nothing to do',upgradeDetailUnchecked:'Use Check for updates on the right to read the release directory',upgradeDetailChecking:'Usually under a second; a failed read needs no resubmit',upgradeRowInstalling:'Installing {version}\u2026',upgradeDetailInstalling:'SHA256 verified, writing the profile; do not quit the app',upgradeRowInstalled:'Installed {version}',upgradeDetailInstalled:'Quit the app (\u2318Q) and reopen to load it \u00b7 this page never restarts the app',upgradeRowFailed:'Install did not finish',upgradeDetailFailedGone:'That candidate is no longer offered \u00b7 use Check for updates',upgradeDetailFailed:'The result was not confirmed \u00b7 ',upgradeDetailFailedWritten:'Bytes are in the profile but activation was not confirmed \u00b7 ',upgradeDetailStoreMismatch:'This profile was created by an older app version, so the update cannot be written into it. Quit the app, rebuild its dependencies once with the package manager this version ships, then try again.',upgradeDiagnosticCode:'code {code}',technicalOnDisk:'On disk: {version}',upgradeRunRetryWithVersion:'Retry installing {version}',upgradeRunWithVersion:'Install {version}',upgradeRowAvailableTitle:'Update available',upgradeDetailAvailable:'Currently {current} \u00b7 quit and reopen after installing',upgradeRowNoInstallable:'No installable update',upgradeDetailNoInstallable:'{version} skipped: verified only on another DSH release ({count})',upgradeCountDirectoryOne:'{count} directory',upgradeCountDirectoryMany:'{count} directories',upgradeRowSource:'Source checkout',upgradeDetailSource:'This page only reads the release directory; a source checkout does not self-upgrade',upgradeCheckedAt:'Last check: {time}',refusalActionable:'{count} cannot be installed: {reasons}',
-  noticeHmrEnabled:'Host source hot update is enabled; compare the running revisions before trusting the button result.',
-  noticeHmrUnconfirmed:'Host watch coverage is absent or unconfirmed (including ignored filters); a build publishes, but a normal separately authorized restart may be required.',
-  noticeHostProtocolOld:'The loaded Host was produced by an older build protocol (SETUP_BUILD_UNSUPPORTED). Complete a full Suite build from source and reload once; this button cannot upgrade the loaded manager itself.',
-  retryNote:'This page retries every 0.75 s; a failed read never needs a resubmit.',modeReleaseHint:'Installed from the release directory; upgrades happen on this page, source builds do not.',modeSourceHint:'Linked from this repository; builds and hot updates follow the Host HMR coverage.',noHmr:'Host source HMR is not enabled in this profile. This page will not restart the application.',retry:'Refresh and retry after fixing the source.',technicalDetails:'Original technical diagnostics',operationError:'The operation did not complete. Open the original diagnostics below. If recovery is required (PARTIAL/RECOVERY_REQUIRED), do not retry until the generation has been recovered.'};
-  const zh={title:'套件开发管理',intro:'本页只做两件事：把已声明组件装到固定身份，以及核对并安装更新的套件。本页不会重启应用。',source:'源码目录',host:'实际Host版本',client:'实际浏览器版本',target:'已发布产物版本',entry:'构建入口',protocol:'构建协议',refresh:'刷新状态',build:'构建并热更新',restartBuild:'构建（Host需重启）',building:'构建中…',waiting:'产物已发布，等待运行时加载回执',applied:'已在当前Host和浏览器生效',restart:'产物已发布，Host需要重启',failed:'构建失败，请查看详情（编译拒绝时保留上一份有效产物）',builderStale:'尚未证明就绪：当前Host或浏览器Client不是当前构建协议的产物，或缺少必需的运行能力。请完整构建一次Suite并重载；本页不会误报成功。',idle:'就绪',confirm:'我了解热更新会丢失插件未保存的草稿。',waitingHost:'正在读取 Host 状态…',
-  readFailed:'读取 Host 状态失败：{reason}',
-  upgradeModeLabel:'运行方式',modeRelease:'发行版安装',modeSource:'源码开发态',upgradeModeMismatch:'Host 自称源码模式，而本页看到的是未绑定源码（{mode} / 未绑定源码）。请完全退出应用后重新打开再试；已加载的字节只在新进程里更新。',
-  upgradeChecking:'正在检查…',componentsCardTitle:'组件',noticesCardTitle:'套件状态',upgradeCheckedNever:'尚未检查',upgradeDetailRelease:'发行版安装 \u00b7 无需操作',upgradeDetailUnchecked:'点右侧「检查更新」读一次发行目录',upgradeDetailChecking:'通常 1 秒内返回；读取失败不用重试',upgradeRowInstalling:'正在安装 {version}\u2026',upgradeDetailInstalling:'已校验 SHA256，正在写入 profile；期间请不要退出应用',upgradeRowInstalled:'已安装 {version}',upgradeDetailInstalled:'退出应用（\u2318Q）后重新打开才会加载 \u00b7 本页不会自动重启应用',upgradeRowFailed:'安装未完成',upgradeDetailFailedGone:'那个候选已不在发行目录 \u00b7 点「检查更新」',upgradeDetailFailed:'没能确认这次安装 \u00b7 ',upgradeDetailFailedWritten:'已写入 profile，但激活未确认 \u00b7 ',upgradeDetailStoreMismatch:'这个 profile 是旧版应用创建的，更新写不进去。请退出应用，用当前版本自带的包管理器重建一次依赖，然后再试。',upgradeDiagnosticCode:'诊断码 {code}',technicalOnDisk:'盘上已装：{version}',upgradeRunRetryWithVersion:'重试安装 {version}',upgradeRunWithVersion:'安装 {version}',upgradeRowAvailableTitle:'有新版本',upgradeDetailAvailable:'当前 {current} \u00b7 装完退出并重开应用才生效',upgradeRowNoInstallable:'没有可用更新',upgradeDetailNoInstallable:'{version} 被跳过：只在别的 DSH 版本上验证过（{count}）',upgradeCountDirectoryOne:'{count} 个目录',upgradeCountDirectoryMany:'{count} 个目录',upgradeRowSource:'源码开发态',upgradeDetailSource:'本页只读发行目录，自升级不在源码态生效',upgradeCheckedAt:'最近检查：{time}',refusalActionable:'有 {count}无法安装：{reasons}',
-  noticeHmrEnabled:'Host 源码热更新已启用；点按钮前请先比对运行中的 revision。',
-  noticeHmrUnconfirmed:'Host 的 watch 覆盖缺失或未确认（含被忽略的过滤项）：构建可以发布，但可能需要一次单独授权的正常重启。',
-  noticeHostProtocolOld:'当前 Host 由旧构建协议产物启动（SETUP_BUILD_UNSUPPORTED）：请从源码完整构建套件并重载一次，本按钮无法升级正在运行的 manager 自身。',
-  retryNote:'本页每 0.75 秒自动重试；读取失败无需重新提交。',modeReleaseHint:'由发行目录安装：在本页升级，不在本页构建源码。',modeSourceHint:'由本仓源码链接：构建与热更新按 Host 的 HMR 覆盖范围生效。',noHmr:'当前profile未启用Host源码HMR，本页不会重启应用。',retry:'修复源码后刷新状态再重试。',technicalDetails:'原始技术诊断',operationError:'操作未完成，请展开下方原始诊断。若提示需要恢复（PARTIAL/RECOVERY_REQUIRED），请勿重试，应先恢复本轮生成目录。'};
-  Object.assign(en,{
-   upgradeAmbient:'A newer Suite version is available: {version} (running {current}).',upgradeAmbientAction:'Update',upgradeConfirmTitle:'Install Suite {version}?',upgradeConfirmBody:'It is installed now and takes effect the next time the application starts. Your settings and configuration are not touched.',upgradeConfirmRun:'Install now',upgradeCancel:'Not now',upgradeInstalling:'Installing Suite {version}\u2026',upgradeInstalled:'Suite {version} is installed and already active (source hot reload).',upgradeInstalledRestart:'Suite {version} is installed. Quit the app (⌘Q) and open it again to load it.',upgradeInstallFailed:'The update did not finish ({code}).',upgradeInstallUnconfirmed:'The update result is unconfirmed ({code}). Restart the app, then check again to confirm what is installed.',upgradeInstallSubmitted:'The update was submitted ({code}). Restart the app to finish installing it, then check again to confirm the installed version.',upgradeRowSubmitted:'Update submitted',upgradeDetailSubmitted:'The install was handed to the app before the page reloaded. Restart the app, then check again: the installed version is what the check reads.',upgradeRowUnconfirmed:'Install unconfirmed',upgradeDetailUnconfirmed:'The reply was lost while the plugin tree reloaded. Restart the app, then check again: the installed version is what the check reads, not what the reply said.',
-   runtimeUnverified:'This page stays open, but the running DSH {version} is not one this Suite was verified on. Check for updates below and install a verified version if one is available.',
-   healTitle:'Start-up containment',needsRestartAfterUpdate:'The plugin was updated. Restart the app to use the new version, then check for updates again.',healDisabled:'{module} failed to load and was switched off for now; everything else keeps working.',healProtected:'{module} is an official package and was left as it is; the failure is reported, not hidden.',healRefused:'{module} failed to load and cannot be switched off automatically.',healPending:'{module} failed to load; the attempt to switch it off has not taken effect yet.',healDismiss:'Got it',closeLabel:'Close',healRescan:'Check again',healToast:'Start-up containment: {module} was switched off so the rest keeps working.',healScanFailed:'The check could not run: {code}',componentsSummary:'Suite carries {total} component(s)',componentsRunning:'No action needed',componentsAttention:'{count} need attention',componentsWhere:'Switch and status live on the official plugin page; each plugin configures itself in its own settings card.',componentLoaded:'Running',loadedUnknown:'not advertised',componentCarried:'Delivered',stateReady:'Ready',stateRestart:'Restart needed',stateUnconfirmed:'Unproven',stateConfigOnly:'Config only',refresh:'Refresh status',recoveryTitle:'Automatic boot recovery happened',recoveryBody:'The previous process never reached readiness, so the declared component rows it had enabled were disabled once. The receipt below is durable; re-enable a row from official plugin management when you have fixed the cause.',recoveryNone:'no rows disabled',recoveryAt:'at',recoveryPreviousPid:'previous process',upgradeTitle:'Suite self-upgrade',upgradeDirectory:'Release directory',upgradeInstalledLabel:'Installed',upgradeRunning:'Running',upgradeRunningHint:'takes effect after you quit and reopen the app',upgradeLatest:'Installable candidate','upgradeComponents':'Modules it carries',upgradeUpToDate:'Up to date',upgradeNoInstallable:'No update for this DSH release',copyValue:'Copy',copiedValue:'Copied',upgradeRefusals:'Refused candidate directories',upgradeRun:'Install / upgrade Suite',upgradeWorking:'Upgrading…','upgradeDone':'Installed. Quit the app (\u2318Q) and open it again to load the new Suite and its components; this page never restarts the app.',
-   upgradeDisabled:'No absolute release directory is configured, so self-upgrade is disabled for this profile.',upgradeSourceMode:'Self-upgrade is unavailable while the Suite runs from linked source; this page only reads a release directory.',upgradeCheck:'Check for updates',upgradeRowTitle:'Suite updates',developerHint:'Run mode, revisions, upgrade candidates and raw state. Nothing here is needed for normal use.',developerOptions:'Developer options',devActions:'Maintenance',upgradeRowCandidate:'Newer Suite available',upgradeAvailable:'Suite {version} is available (running {current}).',devIdentity:'Run information',devRaw:'Raw state',rowEnabled:'enabled',rowDisabledLabel:'disabled',attentionNextStep:'{count} item(s) need action: {steps}',next_none:'Ready: the running Suite already provides this module.',next_restart:'restart the application to finish','next_enable-row':'Turn the row on in the official plugin page; it is not enabled automatically here.','next_check-runtime':'The row is enabled, but the running Host has not proven its protocol yet; read that row log.','next_check-owner':'The Suite-owned row could not be located in the official list; the developer view carries the diagnostic code.',channelUnavailable:'Update channel unavailable',channelUnreadable:'the configured release directory cannot be read',refusalNotNewer:'not a newer version',refusalNotCandidate:'not a Suite candidate directory',refusalSumsMissing:'missing its SHA256SUMS record',refusalInvalid:'directory contents are not a valid candidate',refusalRuntimeUnverified:'verified only on another DSH release, so it is not installable here; update DSH first, or wait for a Suite built for your release',refusalRuntimeUndeclared:'does not state which DSH releases it was verified on, so it is not installed',refusalRuntimeUnknown:'this page could not report the running DSH release, so compatibility could not be confirmed and it is not installed',refusalCurrentUnreadable:'the running Suite version and the profile-installed version are both unreadable',refusalOther:'refused \u00b7 code {code}'});
-  Object.assign(zh,{
-   upgradeAmbient:'套件有新版本 {version}（当前运行 {current}）。',upgradeAmbientAction:'升级',upgradeConfirmTitle:'安装套件 {version}？',upgradeConfirmBody:'现在安装，下次启动应用时生效。你的设置与配置不会被改动。',upgradeConfirmRun:'现在安装',upgradeCancel:'稍后',upgradeInstalling:'正在安装套件 {version}\u2026',upgradeInstalled:'套件 {version} 已安装并已生效（源码热加载）。',upgradeInstalledRestart:'套件 {version} 已安装。退出应用（⌘Q 或菜单「退出」）后重新打开，新版本才会生效。',upgradeInstallFailed:'安装没有完成（{code}）。',upgradeInstallUnconfirmed:'安装结果未确认（{code}）。重启应用后再点「检查」，以盘上实际安装的版本为准。',upgradeInstallSubmitted:'更新已提交（{code}）。重启应用后完成安装，再点「检查」确认实际安装的版本。',upgradeRowSubmitted:'更新已提交',upgradeDetailSubmitted:'页面重载前已把安装交给应用。重启应用后再点「检查」：以盘上实际安装的版本为准。',upgradeRowUnconfirmed:'安装结果未确认',upgradeDetailUnconfirmed:'应答在插件重载中丢失。重启应用后再点「检查」：以盘上实际安装的版本为准，不以这次应答为准。',
-   runtimeUnverified:'本页仍可打开，但当前运行的 DSH {version} 不是本套件验证过的版本。请在下方检查更新，有已验证版本时装上。',
-   healTitle:'启动自愈',needsRestartAfterUpdate:'插件已更新，需要重启应用后才会生效。重启后请再点一次「检查」。',healDisabled:'{module} 加载失败，已暂时关掉，其它功能还可以继续用。',healProtected:'{module} 是官方组件，没有动它；失败已如实报告，不隐藏。',healRefused:'{module} 加载失败，但无法自动关掉。',healPending:'{module} 加载失败；自动关掉还没有生效。',healDismiss:'知道了',closeLabel:'关闭',healRescan:'重新检查',healToast:'启动自愈：已暂时关掉 {module}，其它功能可继续用。',healScanFailed:'检查没能进行：{code}',componentsSummary:'随套件交付 {total} 个组件',componentsRunning:'无需处理',componentsAttention:'{count} 个需要处理',componentsWhere:'开关与状态在官方插件页；配置在各插件自己的设置卡里。',next_none:'就绪：该模块由正在运行的套件提供。',next_restart:'重启应用完成更新','next_enable-row':'请到官方插件页手动启用对应开关。','next_check-runtime':'该行已启用，但正在运行的 Host 尚未确认协议；请查看该行日志。','next_check-owner':'未在官方插件列表中找到套件所属行；请查看开发者视图中的诊断码。',componentCarried:'随套件交付',stateReady:'就绪',stateRestart:'需重启',stateUnconfirmed:'未证实',stateConfigOnly:'仅配置',componentLoaded:'运行中',loadedUnknown:'未自报',refresh:'刷新状态',recoveryTitle:'已发生自动启动自愈',recoveryBody:'上一个进程未达到就绪状态，因此它曾启用的已声明组件行已被停用一次。下方回执持久保留；修复原因后可在官方插件管理里重新启用。',recoveryNone:'没有停用任何行',recoveryAt:'时间',recoveryPreviousPid:'上一进程',upgradeTitle:'套件自升级',upgradeDirectory:'发行目录',upgradeInstalledLabel:'已安装版本',upgradeRunning:'运行中版本',upgradeRunningHint:'退出并重新打开后生效',upgradeLatest:'可安装候选',upgradeComponents:'携带组件',upgradeUpToDate:'已是最新',upgradeNoInstallable:'没有适用于当前 DSH 版本的更新',copyValue:'复制',copiedValue:'已复制',upgradeRefusals:'被拒绝的候选目录',upgradeRun:'安装／升级套件',upgradeWorking:'升级中…',upgradeDone:'已安装。退出应用（⌘Q 或菜单「退出」）后重新打开，才会加载新套件与组件；本页不会自动重启应用。',
-   upgradeDisabled:'未配置绝对发行目录：本 profile 的自升级已停用。',upgradeSourceMode:'源码模式下不提供自升级；本页只读发行目录。',upgradeCheck:'检查更新',upgradeRowTitle:'套件更新',developerHint:'这里显示运行方式、版本修订、更新候选与原始状态；日常使用不需要查看。',developerOptions:'开发者选项',devActions:'维护与构建',upgradeRowCandidate:'可安装新版本',upgradeAvailable:'套件可升级到 {version}（当前 {current}）。',devIdentity:'运行信息',devRaw:'原始状态',rowEnabled:'已启用',rowDisabledLabel:'已停用',attentionNextStep:'有 {count} 项需要处理：{steps}',channelUnavailable:'更新通道不可用',channelUnreadable:'配置的发行目录无法读取',refusalNotNewer:'不是更新版本',refusalNotCandidate:'不是套件候选目录',refusalSumsMissing:'缺少 SHA256SUMS 校验记录',refusalInvalid:'目录内容不是有效候选',refusalRuntimeUnverified:'只在别的 DSH 版本上验证过，当前运行时暂不安装；请先升级 DSH，或等我们为你的版本发布套件',refusalRuntimeUndeclared:'没有声明验证过哪些 DSH 版本，因此不安装',refusalRuntimeUnknown:'本页读不到当前 DSH 版本，无法确认兼容性，因此不安装',refusalCurrentUnreadable:'读不到当前套件版本，也无法确认 profile 里已安装的版本',refusalOther:'以诊断码 {code} 被拒绝'});
-  // ADR-102: words stay Client-owned; these facts are not inferred from a loaded row.
-  Object.assign(en,{stateCovered:'Active for open sessions',stateWaiting:'Waiting for a session',statePartial:'Partly active',stateRejected:'Not active',stateEffectUnknown:'Unable to confirm',statePolicyDisabled:'Policy off',stateRetired:'Retired',effectCovered:'The budget policy is attached to the currently open sessions; this does not confirm a model summary succeeded.',effectWaiting:'Open a session, then refresh status.',effectPartial:'Some sessions are not covered. Check those sessions and the plugin log.',effectRejected:'The budget policy could not be enabled for the current sessions. Read the plugin log; official compaction remains in use.',effectUnconfirmed:'The current session status could not be confirmed. Refresh status; if it still fails, read the plugin log.',effectPolicyDisabled:'To use the budget policy, enable it in the plugin configuration.',effectRetired:'This feature is retired. Keep the old switch off and use official compaction.'});
-  Object.assign(zh,{stateCovered:'已生效（已打开会话）',stateWaiting:'等待会话就绪',statePartial:'部分生效',stateRejected:'未生效',stateEffectUnknown:'无法确认',statePolicyDisabled:'策略已关闭',stateRetired:'已退役',effectCovered:'摘要预算已附加到当前已打开的会话，不代表模型摘要已成功。',effectWaiting:'打开会话后再检查状态。',effectPartial:'部分会话尚未生效，请检查对应会话与插件日志。',effectRejected:'当前会话未能启用摘要预算，请查看插件日志；仍使用官方压缩。',effectUnconfirmed:'无法确认当前会话状态，请刷新；仍失败时查看插件日志。',effectPolicyDisabled:'如需使用，请在插件配置中启用摘要预算。',effectRetired:'此功能已停用；请保持旧开关关闭，使用官方压缩。'});
-  // ADR-068 (2026-10-29): the update source is one row of the update card; choosing GitHub Release reveals
-  // the three fields the fetcher reads. Nothing here is a second configuration store: every write goes
-  // through the official settings form for this row (configForms -> remote.settings.mutate).
-  Object.assign(en,{
-   updateSource:'Update source',updateSourceLocal:'Local directory',updateSourceGithub:'GitHub Release',
-   updateSourceHint:'These three fields open only for GitHub Release; choosing the local directory collapses them and keeps what you typed.',
-   updateSourceRepo:'Repository',updateSourceChannel:'Channel',updateSourceStable:'stable (published releases)',updateSourcePrerelease:'prerelease (also pre-releases)',
-   updateSourceCredential:'Credential reference (private repository only)',updateSourceCredentialConfigured:'configured',updateSourceCredentialMissing:'missing',updateSourceCredentialUnknown:'state unavailable',updateSourceCredentialUnset:'not set',
-   updateSourceSave:'Save',updateSourceSaved:'Update source saved.',updateSourceRefused:'The update source was not saved. Check the repository name (owner/repo) and the credential reference.',
-   updateSourceUnavailable:'This profile does not serve the Suite settings form, so the update source cannot be edited here.',
-   checkFailed:'The update check did not finish ({code}).',
-   fetchNetworkUnreachable:'the release service could not be reached; check the connection and try again',
-   fetchAssetMissing:'that release carries no downloadable Suite archive (or no checksum record)',
-   fetchChecksumMismatch:'the downloaded bytes do not match the published SHA256, so they were discarded',
-   fetchComponentManifestMismatch:"the archive's manifest disagrees with the version the release names, so it was discarded",
-   fetchVersionStale:'that release is not newer than the installed version, so nothing was installed',
-   fetchTokenMissing:'the private repository needs a credential reference that resolves, and this one does not',
-   fetchAborted:'the check was cancelled; nothing was written',
-   fetchRedirectRefused:'the download redirected outside the allowed hosts, so it was refused',
-   upgradeDetailEmptyChannel:'The update channel has no installable version yet.'});
-  Object.assign(zh,{
-   updateSource:'更新来源',updateSourceLocal:'本地目录',updateSourceGithub:'GitHub Release',
-   updateSourceHint:"这三项只在选 GitHub 时展开；选回本地目录会收起，输入内容会保留。",
-   updateSourceRepo:'仓库',updateSourceChannel:'通道',updateSourceStable:'stable（正式发布）',updateSourcePrerelease:'prerelease（含预发布）',
-   updateSourceCredential:'凭据引用（仅私有仓需要）',updateSourceCredentialConfigured:'已配置',updateSourceCredentialMissing:'缺失',updateSourceCredentialUnknown:'状态不可确认',updateSourceCredentialUnset:'未设置',
-   updateSourceSave:'保存',updateSourceSaved:'更新来源已保存。',updateSourceRefused:'更新来源没有保存。请核对仓库（owner/repo）与凭据引用。',
-   updateSourceUnavailable:'这个 profile 没有提供套件设置表单，因此这里改不了更新来源。',
-   checkFailed:'检查更新没有完成（{code}）。',
-   fetchNetworkUnreachable:'连不上 GitHub Release 服务；检查网络后再试',
-   fetchAssetMissing:'这个 Release 里没有可下载的套件包（或没有校验记录）',
-   fetchChecksumMismatch:'下载的字节与发布记录的 SHA256 不一致，已丢弃',
-   fetchComponentManifestMismatch:'包内清单与发布声明的版本不一致，已丢弃',
-   fetchVersionStale:'这个 Release 不比已装版本新，因此什么都没装',
-   fetchTokenMissing:'私有仓需要能解析的凭据引用，而当前这个不能解析',
-   fetchAborted:'这次检查被取消，没有写入任何东西',
-   fetchRedirectRefused:'下载跳转到了允许列表之外，已拒绝',
-   upgradeDetailEmptyChannel:'更新通道里还没有可安装的版本。'});
 export default {
  inject:['slots','locale','remote'],
    apply(rootCtx){
@@ -170,120 +109,7 @@ export default {
        wire.credentials=inner.remote.credentials??null;
        return ()=>{wire.credentials=null;};
       });
-      // Unary Remote methods answer the documented RemoteResult envelope and never reject for a carrier
-      // problem, so this single place separates "not mounted", "carrier unavailable" and "Host refused",
-      // and the page can name which one it hit instead of one generic connection line.
-      const reason=error=>error&&typeof error==='object'?String(error.code??error.name??'REMOTE_ERROR')+': '+String(error.message??error):String(error);
-      // 安装后的读回是有界重试：官方安装器会重载插件树，读回自己也可能落在重载窗口里（0.2.0 稳定版升级实证：
-      // 字节已落盘、页面却弹“安装没有完成（SUITE_HOST_REFUSED）”）。次数与间隔只影响“确认得有多快”，
-      // 不影响任何写操作——读回永远是只读。
-      // 用对象而不是两个裸常量：Bundle 里 `attempts` 是可命中的变异锚点，撤回重试时门禁必红。
-      // 12 秒上限覆盖插件树重载与旧 Host 退出窗口；显式宿主码仍只读回一次，不拖慢失败判定。
-      const UPGRADE_READBACK={attempts:12,delayMs:1000};
-      const call=async(method,...args)=>{
-       const namespace=wire.namespace;
-       if(!namespace||typeof namespace[method]!=='function')throw Error('SUITE_NAMESPACE_MISSING '+method+(remoteState.mountError?' (owned Remote mount failed: '+remoteState.mountError+')':' (the Host namespace is not mounted in this window)'));
-       const result=await namespace[method](...args);
-       if(!result||typeof result!=='object'||typeof result.ok!=='boolean')throw Error('SUITE_RESULT_INVALID '+method+' did not answer a RemoteResult envelope');
-       if(result.ok!==true){
-        const refused=Error('SUITE_HOST_REFUSED '+method+' \u2192 '+reason(result.error));
-        // 宿主的机器码必须留在错误对象上：页面要报“为什么没成”，唯一事实就是这个 code。旧实现只把码
-        // 拼进 message，判定时再按 /[:\s]/ 拆前缀，于是真正的码被丢掉，用户只看到裸的 SUITE_HOST_REFUSED。
-        refused.code=typeof result.error?.code==='string'&&result.error.code.length>0?result.error.code:'SUITE_HOST_REFUSED';
-        refused.method=method;
-        throw refused;
-       }
-       return result.value;
-      };
-      // ADR-043 D2：插件刚装好、应用还没重启时，进程里跑的还是旧 Host——它注册的描述符不接受 runtimeVersion，
-      // 官方网关按字段集合严格校验，以 `gateway/arguments-invalid` 拒收。这个窗口里页面必须还能用，所以按旧
-      // 实参形状再问一次，并让页面说明「重启后才用得上新版」；既不静默成功，也不假装运行版本已经送到 Host。
-      // 只认官方网关的**码**，不匹配散文：报文里出现 runtimeVersion 这几个字不构成拒收理由。
-      // 只有在退回旧形状**成功**之后才置 staleHost：重试也失败时，这是普通读失败，页面不该同时说「已更新，重启」。
-      // 新形状被接受（返回成功）即复位：热重载后新 Host 已在跑，那句话就不再成立。
-      /** One read with the shared Client deadline. The generated Remote has no transport timeout of its
-       * own; a carrier that never answers must become a readable failure and a retry, not a permanent
-       * "reading" state (P2-17). Writes keep their own natural duration. */
-      const readFailure=(method)=>{const error=new Error('SUITE_REMOTE_TIMEOUT '+method+' (no answer within '+Math.round(CLIENT_READ_TIMEOUT_MS/1000)+'s)');error.code='SUITE_REMOTE_TIMEOUT';return error;};
-      const callRead=async(method,...args)=>{try{return await withTimeout(()=>call(method,...args),CLIENT_READ_TIMEOUT_MS,{code:'SUITE_REMOTE_TIMEOUT',message:'SUITE_REMOTE_TIMEOUT '+method});}catch(issue){if(issue instanceof RemoteTimeoutError)throw readFailure(method);throw issue;}};
-      let staleHost=false;
-      const callWithRuntime=async(method,...required)=>{
-       try{const value=await call(method,...required,observedRuntime());staleHost=false;return value;}
-       catch(issue){
-        const raw=String((issue&&issue.message)||issue);
-        if(!raw.includes('gateway/arguments-invalid')){staleHost=false;throw issue;}
-        const value=await call(method,...required);
-        staleHost=true;
-        return value;
-       }
-      };
-      const callWithRuntimeRead=async(method,...args)=>{try{return await withTimeout(()=>callWithRuntime(method,...args),CLIENT_READ_TIMEOUT_MS,{code:'SUITE_REMOTE_TIMEOUT',message:'SUITE_REMOTE_TIMEOUT '+method});}catch(issue){if(issue instanceof RemoteTimeoutError)throw readFailure(method);throw issue;}};
-      // 安装 + 判定"该显示什么"的唯一实现，黄色提示条与套件页共用。权威事实是**盘上装了什么**，不是这次
-      // 调用的成败：官方安装器会重载插件树，应答可能在重载里丢掉，而那时字节已经落盘。2026-10-19 实证：
-      // 0.1.0 已按冻结字节装好（逐文件 SHA 一致），界面却弹"升级没有完成"。所以回答丢了要读回，
-      // 不能把"没听到回答"当成"没装上"。
-      const upgradeOutcome=async version=>{
-       let receipt=null,failure=null;
-       // Whether the install was actually handed to the Host. When the namespace is already gone, the call
-       // never left the page: that is a real "Host unavailable" failure, never "submitted".
-       const couldDispatch=Boolean(wire.namespace&&typeof wire.namespace.upgradeSuite==='function');
-       await callWithRuntime('upgradeSuite',version).then(value=>{receipt=value;},issue=>{failure=issue;});
-       const transport=failure===null?null:String((failure&&failure.message)||failure);
-       const refusalCode=failure&&typeof failure.code==='string'&&failure.code.length>0?failure.code:null;
-       const code=receipt&&typeof receipt.code==='string'?receipt.code:null;
-       const operations=receipt&&Array.isArray(receipt.operations)?receipt.operations:[];
-       const diagnostic=(receipt&&typeof receipt.diagnostic==='string'?receipt.diagnostic:null)??transport;
-       const onDisk=receipt&&typeof receipt.onDisk==='string'?receipt.onDisk:null;
-       const unconfirmed=Boolean(receipt&&receipt.activationUnconfirmed);
-       const receiptRecord=receipt&&receipt.lastInstall&&typeof receipt.lastInstall==='object'?receipt.lastInstall:null;
-       // ADR-079: 有些码不是对安装的判决，而是"这条通道没了"——安装套件正好替换承载这次调用的插件，
-       // 回执会随插件树重载一起消失（实测 gateway/cancelled）。这种码不能当失败；显式宿主判决码仍是失败。
-       const TRANSPORT_LOSS=new Set(['gateway/cancelled','SUITE_HOST_REFUSED']);
-       const heardVerdict=(code!==null&&!TRANSPORT_LOSS.has(code))||(refusalCode!==null&&!TRANSPORT_LOSS.has(refusalCode));
-       if(code==='SUITE_UPGRADE_RESTART_REQUIRED')return {state:'restart',code,operations,diagnostic,target:version,onDisk,activationUnconfirmed:unconfirmed,readback:false};
-       // An explicit Host verdict is a failure no matter what the disk or a stale record says. Check it
-       // before any readback/restart convergence; otherwise a failed attempt can be relabelled as success.
-       if(heardVerdict&&code!==null)return {state:'failed',code,operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
-       if(heardVerdict&&refusalCode!==null)return {state:'failed',code:refusalCode,operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
-       if(receiptRecord!==null&&receiptRecord.target===version&&receiptRecord.phase==='written')
-        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk:receiptRecord.onDisk??onDisk??version,activationUnconfirmed:true,readback:false,record:true};
-       // A receipt can carry the on-disk fact even when its status read or result code was lost in the
-       // plugin-tree reload. Only a transport loss (no explicit Host verdict) may use it: a real refusal
-       // code (runtime gate, incomplete install, ...) must stay a failure even if the same version happens
-       // to exist on disk from an earlier attempt.
-       if(!heardVerdict&&onDisk!==null&&onDisk===version)
-        return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic,target:version,onDisk,activationUnconfirmed:true,readback:false};
-       if(!couldDispatch)return {state:'failed',code:'SUITE_NAMESPACE_MISSING',operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:false,readback:false};
-       // The Client plugin that hosts this function is replaced by the upgrade; the official client HMR tears
-       // its fiber down while the install reply is in flight. Its injected namespace handle is nulled on
-       // dispose, so no readback through it can ever succeed. Saying SUITE_UPGRADE_UNCONFIRMED here would
-       // blame the disk for a channel that is gone; the durable record is read by the new Client generation.
-       if(wire.namespace===null&&!heardVerdict)return {state:'submitted',code:'SUITE_UPGRADE_SUBMITTED',operations,diagnostic,target:version,onDisk:onDisk??null,activationUnconfirmed:true,readback:false};
-       const readbackBudget=heardVerdict?1:UPGRADE_READBACK.attempts;
-       const recordWrittenStatus=status=>status!==null&&typeof status==='object'&&status.lastInstall!==null&&typeof status.lastInstall==='object'?status.lastInstall:null;
-       let installed=null,record=null,namespaceLost=false;
-       for(let attempt=0;attempt<readbackBudget;attempt+=1){
-        try{const status=await callWithRuntimeRead('upgradeStatus');installed=status&&typeof status.currentVersion==='string'?status.currentVersion:null;record=recordWrittenStatus(status);}
-        catch(issue){
-         installed=null;record=null;
-         if(/^SUITE_NAMESPACE_MISSING/.test(String((issue&&issue.message)||issue))){namespaceLost=true;break;}
-        }
-        if(installed!==null&&installed===version)break;
-        if(record!==null&&record.target===version&&record.phase==='written')break;
-        if(attempt<readbackBudget-1)await new Promise(resolve=>setTimeout(resolve,UPGRADE_READBACK.delayMs));
-       }
-       const recordSaysWritten=record!==null&&record.target===version&&record.phase==='written';
-       const settled=[diagnostic,installed===null?null:'installed '+installed,record===null?null:'record '+record.phase].filter(Boolean).join('; ')||null;
-       if(installed!==null&&installed===version)return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic:settled,target:version,onDisk:installed,activationUnconfirmed:false,readback:true};
-       // 记录说"已写入并需要重启"——那是宿主自己在官方交易之后、按盘上字节下的判决（ADR-047 D3）。
-       // 即使回复丢了，这条事实还在 profile 里，所以它和盘上版本一样有资格判"已安装"。
-       if(recordSaysWritten)return {state:'restart',code:'SUITE_UPGRADE_RESTART_REQUIRED',operations,diagnostic:settled,target:version,onDisk:record.onDisk??version,activationUnconfirmed:true,readback:true,record:true};
-       // The readback channel itself disappeared after the call was dispatched. This is neither a failed
-       // install nor a disk verdict: the result is pending until the app restarts.
-       if(namespaceLost&&!heardVerdict)return {state:'submitted',code:'SUITE_UPGRADE_SUBMITTED',operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:true,readback:true};
-       // 既没有判决、也读不到盘上版本/记录 → 这是"未确认"，不是"没装上"：回执丢了不等于没装。
-       return {state:'unknown',code:'SUITE_UPGRADE_UNCONFIRMED',operations,diagnostic:settled,target:version,onDisk:onDisk??installed,activationUnconfirmed:true,readback:true};
-      };
+      const {call,callRead,callWithRuntimeRead,upgradeOutcome,isStaleHost,markStaleHost}=createSuiteTransport({wire,remoteState,observedRuntime});
       // Ambient discovery: a new Suite version must not wait for the user to open this page. One
       // announcement per version per session -- the durable card above stays the record -- and nothing is
       // ever installed without an explicit confirmation, so this path can never mutate the profile by itself.
@@ -292,7 +118,7 @@ export default {
       const say=(key,values={})=>{
        const dict=ambientLanguage()==='zh'?zh:en;
        const text=typeof dict[key]==='string'?dict[key]:(typeof en[key]==='string'?en[key]:key);
-       return Object.entries(values).reduce((line,entry)=>line.split('{'+entry[0]+'}').join(String(entry[1])),text);
+       return fillTemplate(text,values);
       };
       // The announcement path lives outside the Manager component: it publishes the outcome through this
       // sink, which the component fills in on mount. Calling the component setter from here would be an
@@ -354,7 +180,7 @@ export default {
       },'suite ambient upgrade discovery');
       ctx.effect(()=>ctx.locale.register(NS,{en,zh}),'suite manager: locale');
       function Manager({t:translate}){
-       const [state,setState]=React.useState(null),[components,setComponents]=React.useState(null),[upgrade,setUpgrade]=React.useState(null),[error,setError]=React.useState(null),[confirmed,setConfirmed]=React.useState(false),[upgradeReceipt,setUpgradeReceipt]=React.useState(null),[upgradeError,setUpgradeError]=React.useState(null),[upgradeBusy,setUpgradeBusy]=React.useState(false);
+       const [state,setState]=React.useState(null),[components,setComponents]=React.useState(null),[upgrade,setUpgrade]=React.useState(null),[multimodal,setMultimodal]=React.useState(null),[error,setError]=React.useState(null),[confirmed,setConfirmed]=React.useState(false),[upgradeReceipt,setUpgradeReceipt]=React.useState(null),[upgradeError,setUpgradeError]=React.useState(null),[upgradeBusy,setUpgradeBusy]=React.useState(false);
        // ADR-068 (2026-10-29 修订): 勾选框与人话确认一起删除——确认就是那次绑定版本的主按钮点击。卡片只保留
        // “你会付出什么”的告知（当前版本 · 装完退出并重开），不再要第二次点击。
        // 检查回执与安装回执是两条事实：检查回答里带着抓取器的码（FETCH_*），而之后的读盘回答没有它，所以它必须
@@ -417,7 +243,7 @@ export default {
          const raw=String((issue&&issue.message)||issue);
          // 装完未重启的窗口：旧 Host 没有 checkRelease。这不是通道坏了，而是这个进程还没有新 Host——
          // 页面说“重启后再检查”，并且退回读盘（读盘仍是旧 Host 能给的全部答案）。
-         if(/^SUITE_NAMESPACE_MISSING checkRelease/.test(raw)&&wire.namespace){staleHost=true;}
+         if(/^SUITE_NAMESPACE_MISSING checkRelease/.test(raw)&&wire.namespace){markStaleHost();}
          else setCheckFailure({code:typeof issue?.code==='string'&&issue.code.length>0?issue.code:raw,at:new Date().toLocaleTimeString()});
         }finally{
          await read();
@@ -433,6 +259,22 @@ export default {
        };
        const rescanHeal=async()=>{setCheckBusy(true);try{await call('healScan');await read(true);}catch(issue){setError(String(issue&&issue.message?issue.message:issue));}finally{setCheckBusy(false);}};
        React.useEffect(()=>{void read();const timer=setInterval(()=>{void read();},750);return ()=>clearInterval(timer);},[]);
+        // Optional capability reads may time out independently of the Suite state and user actions.
+        React.useEffect(()=>{
+         let stopped=false,inFlight=false;
+         const readOptional=method=>callRead(method).catch(()=>null);
+         const readMultimodal=async()=>{
+          if(stopped||inFlight)return;
+          inFlight=true;
+          try{
+           const [ocr,docParse]=await Promise.all([readOptional('ocrCapabilities'),readOptional('documentParseCapabilities')]);
+           if(!stopped)setMultimodal({ocr,docParse});
+          }finally{inFlight=false;}
+         };
+         void readMultimodal();
+         const timer=setInterval(()=>void readMultimodal(),MULTIMODAL_POLL_INTERVAL_MS);
+         return ()=>{stopped=true;clearInterval(timer);};
+        },[]);
        // One toast per new containment, once per page session: the durable line below is the record, the
        // toast is the interruption. A dismissed notice never interrupts again.
        const toasted=React.useRef(new Set());
@@ -476,33 +318,31 @@ export default {
         // Readiness is the loaded generation's own proof: stamped and remote dispatch at the protocol this
         // manager speaks. Anything else is a stale builder and is reported instead of assumed ready.
         const readiness=state?{ready:Boolean(state.hostCapabilities&&state.hostCapabilities.hostStamped&&state.hostCapabilities.hostRemote&&state.hostProtocol===state.managerProtocol)}:null;
-        // A declared module ships inside the Suite package, so there is nothing to install, upgrade or
-        // deselect here. The card reports the module's state and the one remaining user action, both
-        // derived from the same Host field the summary line uses.
-        // The management card renders the same list the summary line counts. Without this binding the
-        // render threw a ReferenceError as soon as the card mounted, so the page appeared without the
-        // developer switch even after the registration succeeded.
+        // The collapsed badge and notice share the same capability projection as the expanded list.
         const list=components?.components??[];
-        const needsAction=component=>!['ready','covered','disabled','retired','config-only'].includes(component.state);
+        const capabilityRows=buildCapabilityOverview(list,translate,multimodal);
+        const attentionRows=capabilityRows.filter(row=>row.needsAction);
+        const attention=attentionRows.length;
         const effectWords={covered:['stateCovered','effectCovered','ok'],waiting:['stateWaiting','effectWaiting','muted'],partial:['statePartial','effectPartial','warn'],rejected:['stateRejected','effectRejected','warn'],unconfirmed:['stateEffectUnknown','effectUnconfirmed','warn'],'policy-disabled':['statePolicyDisabled','effectPolicyDisabled','muted'],retired:['stateRetired','effectRetired','muted']};
         const effectWordsFor=component=>component.effect?effectWords[component.state]:undefined;
         const nextStepFor=component=>effectWordsFor(component)?.[1]??nextStepKey(component.nextAction);
         const recovery=components?.recovery;
-        const attention=list.filter(needsAction).length;
         const nextStepKey=action=>action==='restart'?'next_restart':action==='enable-row'?'next_enable-row':action==='check-runtime'?'next_check-runtime':action==='check-owner'?'next_check-owner':'next_none';
         const stateBadge=component=>{
          const effect=effectWordsFor(component);
          if(effect)return {tone:effect[2],text:translate(effect[0])};
          return component.state==='ready'?{tone:'ok',text:translate('stateReady')}:component.state==='disabled'?{tone:'muted',text:translate('rowDisabledLabel')}:component.state==='config-only'?{tone:'muted',text:translate('stateConfigOnly')}:component.state==='retired'?{tone:'muted',text:translate('stateRetired')}:component.state==='restart-required'?{tone:'warn',text:translate('stateRestart')}:{tone:'warn',text:translate('stateUnconfirmed')};
         };
-        // The developer view keeps the per-component carried/loaded pair: it is where a developer reads the
-        // one fact that explains a restart-required row. The collapsed view never renders it.
-        const identity=list.length===0?null:h('ul',{'data-testid':'suite-identity','className':'omni-ui-list'},list.map(component=>h(ListRow,{key:component.id,'data-testid':'suite-identity-'+component.id,
+        // The developer view keeps the per-component carried/loaded pair inside a collapsed disclosure:
+        // it is where a developer reads the one fact that explains a restart-required row without
+        // crowding the run-information card. The daily collapsed view never renders it.
+        const identity=list.length===0?null:h(Disclosure,{'data-testid':'suite-identity-disclosure',title:translate('devComponentDetails').replace('{count}',String(list.length))},
+         h('ul',{'data-testid':'suite-identity','className':'omni-ui-list'},list.map(component=>h(ListRow,{key:component.id,'data-testid':'suite-identity-'+component.id,
          title:component.id,badge:h(Badge,{tone:stateBadge(component).tone},stateBadge(component).text),
          description:h('span',null,
           h('span',{'data-testid':'suite-component-version-'+component.id},translate('componentCarried')+' '+String(component.carriedVersion)),
           ' \u00b7 ',h('span',{'data-testid':'suite-component-loaded-'+component.id},translate('componentLoaded')+' '+(component.loadedVersion===null?translate('loadedUnknown'):String(component.loadedVersion))),
-          ' \u00b7 ',h('span',{'data-testid':'suite-component-row-'+component.id},translate(component.rowEnabled?'rowEnabled':'rowDisabledLabel')+(effectWordsFor(component)?' \u00b7 '+translate(nextStepFor(component)):'')))})));
+          ' \u00b7 ',h('span',{'data-testid':'suite-component-row-'+component.id},translate(component.rowEnabled?'rowEnabled':'rowDisabledLabel')+(effectWordsFor(component)?' \u00b7 '+translate(nextStepFor(component)):'')))}))));
         // The update card answers three different questions and used to answer all three with the same
         // string: what is installed, what is running, and what can be installed. Only a *differing* running
         // version earns a row -- it is the one fact that explains a restart.
@@ -541,9 +381,9 @@ export default {
          let active=true;
          Promise.resolve(credentials.describe([sourceRef])).then(answer=>{
           if(!active)return;
-          const row=answer&&answer.ok===true&&answer.value?answer.value[sourceRef]:null;
+          const row=unwrapRemoteResult(answer)?.[sourceRef];
           setCredentialState(row&&row.configured===true?'configured':row?'missing':'unknown');
-         },()=>{if(active)setCredentialState('unknown');});
+         }).catch(()=>{if(active)setCredentialState('unknown');});
          return ()=>{active=false;};
         },[sourceKind,sourceRef,configTick]);
         const sourceRepoParts=()=>{const raw=String(sourceEdit.repo??'').trim(),cut=raw.indexOf('/');
@@ -581,11 +421,10 @@ export default {
          if(credentialState==='missing')return translate('updateSourceCredentialMissing');
          return translate('updateSourceCredentialUnknown');
         })();
-        // The Host already derives `nextAction` per component; the page counted it and said nothing, which
-        // is how "1 component needs attention" left a user with no idea that a restart was the next step.
+        // Keep the existing component steps, and use the settings entry for a bundled capability.
         // One aggregate sentence, distinct steps only, never a per-plugin row again.
         const attentionNotice=attention===0?null:h(StatusLine,{tone:'warn','data-testid':'suite-attention-next-step'},
-         translate('attentionNextStep').replace('{count}',String(attention)).replace('{steps}',[...new Set(list.filter(needsAction).map(component=>translate(nextStepFor(component))))].join(' ')));
+         translate('attentionNextStep').replace('{count}',String(attention)).replace('{steps}',[...new Set(attentionRows.map(row=>row.component?translate(nextStepFor(row.component)):row.entry))].join(' ')));
         // A closed channel used to look exactly like "up to date": no candidate, no sentence. The reason is
         // a machine fact from the Host; the words are the Client's. A linked source checkout is the
         // documented development layout, so only a real blocker or the installed-release contradiction is
@@ -618,12 +457,7 @@ export default {
         // developer switch below, so a healthy Suite page carries exactly one control.
         // The Suite page owns Suite-level facts. Per-plugin status, enablement and configuration belong to the
         // official plugin page: its Components list owns the switch and each plugin's own settings card owns
-        // configuration. A per-plugin row here was a second configuration entry, and it grew with every
-        // component the Suite ever declares.
-        const summaryRow=list.length===0?null:h(ListRow,{'data-testid':'suite-components-summary',
-         title:translate('componentsSummary').replace('{total}',String(list.length)),
-         badge:attention===0?h(Badge,{tone:'ok','data-testid':'suite-components-summary-state'},translate('componentsRunning')):h(Badge,{tone:'warn','data-testid':'suite-components-summary-state'},translate('componentsAttention').replace('{count}',String(attention))),
-         description:h('span',{'data-testid':'suite-components-summary-hint'},translate('componentsWhere'))});
+        // configuration. The capability overview below is strictly read-only and collapsed by default.
         const recoveryNotice=!recovery?null:h('div',{'data-testid':'suite-recovery-notice','className':'omni-ui-stack'},
          h(StatusLine,{tone:'warn','data-testid':'suite-recovery-line'},translate('recoveryTitle')+' \u00b7 '+(recovery.action==='rows-disabled'?recovery.rows.map(row=>row.rowId).join(', '):translate('recoveryNone'))));
         // `recovered` is not a notice: the entry came back and there is nothing for the user to do.
@@ -788,9 +622,20 @@ export default {
           checkReceipt&&h('p',{'data-testid':'suite-upgrade-fetch'},checkReceipt.code+(checkReceipt.directory?' → '+checkReceipt.directory:'')),
           checkFailure&&h('p',{'data-testid':'suite-upgrade-check-code'},'SUITE_CHECK_REFUSED → '+String(checkFailure.code)),
           upgradeError&&h('div',{'data-testid':'suite-upgrade-error'},h(StatusLine,{tone:'error'},upgradeError)),
-          h('pre',{'data-testid':'suite-raw-state'},JSON.stringify({state,components,upgrade,recovery,check:{receipt:checkReceipt,failure:checkFailure}},null,2))));
-        const componentsCard=list.length===0?null:h(SettingsCard,{'data-testid':'suite-components-card',title:translate('componentsCardTitle')},
-         h('ul',{'className':'omni-ui-list omni-ui-list--flush'},summaryRow));
+          h('pre',{'data-testid':'suite-raw-state'},JSON.stringify({state,components,upgrade,recovery,multimodal,check:{receipt:checkReceipt,failure:checkFailure}},null,2))));
+        const componentsCard=list.length===0?null:h(SettingsCard,{
+         collapsible:true,
+         defaultOpen:false,
+         'data-testid':'suite-components-card',
+         title:h('span',{'data-testid':'suite-components-summary'},
+          translate('componentsCardTitle')+' \u00b7 '+translate('componentsSummary').replace('{total}',String(capabilityRows.length))),
+         description:translate('componentsWhere'),
+         badge:attention===0
+          ?h(Badge,{tone:'ok','data-testid':'suite-components-summary-state'},translate('componentsRunning'))
+          :h(Badge,{tone:'warn','data-testid':'suite-components-summary-state'},translate('componentsAttention').replace('{count}',String(attention)))
+        },
+         capabilityRows.length>0&&h('ul',{'data-testid':'suite-capability-overview','className':'omni-ui-list omni-ui-list--flush'},
+          capabilityRows.map(item=>h(ListRow,{key:item.id,'data-capability':item.id,title:item.title,badge:h(Badge,{tone:item.tone},item.badge),description:item.description,meta:item.entry}))));
         const notices=[runtimeNotice,attentionNotice,channelNotice,recoveryNotice,healNotice].filter(Boolean);
         const noticesCard=notices.length===0?null:h(SettingsCard,{'data-testid':'suite-notices-card',title:translate('noticesCardTitle')},
          h('div',{'className':'omni-ui-stack'},notices));
@@ -804,11 +649,11 @@ export default {
          !error&&operationText&&h('div',{'data-testid':'suite-operation-status'},h(StatusLine,{tone:op?.phase==='failed'?'warn':'ok'},operationText)),
          // ADR-048 D1: no information block sits bare on the page root. The component summary is one titled
          // card, the transient notices are one titled card, and the update block stays its own titled card.
-         componentsCard,noticesCard,upgradeCard,
+         upgradeCard,componentsCard,noticesCard,
          // ADR-043: between installing an update and restarting, the running Host still answers with the
          // previous descriptor. The read below falls back to the older arity, and this is the one sentence
          // that tells the user what to do about it — plain words, no control-plane vocabulary.
-         staleHost&&h('p',{className:'omni-ui-hint','data-testid':'suite-needs-restart'},translate('needsRestartAfterUpdate')),
+         isStaleHost()&&h('p',{className:'omni-ui-hint','data-testid':'suite-needs-restart'},translate('needsRestartAfterUpdate')),
          h(Checkbox,{'data-testid':'suite-developer-toggle',checked:developer,label:translate('developerOptions'),description:translate('developerHint'),onChange:event=>toggleDeveloper(event.target.checked)}),
          developerPanel);
       }

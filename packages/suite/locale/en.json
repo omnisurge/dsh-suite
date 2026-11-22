@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "Omnisurge Suite",
-    "description": "Independent extensions for DeepSeek Harness. Includes web search."
+    "description": "Practical extensions for DeepSeek Harness, including web search, handwriting and document recognition, and Skills/MCP management.",
+    "detail": "locale/detail.en.md"
   }
 }

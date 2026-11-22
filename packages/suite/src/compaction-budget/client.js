@@ -1,5 +1,7 @@
 import * as React from 'react';
 import { ActionGroup, Button, Disclosure, Field, NumberInput, ConfigPage, injectStyles, registerSettingsPluginCard, showToast } from '@omnisurge/dsh-ui';
+import { withTimeout } from '../remote-timeout.js';
+import { assertRemoteEnvelope } from '../shared/client-remote.js';
 
 const NS = 'omnisurge-compaction-budget';
 const FIELDS = ['checkpointTokens', 'safetyTokens', 'timeoutMs'];
@@ -57,11 +59,12 @@ const sameDraft = (a, b) => FIELDS.every(field => a?.[field] === b?.[field]);
 export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
   let disposed = false, lock = false, base = null, off = [], generation = 0;
   const pending = new Set();
-  const bounded = promise => new Promise((resolve, reject) => {
-    const abort = () => { clearTimeout(timer); pending.delete(abort); reject(new Error('SETTINGS_UNCONFIRMED')); };
-    const timer = setTimeout(abort, 15000); pending.add(abort);
-    Promise.resolve(promise).then(value => { clearTimeout(timer); pending.delete(abort); resolve(value); }, issue => { clearTimeout(timer); pending.delete(abort); reject(issue); });
-  });
+  const bounded = promise => {
+    const controller = new AbortController();
+    pending.add(controller);
+    return withTimeout(promise, 15000, { signal: controller.signal, code: 'SETTINGS_UNCONFIRMED', message: 'SETTINGS_UNCONFIRMED' })
+      .finally(() => pending.delete(controller));
+  };
   let state = { draft: null, ready: false, writable: false, busy: false, blocked: false, enabled: undefined, hints: {} };
   const listeners = new Set();
   const publish = patch => { if (disposed) return; state = { ...state, ...patch }; for (const listener of listeners) listener(); };
@@ -109,15 +112,18 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
         // Only an explicit Reload abandons the draft and requests a fresh official read.
         const result = await bounded(refresh());
         if (disposed || current !== generation) return;
-        if (!result || result.ok !== true || !Array.isArray(result.value?.namespaces)) { publish({ blocked: true }); announce('unavailable'); return; }
+        // A refused/invalid reply blocks stale writes; a thrown carrier error follows the outer catch.
+        let view;
+        try { view = assertRemoteEnvelope(result, 'describe'); } catch { view = null; }
+        if (!Array.isArray(view?.namespaces)) { publish({ blocked: true }); announce('unavailable'); return; }
         // acceptView folds one namespace, not document permissions. Compare the current official cut;
         // neither a fresh reply nor local state may become a second writable authority (ADR-106).
         const documentWritable = mirror.getSnapshot().view?.writable;
-        if (typeof result.value.writable !== 'boolean' || typeof documentWritable !== 'boolean' || result.value.writable !== documentWritable) {
+        if (typeof view.writable !== 'boolean' || typeof documentWritable !== 'boolean' || view.writable !== documentWritable) {
           publish({ blocked: true }); announce('unavailable'); return;
         }
         if (!documentWritable) { publish({ blocked: true }); announce('refused'); return; }
-        const row = result.value.namespaces.find(item => item.ns === NS);
+        const row = view.namespaces.find(item => item.ns === NS);
         if (!row) { publish({ ready: false, writable: false }); announce('unavailable'); return; }
         const latest = form.getSnapshot();
         if (Number.isSafeInteger(latest.revision) && latest.revision > row.revision) { publish({ blocked: true }); announce('unavailable'); return; }
@@ -161,7 +167,7 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
       } catch { if (!disposed && current === generation) { publish({ blocked: true }); announce('unknown', true); } }
       finally { if (!disposed && current === generation) { lock = false; publish({ busy: false }); } }
     },
-    dispose() { disposed = true; generation++; for (const abort of pending) abort(); for (const dispose of off) dispose(); off = []; listeners.clear(); },
+    dispose() { disposed = true; generation++; for (const controller of pending) controller.abort(); pending.clear(); for (const dispose of off) dispose(); off = []; listeners.clear(); },
   };
   return editor;
 }

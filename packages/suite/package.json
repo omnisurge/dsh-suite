@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -211,7 +211,7 @@
         "win32",
         "linux"
       ],
-      "note": "This 0.3.6 stable release targets macOS DSH 0.2.2-rc.5; final artifact-bound G5 results and limitations are recorded in docs/evidence/release-0.3.6.md. Windows and Linux remain unverified; NAS execution is frozen by ADR0048. Earlier rc.3 and internal-iteration results are historical only, not this stable release."
+      "note": "This 0.3.7 stable release targets macOS DSH 0.2.2-rc.5; final artifact-bound G5 results and limitations are recorded in docs/evidence/release-0.3.7.md. Windows and Linux remain unverified; NAS execution is frozen by ADR0048. Earlier rc.3 and internal-iteration results are historical only, not this stable release."
     }
   },
   "dependencies": {

@@ -1,6 +1,7 @@
 {
   "meta": {
     "title": "万物生腾套件组",
-    "description": "为 DeepSeek Harness 提供独立扩展，当前包含联网搜索。"
+    "description": "为 DeepSeek Harness 提供实用扩展，涵盖联网搜索、手写与文档识别、技能与 MCP 管理等能力。",
+    "detail": "locale/detail.zh.md"
   }
 }

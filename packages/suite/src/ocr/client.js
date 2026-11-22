@@ -2,6 +2,8 @@ import * as React from 'react';
 import {ActionGroup,Badge,Button,CapsuleSwitch,EmptyState,Field,SettingsCard,StatusLine,Switch,TextInput,registerSettingsPluginCard} from '@omnisurge/dsh-ui';
 import {DocumentParseCard} from '../document-parse/client.js';
 import {CLIENT_ACTION_TIMEOUT_MS,CLIENT_READ_TIMEOUT_MS,withTimeout} from '../remote-timeout.js';
+import {fillTemplate as fill} from '../shared/client-copy.js';
+import {unwrapRemoteResult as unwrap} from '../shared/client-remote.js';
 import {CREDENTIAL_SAVE_BLOCKED,CREDENTIAL_SAVE_EMPTY,CREDENTIAL_SAVE_FAILED,CREDENTIAL_SAVE_OK,CREDENTIAL_SAVE_PARTIAL,credentialRolesText,saveCredentialRoles} from '../credential-save.js';
 
 /** The multimodal capability card. The host draws the outer settings card; this component is its body.
@@ -18,91 +20,90 @@ const PROVIDER_LINKS={
 
 const en={
  title:'Multimodal input',
- description:'Handwriting and scanned-document recognition. Values are stored by the official credential store; this page never shows them again.',
+ description:'Handwriting and scanned-document recognition. Credentials are saved in system credential management and will not be shown here again.',
  axisLabel:'Capability axis',axisInput:'Multimodal input',axisOutput:'Multimodal output',
  axisEmptyTitle:'No multimodal output capability yet',
- axisEmptyDesc:'Image generation, video generation and similar capabilities will appear here when they land; no placeholder cards or fake switches.',
+ axisEmptyDesc:'Image generation, video generation, and similar capabilities will appear here once available.',
  handwritingTitle:'Handwriting recognition',handwritingSubtitle:'Handwriting and scanned-document recognition · multimodal input',
- providerLabel:'Supplier',providerTencent:'Tencent Cloud',providerBaidu:'Baidu Intelligent Cloud',
- providerAccessTitle:'Supplier access',
- providerAccessHint:'When the assistant recognizes, it chooses among configured suppliers. Unconfigured suppliers do not participate.',
+ providerLabel:'Provider',providerTencent:'Tencent Cloud',providerBaidu:'Baidu Intelligent Cloud',
+ providerAccessTitle:'Provider access',
+ providerAccessHint:'During recognition, the assistant chooses from configured providers automatically; unconfigured ones are not used.',
  providerConfigured:'Configured',providerNotConfigured:'Not configured',capabilityAvailable:'Available',
  configureCredentials:'Configure credentials',hideCredentials:'Hide credentials',
  credentialsTitle:'Credentials',
- credentialsHidden:'Hidden by default. Choose Configure credentials on a supplier to enter its two values; saving collapses the form.',
- credentialHint:'Paste the value from the supplier console. Stored by reference, never in the configuration file.',
+ credentialsHidden:'Credentials are hidden by default for privacy. Select Configure credentials on a provider to enter them; the form collapses after saving.',
+ credentialHint:'Paste the credential from the provider console. Stored by reference only, never in the configuration file.',
  credentialPresent:'saved',credentialAbsent:'not set',save:'Save credentials',saveBusy:'Saving…',
- officialLinkHint:'Need a key?',openService:'Open the OCR console',openKeys:'Request an API key',
- saveDone:'Saved. Values are in the credential store; this page will not show them again.',saveDoneRoles:'Saved {roles}. Values are in the credential store; this page will not show them again.',saveFailed:'The credential store refused the write.',saveEmpty:'Enter at least one credential before saving.',saveBlocked:'Nothing was saved: these credential values cannot be written from this page ({roles}).',saveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',savePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',
+ officialLinkHint:'Need a key?',openService:'Open console',openKeys:'Request an API key',
+ saveDone:'Saved to system credential management; plain values will not be shown here again.',saveDoneRoles:'Saved {roles} to system credential management; plain values will not be shown here again.',saveFailed:'Could not save credentials. Please try again later.',saveEmpty:'Enter at least one credential before saving.',saveBlocked:'Nothing was saved: these credential values cannot be written from this page ({roles}).',saveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',savePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',
  usageTitle:'Usage',
- quotaValue:'{calls} calls · {pages} pages · {lines} lines on this machine. Remaining quota is shown in the supplier console.',
+ quotaValue:'{calls} calls · {pages} pages · {lines} lines on this machine. Check the provider console for remaining quota.',
  providerUsage:'This machine: {calls} calls · {pages} pages · {lines} lines',
  providerUsageEmpty:'No calls recorded on this machine yet',
  statusTestTitle:'Status test',
  statusTestButton:'Test status',statusTestBusy:'Testing…',
- statusTestHint:'Calls this supplier interface using the most recent conversation image and spends one quota unit.',
- statusTestNoImage:'No conversation image is available for a status test.',statusTestNeedEnabled:'Turn this capability on before running a status test.',statusTestTimeout:'The status test timed out after 30 seconds; check the provider and try again.',
+ statusTestHint:'Uses the most recent conversation image to call this provider and consumes 1 recognition quota unit.',
+ statusTestNoImage:'No conversation image is available for a status test.',statusTestNeedEnabled:'Turn this capability on before running a status test.',statusTestTimeout:'The test timed out after 30 seconds. Check your network or provider status and try again.',
  statusTestDone:'Last test: {lines} line(s) · {seconds}s',
  statusTestFailed:'The status test did not complete: {code}. Check the credentials, then try again.',
  channelAccurate:'High precision',channelHandwriting:'Handwriting',
- switchLabel:'Turn this capability on',switchHint:'Off by default: recognition sends the page to the supplier and spends your quota. Turn it on only when you need it.',switchFailed:'Could not change the switch.',
- loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',loadFailedNamespace:'The page is not connected to the Host service ({code}). Reopen the settings panel and try again.',loading:'Reading current state…',
+ switchLabel:'Turn this capability on',switchHint:'Off by default. When enabled, images are sent to the selected provider and may consume quota.',switchFailed:'Could not change the switch.',
+ loadFailedCode:'Could not read the current state ({code}).',loadFailed:'Could not read the current state.',loadFailedNamespace:'Temporarily unable to reach the background service ({code}). Reopen the settings panel and try again.',loading:'Reading current state…',
  summaryReady:'Ready {ready} · Not configured {missing}',
  summaryOn:'On (ready {ready} · not configured {missing})',summaryOff:'Switched off',
- caveat:'Handwriting recognition is limited by loose or joined strokes and cannot reproduce the page exactly. The assistant in the conversation recovers most unclear passages from context, but for names, numbers and acceptance conclusions, check the page image yourself.',
+ caveat:'Handwriting recognition can be affected by messy or joined strokes. The assistant uses context to fill gaps, but please verify names, numbers, and key conclusions against the original page image.',
 };
 const zh={
  title:'多模态能力',
- description:'手写与扫描件识别。值由官方凭据库保存，这个页面此后不再显示它。',
+ description:'手写与扫描件识别。凭据值由系统凭据管理保存，本页此后不再显示。',
  axisLabel:'能力轴',axisInput:'多模态输入',axisOutput:'多模态输出',
  axisEmptyTitle:'多模态输出还没有可用能力',
- axisEmptyDesc:'生图、生视频等能力落地后会出现在这里；不预埋空卡、不显示假开关。',
+ axisEmptyDesc:'图片生成、视频生成等能力上线后会显示在这里。',
  handwritingTitle:'手写识别',handwritingSubtitle:'手写与扫描件识别 · 多模态输入',
- providerLabel:'供应商',providerTencent:'腾讯云',providerBaidu:'百度智能云',
- providerAccessTitle:'供应商接入',
- providerAccessHint:'识别时由 agent 在已接入的供应商中选择；未接入的不参与。',
+ providerLabel:'服务商',providerTencent:'腾讯云',providerBaidu:'百度智能云',
+ providerAccessTitle:'服务商接入',
+ providerAccessHint:'识别时，助手会自动从已配置的服务商中选择调用，未配置的服务商不会参与。',
  providerConfigured:'已配置',providerNotConfigured:'未配置',capabilityAvailable:'可用',
  configureCredentials:'配置凭据',hideCredentials:'收起凭据',
  credentialsTitle:'凭据',
- credentialsHidden:'默认不显示。点击对应供应商的「配置凭据」后展开两个值；保存后自动收起。',
- credentialHint:'把供应商控制台里的值粘进来。按引用保存，不写进配置文件。',
+ credentialsHidden:'为保护隐私，密钥默认隐藏。点击对应服务商的「配置凭据」即可填写，保存后会自动收起。',
+ credentialHint:'把服务商控制台里的凭据粘进来。仅按引用保存，不会写入配置文件。',
  credentialPresent:'已保存',credentialAbsent:'未设置',save:'保存凭据',saveBusy:'保存中…',
- officialLinkHint:'还没有密钥？',openService:'开通服务',openKeys:'申请 API 密钥',
- saveDone:'已保存。值在凭据库里，这个页面不会再显示它。',saveDoneRoles:'已保存 {roles}。值在凭据库里，这个页面不会再显示它。',saveFailed:'凭据库拒绝了这次写入。',saveEmpty:'请至少填写一项凭据再保存。',saveBlocked:'没有写入任何值：这些凭据在当前页面不可写（{roles}）。',saveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',savePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',
+ officialLinkHint:'还没有密钥？',openService:'打开控制台',openKeys:'申请 API 密钥',
+ saveDone:'已妥善保存至系统凭据管理，本页面不会再显示明文。',saveDoneRoles:'已保存 {roles}。凭据值由系统凭据管理保存，本页面不会再显示明文。',saveFailed:'这次凭据没有保存成功，请稍后重试。',saveEmpty:'请至少填写一项凭据再保存。',saveBlocked:'没有写入任何值：这些凭据在当前页面不可写（{roles}）。',saveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',savePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',
  usageTitle:'用量',
- quotaValue:'本机已调用 {calls} 次 · {pages} 页 · {lines} 行。剩余额度以供应商控制台为准。',
+ quotaValue:'本机已调用 {calls} 次 · {pages} 页 · {lines} 行。剩余额度以服务商控制台为准。',
  providerUsage:'本机：{calls} 次 · {pages} 页 · {lines} 行',
  providerUsageEmpty:'本机暂无调用记录',
  statusTestTitle:'状态测试',
  statusTestButton:'测试状态',statusTestBusy:'测试中…',
- statusTestHint:'会调用该供应商接口，并使用最近一张会话图片，消耗一次额度。',
- statusTestNoImage:'当前没有可用于状态测试的会话图片。',statusTestNeedEnabled:'请先启用这项能力再测试。',statusTestTimeout:'状态测试 30 秒未返回，请检查供应商后重试。',
+ statusTestHint:'测试会使用最近一次对话中的图片调用该服务商，并消耗 1 次识别额度。',
+ statusTestNoImage:'当前没有可用于状态测试的会话图片。',statusTestNeedEnabled:'请先启用这项能力再测试。',statusTestTimeout:'测试超过 30 秒未响应，请检查网络或服务商状态后重试。',
  statusTestDone:'上次测试：识别 {lines} 行 · 用时 {seconds} 秒',
  statusTestFailed:'状态测试没有完成：{code}。请检查凭据后重试。',
  channelAccurate:'高精度',channelHandwriting:'手写体',
- switchLabel:'启用这项能力',switchHint:'默认关闭：识别会把页面发到供应商并消耗你的额度。需要时再打开。',switchFailed:'开关没有改成功。',
- loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',loadFailedNamespace:'页面没有连接到后台服务（{code}），请重新打开设置面板后再试。',loading:'正在读取当前状态…',
+ switchLabel:'启用这项能力',switchHint:'默认关闭。开启后，识别内容会发送至所选服务商并消耗相应额度，建议按需启用。',switchFailed:'开关没有改成功。',
+ loadFailedCode:'读不到当前状态（{code}）。',loadFailed:'读不到当前状态。',loadFailedNamespace:'页面暂时连不上后台服务（{code}），请重新打开设置面板后再试。',loading:'正在读取当前状态…',
  summaryReady:'可用 {ready} · 未配置 {missing}',
  summaryOn:'已启用（可用 {ready} · 未配置 {missing}）',summaryOff:'开关已关闭',
- caveat:'手写识别受书写潦草与连笔限制，无法百分百还原原文。对话中的助手能凭上下文补回大部分读不通的地方，但人名、数字、验收结论这类关键内容，仍建议你对着原图确认。',
+ caveat:'手写识别易受字迹潦草或连笔影响，难以做到完全准确。助手会结合上下文尽量补全，但涉及人名、数字和验收结论时，仍建议对照原图核对。',
 };
 /** Exposed for the mount fixture only: the card is registered with this same dictionary pair. */
 export const OCR_LOCALE={en,zh};
 Object.assign(en,{
- documentParseTitle:'Document parsing',documentParseSubtitle:'Parse PDF and image documents into Markdown, JSON or artifacts.',documentParseSwitch:'Turn document parsing on',documentParseSwitchHint:'Off by default: a parse sends the document to the selected provider and may spend its quota.',
+ documentParseTitle:'Document parsing',documentParseSubtitle:'Parse PDF and image documents into Markdown, JSON or artifacts.',documentParseSwitch:'Turn document parsing on',documentParseSwitchHint:'Off by default. When enabled, documents are sent to the selected provider for parsing and may consume quota.',
  providerMineru:'MinerU',providerPaddleOcr:'PaddleOCR',documentParseMode:'Mode',documentParseConfigured:'Configured',documentParseNotConfigured:'Not configured',
  modeMineruAgent:'Agent, no token (default)',modeMineruApi:'API, requires API key',modePaddleVl16:'PaddleOCR-VL-1.6',modePaddleOcrv6:'PP-OCRv6',modePaddleStructureAsync:'PP-StructureV3 async',
- documentParseSave:'Save credentials',documentParseSaveBusy:'Saving…',documentParseSaved:'Saved. The value is held by the credential store.',documentParseSaveDoneRoles:'Saved {roles}. The value is held by the credential store.',documentParseSaveFailed:'The credential store refused the write.',documentParseSaveBlocked:'Nothing was saved: these credential references cannot be written from this page ({roles}).',documentParseSaveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',documentParseSavePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',documentParseCredentialHint:'Stored by reference; this page never shows the value again.',
- documentParseUsage:'This machine: {calls} tasks · {pages} pages',documentParseUsageEmpty:'No parse tasks recorded on this machine yet',documentParseTest:'Test status',documentParseTestHint:'A test calls the selected provider with the public demo PDF and may spend quota.',documentParseTestUnsupported:'Add a sample file in the conversation before testing.',documentParseTestRunning:'Testing…',documentParseTestDone:'Last test: {mode} · {pages} · {seconds}s',documentParseTestPageUnit:'page(s)',documentParseTestPagesUnknown:'page count unavailable',documentParseTestFailed:'Last test failed: {code}',documentParseTestNeedEnabled:'Turn document parsing on before running a test.',documentParseSwitchFailed:'The document parsing switch could not be changed. Try again.',documentParseTestTimeout:'The status test timed out after {seconds} seconds; try again later.',documentParseTestTimeoutAgent:'MinerU public Agent queue stayed pending for {seconds} seconds; switch to the API mode or try again later.',documentParseLastError:'Last attempt: {code}',documentParseLoadFailed:'Could not read document parsing status ({code}).',documentParseProviderAccessHint:'At parse time the assistant chooses one configured provider and mode; unconfigured providers do not participate. MinerU Agent is a shared token-free queue and may wait; when an API key is configured, the API mode is preferred.',documentParseCaveat:'Document parsing quality depends on the source layout; verify names, numbers and conclusions against the original.',documentParseNeedKey:'Need a key?',documentParseMineruKey:'Get a MinerU API Key',documentParsePaddleKey:'Get a PaddleOCR Token',
+ documentParseSave:'Save credentials',documentParseSaveBusy:'Saving…',documentParseSaved:'Saved to system credential management; plain values will not be shown here again.',documentParseSaveDoneRoles:'Saved {roles} to system credential management; plain values will not be shown here again.',documentParseSaveFailed:'Could not save credentials. Please try again later.',documentParseSaveBlocked:'Nothing was saved: these credential references cannot be written from this page ({roles}).',documentParseSaveFailedRole:'Nothing was saved: {role} was refused. Check the value and retry.',documentParseSavePartial:'Saved {saved}; not saved {failed}. Enter the failed value and retry.',documentParseCredentialHint:'Stored by reference; this page never shows the value again.',
+ documentParseUsage:'This machine: {calls} tasks · {pages} pages',documentParseUsageEmpty:'No parse tasks recorded on this machine yet',documentParseTest:'Test status',documentParseTestHint:'Calls the selected provider with a public sample PDF and may consume quota.',documentParseTestUnsupported:'Add a sample file in the conversation before testing.',documentParseTestRunning:'Testing…',documentParseTestDone:'Last test: {mode} · {pages} · {seconds}s',documentParseTestPageUnit:'page(s)',documentParseTestPagesUnknown:'page count unavailable',documentParseTestFailed:'Last status test did not pass ({code}). Check your credentials and try again.',documentParseTestNeedEnabled:'Turn document parsing on before running a test.',documentParseSwitchFailed:'The document parsing switch could not be changed. Try again.',documentParseTestTimeout:'The test timed out after {seconds} seconds. Check your network or provider status and try again.',documentParseTestTimeoutAgent:'MinerU shared queue did not respond within {seconds} seconds. Switch to API mode or try again later.',documentParseLastError:'Last attempt: {code}',documentParseLoadFailed:'Could not read document parsing status ({code}).',documentParseProviderAccessHint:'During parsing, the assistant selects from configured providers and modes; unconfigured ones are not used. MinerU Agent is a shared token-free queue and may wait; configuring an API Key prioritizes API mode.',documentParseCaveat:'Document parsing quality depends on the source layout; verify names, numbers and conclusions against the original.',documentParseNeedKey:'Need a key?',documentParseMineruKey:'Get a MinerU API Key',documentParsePaddleKey:'Get a PaddleOCR Token',
 });
 Object.assign(zh,{
- documentParseTitle:'文档解析',documentParseSubtitle:'把 PDF 和图片文档解析为 Markdown、JSON 或可下载结果。',documentParseSwitch:'启用文档解析',documentParseSwitchHint:'默认关闭：解析会把文档发到所选供应商，可能消耗其额度。',
+ documentParseTitle:'文档解析',documentParseSubtitle:'把 PDF 和图片文档解析为 Markdown、JSON 或可下载结果。',documentParseSwitch:'启用文档解析',documentParseSwitchHint:'默认关闭。开启后，文档会发送至所选服务商进行解析，可能消耗对应额度。',
  providerMineru:'MinerU',providerPaddleOcr:'PaddleOCR',documentParseMode:'模式',documentParseConfigured:'已配置',documentParseNotConfigured:'未配置',
  modeMineruAgent:'Agent 免密（默认）',modeMineruApi:'API 精准（需 API Key）',modePaddleVl16:'PaddleOCR-VL-1.6',modePaddleOcrv6:'PP-OCRv6',modePaddleStructureAsync:'PP-StructureV3 异步',
- documentParseSave:'保存凭据',documentParseSaveBusy:'保存中…',documentParseSaved:'已保存，值由凭据服务持有。',documentParseSaveDoneRoles:'已保存 {roles}，值由凭据服务持有。',documentParseSaveFailed:'凭据服务拒绝了这次写入。',documentParseSaveBlocked:'没有写入任何值：这些凭据引用在当前页面不可写（{roles}）。',documentParseSaveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',documentParseSavePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',documentParseCredentialHint:'只保存引用；本页不会再次显示凭据值。',
- documentParseUsage:'本机：{calls} 个任务 · {pages} 页',documentParseUsageEmpty:'本机暂无文档解析记录',documentParseTest:'测试状态',documentParseTestHint:'测试会用公开示例 PDF 调用所选供应商，可能消耗额度。',documentParseTestUnsupported:'请先在对话中提供一份样本文档。',documentParseTestRunning:'测试中…',documentParseTestDone:'最近测试：{mode} · {pages} · {seconds} 秒',documentParseTestPageUnit:'页',documentParseTestPagesUnknown:'页数未提供',documentParseTestFailed:'最近测试失败：{code}',documentParseTestNeedEnabled:'请先启用文档解析再测试。',documentParseSwitchFailed:'文档解析开关没有改成功，请重试。',documentParseTestTimeout:'状态测试 {seconds} 秒未返回，请稍后重试。',documentParseTestTimeoutAgent:'MinerU 公共免密队列 {seconds} 秒未返回，请切换到 API 精准模式或稍后重试。',documentParseLastError:'最近一次：{code}',documentParseLoadFailed:'读不到文档解析状态（{code}）。',documentParseProviderAccessHint:'解析时由助手在已接入的供应商和模式中选择；未接入的不参与。MinerU Agent 是公共免密队列，可能长时间排队；配置 API Key 后优先使用 API 精准模式。',documentParseCaveat:'文档解析结果受版面质量影响；人名、数字、验收结论等关键内容请对照原文确认。',documentParseNeedKey:'还没有密钥？',documentParseMineruKey:'获取 MinerU API Key',documentParsePaddleKey:'获取 PaddleOCR Token',
+ documentParseSave:'保存凭据',documentParseSaveBusy:'保存中…',documentParseSaved:'已妥善保存至系统凭据管理，本页面不会再显示明文。',documentParseSaveDoneRoles:'已保存 {roles}。凭据值由系统凭据管理保存，本页面不会再显示明文。',documentParseSaveFailed:'这次凭据没有保存成功，请稍后重试。',documentParseSaveBlocked:'没有写入任何值：这些凭据引用在当前页面不可写（{roles}）。',documentParseSaveFailedRole:'没有写入任何值：{role} 被拒绝。请核对后重试。',documentParseSavePartial:'已保存 {saved}；未保存 {failed}。请补填未保存的值后重试。',documentParseCredentialHint:'只保存引用；本页不会再次显示凭据值。',
+ documentParseUsage:'本机：{calls} 个任务 · {pages} 页',documentParseUsageEmpty:'本机暂无文档解析记录',documentParseTest:'测试状态',documentParseTestHint:'测试会使用公开示例 PDF 调用所选服务商，可能消耗一次额度。',documentParseTestUnsupported:'请先在对话中提供一份样本文档。',documentParseTestRunning:'测试中…',documentParseTestDone:'最近测试：{mode} · {pages} · {seconds} 秒',documentParseTestPageUnit:'页',documentParseTestPagesUnknown:'页数未提供',documentParseTestFailed:'最近一次状态测试未通过（{code}），请检查凭据后重试。',documentParseTestNeedEnabled:'请先启用文档解析再测试。',documentParseSwitchFailed:'文档解析开关没有改成功，请重试。',documentParseTestTimeout:'测试超过 {seconds} 秒未响应，请检查网络或服务商状态后重试。',documentParseTestTimeoutAgent:'MinerU 公共免密队列超过 {seconds} 秒未响应，请切换到 API 精准模式或稍后重试。',documentParseLastError:'最近一次：{code}',documentParseLoadFailed:'读不到文档解析状态（{code}）。',documentParseProviderAccessHint:'解析时，助手会从已配置的服务商和模式中选择调用；未配置的不参与。MinerU Agent 是公共免密队列，可能需要排队；配置 API Key 后优先使用 API 精准模式。',documentParseCaveat:'文档解析结果受版面质量影响；人名、数字、验收结论等关键内容请对照原文确认。',documentParseNeedKey:'还没有密钥？',documentParseMineruKey:'获取 MinerU API Key',documentParsePaddleKey:'获取 PaddleOCR Token',
 });
-const fill=(template,values)=>String(template).replace(/\{(\w+)\}/g,(match,key)=>(key in values?String(values[key]):match));
 const roleLabel=role=>role==='apiKey'?'API Key':role==='secretId'?'SecretId':role==='secretKey'?'SecretKey':role;
 const channelLabel=(channel,t)=>channel==='handwriting'?t('channelHandwriting'):t('channelAccurate');
 export function OcrCard({t,wire,view}){
@@ -196,15 +197,11 @@ export function OcrCard({t,wire,view}){
   const sample=samples[0]??null;
   if(sample===null){setTests(current=>({...current,[option.id]:{phase:'failed',code:'OCR_NO_IMAGE'}}));return;}
   setTests(current=>({...current,[option.id]:{phase:'busy'}}));
-  let settled=false;
-  const timer=setTimeout(()=>{if(settled)return;settled=true;setTests(current=>({...current,[option.id]:{phase:'failed',code:'OCR_TEST_TIMEOUT'}}));},30000);
   try{
-   const result=await wire.recognize({attachment:sample.attachment,mode:'both',reconcile:true,provider:option.id});
-   if(settled)return;
-   settled=true;clearTimeout(timer);
+   const result=await withTimeout(()=>wire.recognize({attachment:sample.attachment,mode:'both',reconcile:true,provider:option.id}),30000,{code:'OCR_TEST_TIMEOUT',message:'OCR_TEST_TIMEOUT'});
    const seconds=((result.channels??[]).reduce((sum,channel)=>sum+(Number(channel.ms)||0),0)/1000).toFixed(1);
    setTests(current=>({...current,[option.id]:{phase:'done',lines:(result.lines??[]).length,seconds}}));
-  }catch(failure){if(settled)return;settled=true;clearTimeout(timer);setTests(current=>({...current,[option.id]:{phase:'failed',code:failure&&failure.code?failure.code:'OCR_FAILED'}}));}
+  }catch(failure){setTests(current=>({...current,[option.id]:{phase:'failed',code:failure&&failure.code?failure.code:'OCR_FAILED'}}));}
  };
  const testLine=option=>{
   const result=tests[option.id];
@@ -261,21 +258,22 @@ export function OcrCard({t,wire,view}){
  * namespace and the official credential service, while a fixture can pass a stalled namespace and prove
  * that every read settles with a readable timeout instead of a permanent loading state. */
 export function createOcrWire({namespace,credentials,readTimeoutMs=CLIENT_READ_TIMEOUT_MS,actionTimeoutMs=CLIENT_ACTION_TIMEOUT_MS}){
- const unwrap=result=>{if(result&&result.ok===true)return result.value;const code=result&&result.error&&(result.error.code||result.error.name);const failure=new Error(typeof code==='string'?code:'REMOTE_FAILED');failure.code=typeof code==='string'?code:'REMOTE_FAILED';throw failure;};
  const remote=()=>{const value=typeof namespace==='function'?namespace():namespace;if(value===undefined||value===null)throw Object.assign(new Error('OCR_NAMESPACE_UNAVAILABLE'),{code:'OCR_NAMESPACE_UNAVAILABLE'});return value;};
  const credential=()=>{if(credentials===undefined||credentials===null||typeof credentials.set!=='function')throw Object.assign(new Error('OCR_CREDENTIALS_UNAVAILABLE'),{code:'OCR_CREDENTIALS_UNAVAILABLE'});return credentials;};
- const bounded=(operation,task,timeoutMs)=>withTimeout(task,timeoutMs,{code:'OCR_REMOTE_TIMEOUT',message:'OCR_REMOTE_TIMEOUT '+operation});
+ const call=async(operation,task,timeoutMs)=>unwrap(await withTimeout(task,timeoutMs,{code:'OCR_REMOTE_TIMEOUT',message:'OCR_REMOTE_TIMEOUT '+operation}));
+ const json=async(...args)=>JSON.parse(JSON.stringify(await call(...args)));
+ const setCredential=async(reference,value)=>{await call('credential-set',()=>credential().set(reference,value),actionTimeoutMs);};
  return {
-  capabilities:async()=>JSON.parse(JSON.stringify(unwrap(await bounded('capabilities',()=>remote().ocrCapabilities(),readTimeoutMs)))),
-  recentImages:async()=>{const value=typeof namespace==='function'?namespace():namespace;if(value===undefined||value===null||typeof value.ocrRecentImages!=='function')return [];return JSON.parse(JSON.stringify(unwrap(await bounded('recentImages',()=>value.ocrRecentImages(),readTimeoutMs))));},
-  recognize:async input=>JSON.parse(JSON.stringify(unwrap(await bounded('recognize',()=>remote().ocrRecognize(input),actionTimeoutMs)))),
-  set:async(reference,value)=>{unwrap(await bounded('credential-set',()=>credential().set(reference,value),actionTimeoutMs));},
-  setCredential:async(reference,value)=>{unwrap(await bounded('credential-set',()=>credential().set(reference,value),actionTimeoutMs));},
-  describeCredentials:async references=>JSON.parse(JSON.stringify(unwrap(await bounded('credential-describe',()=>{const service=credential();if(typeof service.describe!=='function')throw Object.assign(new Error('OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'),{code:'OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'});return service.describe(references);},readTimeoutMs)))),
-  setEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await bounded('setEnabled',()=>remote().ocrSetEnabled(enabled),actionTimeoutMs)))),
-  documentParseCapabilities:async()=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParseCapabilities',()=>remote().documentParseCapabilities(),readTimeoutMs)))),
-  documentParse:async input=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParse',()=>remote().documentParse(input),300000)))),
-  documentParseSetEnabled:async enabled=>JSON.parse(JSON.stringify(unwrap(await bounded('documentParseSetEnabled',()=>remote().documentParseSetEnabled(enabled),actionTimeoutMs)))),
+  capabilities:()=>json('capabilities',()=>remote().ocrCapabilities(),readTimeoutMs),
+  recentImages:async()=>{const value=typeof namespace==='function'?namespace():namespace;if(value===undefined||value===null||typeof value.ocrRecentImages!=='function')return [];return json('recentImages',()=>value.ocrRecentImages(),readTimeoutMs);},
+  recognize:input=>json('recognize',()=>remote().ocrRecognize(input),actionTimeoutMs),
+  set:setCredential,
+  setCredential,
+  describeCredentials:references=>json('credential-describe',()=>{const service=credential();if(typeof service.describe!=='function')throw Object.assign(new Error('OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'),{code:'OCR_CREDENTIALS_DESCRIBE_UNAVAILABLE'});return service.describe(references);},readTimeoutMs),
+  setEnabled:enabled=>json('setEnabled',()=>remote().ocrSetEnabled(enabled),actionTimeoutMs),
+  documentParseCapabilities:()=>json('documentParseCapabilities',()=>remote().documentParseCapabilities(),readTimeoutMs),
+  documentParse:input=>json('documentParse',()=>remote().documentParse(input),300000),
+  documentParseSetEnabled:enabled=>json('documentParseSetEnabled',()=>remote().documentParseSetEnabled(enabled),actionTimeoutMs),
  };
 }
 export function apply(ctx){

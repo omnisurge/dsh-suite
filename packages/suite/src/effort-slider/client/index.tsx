@@ -31,6 +31,7 @@ import {
 } from '../shared.js'
 import { remoteSelectAccepted, tryDirectoryFor, unwrapCatalog, type CatalogGroup } from '../directory-bind.js'
 import { injectStyles, showConfirm, showToast, Switch } from '@omnisurge/dsh-ui'
+import { fillTemplate } from '../../shared/client-copy.js'
 import { CSS } from './styles.js'
 import type { SlotEntry, SlotHost } from './slot-host.js'
 import {
@@ -57,18 +58,18 @@ export const en = {
   'level.max': 'Max',
   'toast.dismiss': 'Dismiss',
   'effort.caption': 'Thinking effort',
-  'effort.ariaLabel': 'Reasoning effort',
-  'effort.title': 'Reasoning effort · {name}',
-  'effort.titleError': 'Reasoning effort could not be set: {error}',
+  'effort.ariaLabel': 'Thinking effort',
+  'effort.title': 'Thinking effort · {name}',
+  'effort.titleError': 'Thinking effort could not be set: {error}',
   'effort.rangeLow': 'Low',
   'effort.rangeHigh': 'High',
   'effort.default': 'Default',
-  'effort.error.noLevels': 'The current model does not provide reasoning effort levels',
-  'effort.error.notApplied': 'The reasoning effort change did not take effect',
-  'effort.toast.failed': 'Could not change the reasoning effort. {error}',
-  'chat.status.loading': 'Reading the chat route…',
-  'chat.status.failed': 'The chat route could not be read',
-  'chat.status.stale': 'The chat route has expired',
+  'effort.error.noLevels': 'The current model does not provide thinking effort levels',
+  'effort.error.notApplied': 'The thinking effort change did not take effect',
+  'effort.toast.failed': 'Could not change thinking effort: {error}. Try again later or switch models.',
+  'chat.status.loading': 'Reading current chat model…',
+  'chat.status.failed': 'Could not read current chat model',
+  'chat.status.stale': 'Current chat model status has expired',
   'chat.status.followDefault': 'Using the default',
   'chat.effort.unspecified': 'Effort not specified',
   'chat.phase.planned': 'Planned',
@@ -77,18 +78,18 @@ export const en = {
   'chat.phase.appDefault': 'App default',
   'chat.phase.inherited': 'Inherited',
   'chat.phase.stale': 'Expired',
-  'chat.ariaLabel': 'Chat route {title}',
+  'chat.ariaLabel': 'Current chat model {title}',
   'chat.unavailable': 'The conversation surface is not ready yet',
   'model.placeholder': 'Select a model',
-  'model.loadFailed': 'Could not load the model list. {error}',
-  'model.selectFailed': 'Could not switch models.',
-  'model.selectFailedWithError': 'Could not switch models. {error}',
+  'model.loadFailed': 'Could not load the model list. Try again later: {error}',
+  'model.selectFailed': 'Could not switch models. Try again later.',
+  'model.selectFailedWithError': 'Could not switch models. Try again later: {error}',
   'model.ariaLabel': 'Model {model}',
   'model.loading': 'Loading models…',
   'model.empty': 'No models available',
-  'model.menuAriaLabel': 'Model and reasoning effort',
+  'model.menuAriaLabel': 'Model and thinking effort',
   'model.back': 'Select a model',
-  'model.triggerAriaLabel': 'Model {model}, reasoning effort {effort}',
+  'model.triggerAriaLabel': 'Model {model}, thinking effort {effort}',
   'team.saveFailed': 'Could not save the agent team setting: {error}',
   'team.confirmDisableTitle': 'Turn off agent team collaboration?',
   'team.confirmDisableText': 'Turning off agent team collaboration during a conversation stops shared task tools and team coordination instructions.',
@@ -109,40 +110,40 @@ export const zh = {
   'level.high': '高',
   'level.xhigh': '极高',
   'level.max': '最大',
-  'toast.dismiss': '忽略',
+  'toast.dismiss': '关闭',
   'effort.caption': '思考强度',
-  'effort.ariaLabel': '推理强度',
-  'effort.title': '推理强度 · {name}',
-  'effort.titleError': '推理强度设置失败：{error}',
+  'effort.ariaLabel': '思考强度',
+  'effort.title': '思考强度 · {name}',
+  'effort.titleError': '思考强度设置失败：{error}',
   'effort.rangeLow': '低',
   'effort.rangeHigh': '高',
   'effort.default': '默认',
-  'effort.error.noLevels': '当前模型未提供推理强度档位',
-  'effort.error.notApplied': '推理强度切换未生效',
-  'effort.toast.failed': '没能改推理强度。{error}',
-  'chat.status.loading': '正在读取 Chat 路由…',
-  'chat.status.failed': 'Chat 路由读取失败',
-  'chat.status.stale': 'Chat 路由已过期',
+  'effort.error.noLevels': '当前模型未提供思考强度档位',
+  'effort.error.notApplied': '思考强度切换未生效',
+  'effort.toast.failed': '思考强度切换未成功：{error}。请稍后重试，或换用其他模型。',
+  'chat.status.loading': '正在读取当前对话模型…',
+  'chat.status.failed': '暂时无法获取当前对话模型',
+  'chat.status.stale': '当前对话模型信息已过期',
   'chat.status.followDefault': '跟随默认',
   'chat.effort.unspecified': '未指定强度',
   'chat.phase.planned': '计划',
   'chat.phase.sessionOverride': '会话覆盖',
   'chat.phase.fallback': '后备路由',
-  'chat.phase.appDefault': '宿主默认',
+  'chat.phase.appDefault': '应用默认',
   'chat.phase.inherited': '继承',
   'chat.phase.stale': '过期',
-  'chat.ariaLabel': 'Chat 路由 {title}',
+  'chat.ariaLabel': '当前对话模型 {title}',
   'chat.unavailable': '会话界面尚未就绪',
   'model.placeholder': '选择模型',
-  'model.loadFailed': '没能加载模型清单。{error}',
-  'model.selectFailed': '没能切换模型。',
-  'model.selectFailedWithError': '没能切换模型。{error}',
+  'model.loadFailed': '模型清单读取失败，请稍后重试：{error}',
+  'model.selectFailed': '模型切换未成功，请稍后重试。',
+  'model.selectFailedWithError': '模型切换未成功，请稍后重试：{error}',
   'model.ariaLabel': '模型 {model}',
   'model.loading': '正在加载模型…',
   'model.empty': '没有可用模型',
-  'model.menuAriaLabel': '模型与推理强度',
+  'model.menuAriaLabel': '模型与思考强度',
   'model.back': '选择模型',
-  'model.triggerAriaLabel': '模型 {model}，推理强度 {effort}',
+  'model.triggerAriaLabel': '模型 {model}，思考强度 {effort}',
   'team.saveFailed': '智能体团队协作设置保存失败：{error}',
   'team.confirmDisableTitle': '确认停用智能体团队协作？',
   'team.confirmDisableText': '对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。',
@@ -158,15 +159,10 @@ export const zh = {
 export type EffortSliderCopyKey = keyof typeof zh
 export type EffortSliderTranslate = (key: EffortSliderCopyKey, vars?: Record<string, unknown>) => string
 
-const fillCopy = (template: string, vars?: Record<string, unknown>): string => {
-  if (vars === undefined) return template
-  return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in vars ? String(vars[name]) : match))
-}
-
 /** Translate through the shipped dictionaries; the fallback keeps the previous Chinese copy without a locale service. */
 export function effortSliderTranslate(locale: 'en' | 'zh', key: EffortSliderCopyKey, vars?: Record<string, unknown>): string {
   const table = locale === 'en' ? en : zh
-  return fillCopy(table[key], vars)
+  return fillTemplate(table[key], vars)
 }
 
 export const defaultEffortSliderTranslate: EffortSliderTranslate = (key, vars) => effortSliderTranslate('zh', key, vars)

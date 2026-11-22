@@ -1,8 +1,8 @@
 import * as React from 'react';
 import {ActionGroup,Badge,Button,Field,Select,SettingsCard,StatusLine,Switch,TextInput} from '@omnisurge/dsh-ui';
 import {CREDENTIAL_SAVE_BLOCKED,CREDENTIAL_SAVE_EMPTY,CREDENTIAL_SAVE_FAILED,CREDENTIAL_SAVE_OK,CREDENTIAL_SAVE_PARTIAL,credentialRolesText,saveCredentialRoles} from '../credential-save.js';
+import {fillTemplate as fill} from '../shared/client-copy.js';
 
-const fill=(template,values)=>String(template).replace(/\{(\w+)\}/g,(match,key)=>(key in values?String(values[key]):match));
 const roleLabel=role=>role==='apiKey'?'API Key':role==='token'?'Token':role;
 
 /** The second multimodal subcard (ADR-086). It follows the handwrite card's provider-card anatomy:
