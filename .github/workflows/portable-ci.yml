@@ -41,3 +41,11 @@ jobs:
         run: pnpm run build
       - name: Portable checks
         run: pnpm run test:portable
+      - name: Pack Suite candidate
+        run: node portable-checks/pack-suite.mjs "$RUNNER_TEMP/suite-pack"
+      - name: Install official CLI
+        run: pnpm add -D --ignore-scripts @deepseek-ai/dsh@0.2.2-rc.5
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: CLI web host smoke
+        run: pnpm run test:cli-web-host -- "$RUNNER_TEMP/suite-pack"

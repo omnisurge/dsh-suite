@@ -69,6 +69,7 @@
   },
   "scripts": {
     "build": "pnpm --filter @omnisurge/dsh-ui build && node scripts/build/build-suite.mjs",
-    "test:portable": "node portable-checks/run.mjs"
+    "test:portable": "node portable-checks/run.mjs",
+    "test:cli-web-host": "node portable-checks/check-cli-web-host.mjs"
   }
 }
