@@ -47,24 +47,31 @@ async function waitHttp(url){
 async function closeBrowser(browser){try{await browser.close();}catch{}}
 async function stopChild(child){if(!child||child.exitCode!==null)return;child.kill('SIGTERM');await new Promise(resolve=>setTimeout(resolve,1500));if(child.exitCode===null)child.kill('SIGKILL');}
 async function dismissOnboarding(page){
- for(let round=0;round<5;round++){
-  const overlay=page.locator('[role="presentation"] [aria-hidden="true"]').first();
-  if(!(await overlay.count()))return;
-  const buttons=page.locator('[role="presentation"] button');
-  let clicked=false;
-  for(let index=0;index<await buttons.count();index++){
-   const button=buttons.nth(index);
-   if(!(await button.isVisible().catch(()=>false))||!(await button.isEnabled().catch(()=>false)))continue;
-   const text=await button.innerText().catch(()=> '');
-   if(!/(继续|Continue|关闭|Close|跳过|Skip|完成|Done)/i.test(text))continue;
-   await button.click({timeout:5000}).catch(()=>{});clicked=true;break;
+ for(let round=0;round<8;round++){
+  const overlays=page.locator('[role="presentation"]');
+  let acted=false;
+  for(let index=0;index<await overlays.count();index++){
+   const overlay=overlays.nth(index);
+   if(!(await overlay.isVisible().catch(()=>false)))continue;
+   if(!(await overlay.locator('[aria-hidden="true"]').count()))continue;
+   const buttons=overlay.locator('button');
+   let clicked=false;
+   for(let buttonIndex=0;buttonIndex<await buttons.count();buttonIndex++){
+    const button=buttons.nth(buttonIndex);
+    if(!(await button.isVisible().catch(()=>false))||!(await button.isEnabled().catch(()=>false)))continue;
+    const text=await button.innerText().catch(()=> '');
+    if(!/(开始设置|开始使用|开始|Get started|Start|继续|Continue|关闭|Close|跳过|Skip|完成|Done|进入应用|Open app|我知道了|Got it|上一步|Back)/i.test(text))continue;
+    await button.click({timeout:5000}).catch(()=>{});clicked=true;break;
+   }
+   if(!clicked){
+    const fallback=overlay.locator('button:visible').first();
+    if(await fallback.count())await fallback.click({timeout:5000}).catch(()=>{});
+    else await page.keyboard.press('Escape').catch(()=>{});
+   }
+   acted=true;break;
   }
-  if(!clicked){
-   const fallback=page.locator('[role="presentation"] button:visible').first();
-   if(await fallback.count())await fallback.click({timeout:5000}).catch(()=>{});
-   else await page.keyboard.press('Escape').catch(()=>{});
-  }
-  await page.waitForTimeout(700);
+  if(!acted)await page.waitForTimeout(700);
+  else await page.waitForTimeout(900);
  }
 }
 
