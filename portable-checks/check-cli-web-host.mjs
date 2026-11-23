@@ -115,5 +115,5 @@ try{
  log(JSON.stringify({ok:true,pluginPage:true,settingsCard:settingsText,suiteManager:true,pageErrors}));
 }finally{
  await closeBrowser(browser);await stopChild(child);
- await rm(workspace,{recursive:true,force:true});
+ await rm(workspace,{recursive:true,force:true,maxRetries:5,retryDelay:500}).catch(()=>{});
 }
