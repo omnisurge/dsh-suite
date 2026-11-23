@@ -14,6 +14,7 @@ test('public root exposes build and portable checks', async () => {
   const pkg = await readJson(join(root, 'package.json'));
   assert.equal(pkg.scripts.build, 'pnpm --filter @omnisurge/dsh-ui build && node scripts/build/build-suite.mjs');
   assert.equal(pkg.scripts['test:portable'], 'node portable-checks/run.mjs');
+  assert.equal(pkg.scripts['test:cli-web-host'], 'node portable-checks/check-cli-web-host.mjs');
 });
 
 test('suite package keeps runtime metadata', async () => {
