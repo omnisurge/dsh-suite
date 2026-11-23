@@ -45,7 +45,7 @@ async function waitHttp(url){
  throw new Error('WEB_HOST_HTTP_TIMEOUT');
 }
 async function closeBrowser(browser){try{await browser.close();}catch{}}
-async function stopChild(child){if(!child||child.exitCode!==null)return;child.kill('SIGTERM');await new Promise(resolve=>setTimeout(resolve,1500));if(child.exitCode===null)child.kill('SIGKILL');}
+async function stopChild(child){if(!child||child.exitCode!==null)return;if(process.platform==='win32'){await new Promise(resolve=>{const killer=spawn('taskkill',['/pid',String(child.pid),'/T','/F'],{stdio:'ignore'});killer.on('close',resolve);killer.on('error',resolve);});return;}child.kill('SIGTERM');await new Promise(resolve=>setTimeout(resolve,1500));if(child.exitCode===null)child.kill('SIGKILL');}
 async function dismissOnboarding(page){
  for(let round=0;round<8;round++){
   const overlays=page.locator('[role="presentation"]');
