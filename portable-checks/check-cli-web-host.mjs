@@ -46,11 +46,32 @@ async function waitHttp(url){
 }
 async function closeBrowser(browser){try{await browser.close();}catch{}}
 async function stopChild(child){if(!child||child.exitCode!==null)return;child.kill('SIGTERM');await new Promise(resolve=>setTimeout(resolve,1500));if(child.exitCode===null)child.kill('SIGKILL');}
+async function dismissOnboarding(page){
+ for(let round=0;round<5;round++){
+  const overlay=page.locator('[role="presentation"] [aria-hidden="true"]').first();
+  if(!(await overlay.count()))return;
+  const buttons=page.locator('[role="presentation"] button');
+  let clicked=false;
+  for(let index=0;index<await buttons.count();index++){
+   const button=buttons.nth(index);
+   if(!(await button.isVisible().catch(()=>false))||!(await button.isEnabled().catch(()=>false)))continue;
+   const text=await button.innerText().catch(()=> '');
+   if(!/(继续|Continue|关闭|Close|跳过|Skip|完成|Done)/i.test(text))continue;
+   await button.click({timeout:5000}).catch(()=>{});clicked=true;break;
+  }
+  if(!clicked){
+   const fallback=page.locator('[role="presentation"] button:visible').first();
+   if(await fallback.count())await fallback.click({timeout:5000}).catch(()=>{});
+   else await page.keyboard.press('Escape').catch(()=>{});
+  }
+  await page.waitForTimeout(700);
+ }
+}
 
 const workspace=await mkdtemp(join(tmpdir(),'dsh-g6a-cli-web-host-'));
-const home=join(workspace,'home'),dshHome=join(workspace,'dsh-home'),config=join(workspace,'config'),data=join(workspace,'data'),cache=join(workspace,'cache');
-await Promise.all([home,dshHome,config,data,cache].map(dir=>mkdir(dir,{recursive:true})));
-const env={...process.env,HOME:home,DSH_HOME:dshHome,XDG_CONFIG_HOME:config,XDG_DATA_HOME:data,XDG_CACHE_HOME:cache,NO_COLOR:'1',CI:'1'};
+const home=join(workspace,'home'),dshHome=join(workspace,'dsh-home'),config=join(workspace,'config'),data=join(workspace,'data'),cache=join(workspace,'cache'),tmp=join(workspace,'tmp'),appData=join(home,'AppData');
+await Promise.all([home,dshHome,config,data,cache,tmp,join(appData,'Roaming'),join(appData,'Local')].map(dir=>mkdir(dir,{recursive:true})));
+const env={...process.env,HOME:home,USERPROFILE:home,APPDATA:join(appData,'Roaming'),LOCALAPPDATA:join(appData,'Local'),DSH_HOME:dshHome,XDG_CONFIG_HOME:config,XDG_DATA_HOME:data,XDG_CACHE_HOME:cache,TMP:tmp,TEMP:tmp,NO_COLOR:'1',CI:'1'};
 let child=null,browser=null;
 try{
  if(!existsSync(dsh))throw new Error('DSH_BIN_NOT_FOUND '+dsh);
@@ -69,6 +90,7 @@ try{
  const pageErrors=[];page.on('pageerror',error=>pageErrors.push(String(error.message??error).slice(0,300)));
  await page.goto(url,{waitUntil:'domcontentloaded',timeout:timeouts.ui});
  await page.waitForTimeout(1000);
+ await dismissOnboarding(page);
  for(const name of [/^(继续|Continue)$/]){
   const button=page.getByRole('button',{name});if(await button.count()){await button.first().click();await page.waitForTimeout(700);}
  }
