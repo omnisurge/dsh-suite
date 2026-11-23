@@ -68,6 +68,7 @@
     }
   },
   "scripts": {
-    "build": "pnpm --filter @omnisurge/dsh-ui build && node scripts/build/build-suite.mjs"
+    "build": "pnpm --filter @omnisurge/dsh-ui build && node scripts/build/build-suite.mjs",
+    "test:portable": "node portable-checks/run.mjs"
   }
 }
