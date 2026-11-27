@@ -1,9 +1,9 @@
-/** MCP server management tab for the Skills & MCP panel (ADR-025/032/046/052/094/095). Extracted per ADR-117 D4. */
+/** MCP server management tab for the Capabilities & Connections panel (ADR-025/032/046/052/094/095/122/123). Extracted per ADR-117 D4. */
 import * as React from 'react';
-import {ActionGroup,Badge,Button,CapsuleSwitch,EmptyState,Field,FormGrid,IconButton,ListRow,NumberInput,Select,SheetHead,StatusLine,Switch,TextArea,TextInput,showConfirm,showToast} from '@omnisurge/dsh-ui';
+import {ActionGroup,Badge,Banner,Button,CapsuleSwitch,Card,Drawer,EmptyState,Field,ListRow,NumberInput,Select,StatusLine,Switch,TextArea,TextInput,showConfirm,showToast} from '@omnisurge/dsh-ui';
 import {fillTemplate as fill} from '../shared/client-copy.js';
 import {DiagnosticDisclosure} from '../shared/DiagnosticDisclosure.js';
-import {MCP_RUNTIME_KEYS,MCP_RUNTIME_TONES,MCP_STATE_KEYS,MCP_STATE_TONES,codeOf,failure,mcpActionSentence,mcpDraftInvalidSentence,mcpMutationSentence,mcpProtocolOf,mcpPurposeRefreshable,mcpPurposeSentence,mcpSentence,mutationRaw,pairList} from './client-format.js';
+import {MCP_RUNTIME_KEYS,MCP_RUNTIME_TONES,MCP_STATE_KEYS,MCP_STATE_TONES,codeOf,failure,mcpActionSentence,mcpDraftInvalidSentence,mcpFormDirty,mcpMutationSentence,mcpProtocolOf,mcpPurposeRefreshable,mcpPurposeSentence,mcpSentence,mcpSourceKey,mutationRaw,pairList} from './client-format.js';
 import {MCP_OAUTH_POLL_MS,mcpAuthorizationOf,mcpOauthPost,mcpOauthStatus,mcpOauthStatusOf,mcpOauthWaitBudgetMs,mcpRedactCode} from './oauth-control.js';
 
 const h=React.createElement;
@@ -18,18 +18,18 @@ function PencilIcon(){
 }
 
 /**
- * The MCP tab: the MCP servers this profile configures, as one management list.
+ * The MCP tab: two-card overview + unified server list (ADR-123) and Drawer form (ADR-125 D1).
  *
  * The 0.1.4/0.1.5 flat tool wall is gone (ADR-025 D4): hundreds of model-facing tool names had no reading
  * value. A row carries the server facts only — name (mono), transport, state and the number of tools the
  * server currently contributes. Row identity is the Loader/patch rowId, never a name parsed back out of a
  * public tool name (ADR-024 correction 2).
  *
- * Add and edit replace the list with one in-page form (SheetHead returns, no second modal) because a modal
- * over a page whose only content is the list would hide the list it edits. Credential values are write-only:
- * the form starts from counts, never from plaintext, omits headers/env entirely unless the user resets them,
- * and a reset submits the complete list the user typed. Editing never shows or asks for the row's plugin
- * package — the Host derives that from the profile.
+ * Add and edit open a native right-hand Drawer (<Drawer size="lg" placement="right">) while keeping the
+ * background overview and server list mounted underneath (with the edited row selected). Credential values
+ * are write-only: the form starts from counts, never from plaintext, omits headers/env entirely unless the
+ * user resets them, and a reset submits the complete list the user typed. Editing never shows or asks for the
+ * row's plugin package — the Host derives that from the profile.
  */
 export function McpTab(props){
   const t=props.t,slot=props.panel,start=props.start;
@@ -37,30 +37,23 @@ export function McpTab(props){
   const busy=slot.phase==='loading';
   const catalog=slot.data;
   const servers=catalog!==null&&catalog!==undefined&&Array.isArray(catalog.servers)?catalog.servers:[];
-  // ADR-094 D4：官方 manager 在场时，托管行与套件自有客户端是两类事实，列表按来源分开；
-  // 没有官方 manager（rc.1）时保持原来的单列表，页面不凭空多出两个分区。
   // A catalog that is absent, old, or explicitly unsupported is read-only: only the official manager is a
   // writable authority in 0.3.0 (ADR-095 D3).
   const authority=catalog!==null&&catalog!==undefined&&catalog.authority==='official'?'official':'unsupported';
   const unsupported=authority==='unsupported';
   const catalogIssue=catalog!==null&&catalog!==undefined&&catalog.issue&&typeof catalog.issue==='object'?catalog.issue:null;
-  const officialRows=servers.filter(server=>server.managed===true);
-  const ownRows=servers.filter(server=>server.managed!==true);
   // F6 reuses the existing read-failure surface: a catalog issue is another read failure, not a new block.
   const failureIssue=slot.issue??(catalogIssue!==null?{kind:'catalog-unreadable',raw:catalogIssue.raw}:null);
   const sentence=mcpSentence(t,failureIssue);
-  const summary=catalog===null?t('summaryPending'):catalogIssue!==null?t('mcpCatalogSummaryUnreadable'):fill(t('mcpServersSummary'),{
-    servers:servers.length,
-    running:servers.filter(server=>server.state==='running').length,
-    tools:servers.reduce((total,server)=>total+(Number.isFinite(server.toolCount)?server.toolCount:0),0),
-  });
   const receipt=slot.lastRead===null?null:h('span',{className:'omni-ui-hint','data-testid':'mcp-checked'},fill(t('checkedAt'),{time:slot.lastRead}));
   const [form,setForm]=React.useState(null);
   const [values,setValues]=React.useState(null);
+  const [initialValues,setInitialValues]=React.useState(null);
   const [savePhase,setSavePhase]=React.useState('idle');
   const [saveIssue,setSaveIssue]=React.useState(null);
-  const [deleteIssue,setDeleteIssue]=React.useState(null);
+  const [actionIssue,setActionIssue]=React.useState(null);
   const [removing,setRemoving]=React.useState(null);
+  const [toggling,setToggling]=React.useState(null);
   const [probing,setProbing]=React.useState(null);
   const [probeIssue,setProbeIssue]=React.useState(null);
   const [runtimeOverrides,setRuntimeOverrides]=React.useState({});
@@ -78,6 +71,26 @@ export function McpTab(props){
   const purposeRowRefs=React.useRef(new Map());
   const purposeFocusReturn=React.useRef(null);
   const confirmRef=React.useRef(null);
+  const openerRef=React.useRef(null);
+  const wasFormOpenRef=React.useRef(false);
+  const onDirtyChangeRef=React.useRef(props.onDirtyChange);
+  onDirtyChangeRef.current=props.onDirtyChange;
+  const dirty=form!==null&&mcpFormDirty(values,initialValues);
+  const formOpen=form!==null&&values!==null;
+  React.useEffect(()=>{onDirtyChangeRef.current?.(dirty);},[dirty]);
+  React.useEffect(()=>{
+    if(formOpen){
+      wasFormOpenRef.current=true;
+      return;
+    }
+    if(!wasFormOpenRef.current)return;
+    wasFormOpenRef.current=false;
+    const opener=openerRef.current;
+    openerRef.current=null;
+    if(opener!==null&&opener.isConnected&&!opener.disabled&&typeof opener.focus==='function'){
+      opener.focus({preventScroll:true});
+    }
+  },[formOpen]);
   // A probe result is the row's newest connection fact until the next list read replaces the catalog: keep the
   // override in immutable state, never by mutating the row object the registration store handed us.
   const catalogRef=React.useRef(catalog);
@@ -99,7 +112,11 @@ export function McpTab(props){
   // timer is not enough — a read already in flight returns to a live closure whose session ref still points at
   // the old session, so it would schedule the next round for a page that no longer exists. Bumping the generation
   // is what turns that answer into a no-op (review B3).
-  React.useEffect(()=>()=>{stopOauthWait();if(oauthStartAbort.current!==null){oauthStartAbort.current.abort();oauthStartAbort.current=null;}},[]);
+  React.useEffect(()=>()=>{
+    onDirtyChangeRef.current?.(false);
+    stopOauthWait();
+    if(oauthStartAbort.current!==null){oauthStartAbort.current.abort();oauthStartAbort.current=null;}
+  },[]);
   // ADR-046 task-72: when a purpose editor closes, return keyboard focus to the value button that opened it.
   // The trigger is re-rendered by this same state transition, so the effect reads the row after commit.
   React.useEffect(()=>{
@@ -108,7 +125,7 @@ export function McpTab(props){
     purposeFocusReturn.current=null;
     const row=purposeRowRefs.current.get(id);
     const button=row===undefined?null:row.querySelector('[data-testid="mcp-purpose-edit-'+id+'"]');
-    if(button!==null&&typeof button.focus==='function')button.focus();
+    if(button!==null&&typeof button.focus==='function')button.focus({preventScroll:true});
   },[purposeEditing]);
   React.useEffect(()=>{
     if(catalogRef.current!==catalog){
@@ -127,6 +144,20 @@ export function McpTab(props){
     }
   },[slot.purposes]);
   const runtimeOf=server=>Object.prototype.hasOwnProperty.call(runtimeOverrides,String(server.rowId))?runtimeOverrides[String(server.rowId)]:server.runtime;
+  const hasRuntimeInfo=servers.length===0||servers.some(server=>{
+    const rt=runtimeOf(server);
+    return rt!==null&&rt!==undefined;
+  });
+  const connectedCount=servers.filter(server=>server.state==='running'&&runtimeOf(server)?.state==='connected').length;
+  const runningCount=servers.filter(server=>server.state==='running').length;
+  const toolCount=servers.reduce((total,server)=>total+(Number.isFinite(server.toolCount)?server.toolCount:0),0);
+  const summary=catalog===null
+    ?(busy?t('mcpReading'):t('summaryPending'))
+    :catalogIssue!==null
+      ?t('mcpCatalogSummaryUnreadable')
+      :hasRuntimeInfo
+        ?fill(t('mcpServersSummaryConnected'),{servers:servers.length,connected:connectedCount,tools:toolCount})
+        :fill(t('mcpServersSummaryRunning'),{servers:servers.length,running:runningCount,tools:toolCount});
   // The local snapshot wins until the next Host read hands over a new object: a write answer is fresher than
   // the registration store's last read, and the sync effect above adopts every genuinely new read.
   const purposes=purposeSnapshot??slot.purposes;
@@ -139,10 +170,28 @@ export function McpTab(props){
   const updatePair=(kind,index,key,value)=>setValues(current=>current===null?current:{...current,[kind]:current[kind].map((pair,position)=>position===index?{...pair,[key]:value}:pair)});
   const addPair=kind=>setValues(current=>current===null?current:{...current,[kind]:[...current[kind],{key:'',value:''}]});
   const removePair=(kind,index)=>setValues(current=>current===null?current:{...current,[kind]:current[kind].filter((_,position)=>position!==index)});
-  const closeForm=()=>{setForm(null);setValues(null);setSaveIssue(null);setSavePhase('idle');};
-  const openAdd=()=>{
-    setDeleteIssue(null);setSaveIssue(null);
-    setValues({
+  const closeForm=()=>{
+    setForm(null);setValues(null);setInitialValues(null);setSaveIssue(null);setSavePhase('idle');
+    onDirtyChangeRef.current?.(false);
+  };
+  const requestCloseForm=()=>{
+    if(savePhase==='saving')return;
+    if(!dirty){closeForm();return;}
+    if(confirmRef.current!==null)confirmRef.current.close();
+    confirmRef.current=showConfirm({
+      title:t('unsavedTitle'),
+      text:t('unsavedMcpText'),
+      cancelLabel:t('keepEditing'),
+      confirmLabel:t('discardChanges'),
+      tone:'danger',
+      onCancel:()=>{confirmRef.current=null;},
+      onConfirm:()=>{confirmRef.current=null;closeForm();},
+    });
+  };
+  const openAdd=event=>{
+    openerRef.current=event?.currentTarget instanceof HTMLElement?event.currentTarget:null;
+    setActionIssue(null);setSaveIssue(null);
+    const snapshot={
       name:'',kind:'static',transport:'streamable-http',url:'',command:'',args:'',cwd:'',timeoutMs:'',
       staticClientId:'',authTimeoutMs:'',
       endpointOpen:true,
@@ -153,12 +202,15 @@ export function McpTab(props){
       enabled:true,enabledDirty:false,
       // ADR-055 tri-state: 'keep' sends nothing, 'clear' sends an empty list, 'replace' sends the typed rows.
       headersMode:'keep',envMode:'keep',headers:[{key:'',value:''}],env:[{key:'',value:''}],
-    });
+    };
+    setValues(snapshot);
+    setInitialValues(snapshot);
     setForm({mode:'add',server:null});
   };
-  const openEdit=server=>{
-    setDeleteIssue(null);setSaveIssue(null);
-    setValues({
+  const openEdit=(server,event)=>{
+    openerRef.current=event?.currentTarget instanceof HTMLElement?event.currentTarget:null;
+    setActionIssue(null);setSaveIssue(null);
+    const snapshot={
       name:typeof server.name==='string'?server.name:'',
       // The kind is the row's own client fact; an edit never sends it, but the form reads it to decide whether
       // the transport may still be changed at all.
@@ -178,7 +230,9 @@ export function McpTab(props){
       failOnStartupError:typeof server.failOnStartupError==='boolean'?server.failOnStartupError:false,failDirty:false,
       enabled:server.enabled!==false,enabledDirty:false,
       headersMode:'keep',envMode:'keep',headers:[{key:'',value:''}],env:[{key:'',value:''}],
-    });
+    };
+    setValues(snapshot);
+    setInitialValues(snapshot);
     setForm({mode:'edit',server});
   };
   const buildDraft=()=>{
@@ -249,11 +303,11 @@ export function McpTab(props){
     }
     return draft;
   };
-  const announce=(mutation,fallbackName,actionKey)=>{
+  const announce=(mutation,fallbackName,actionKey,tone)=>{
     const action=t(actionKey);
     const state=mutation&&mutation.applied==='live'?t('mcpApplied'):t('mcpPending');
     const name=mutation&&typeof mutation.name==='string'?mutation.name:String(fallbackName);
-    showToast({text:fill(t('mutationToast'),{action,state,name}),kind:'mcp-mutation',closeLabel:t('closeToast')});
+    showToast({text:fill(t('mutationToast'),{action,state,name}),kind:'mcp-mutation',...(tone===undefined?{}:{tone}),closeLabel:t('closeToast')});
   };
   const submit=async()=>{
     if(savePhase==='saving'||form===null)return;
@@ -263,7 +317,7 @@ export function McpTab(props){
       const mutation=form.mode==='add'
         ?await mutate('addMcpServer',draft)
         :await mutate('updateMcpServer',String(form.server.rowId),draft);
-      announce(mutation,values.name,form.mode==='add'?'mcpAdded':'mcpUpdated');
+      announce(mutation,values.name,form.mode==='add'?'mcpAdded':'mcpUpdated',mutation?.applied==='live'?'ok':'neutral');
       closeForm();
       start();
     }catch(failed){
@@ -273,15 +327,29 @@ export function McpTab(props){
     }
   };
   const remove=async server=>{
-    setDeleteIssue(null);setRemoving(String(server.rowId));
+    setActionIssue(null);setRemoving(String(server.rowId));
     try{
       const mutation=await mutate('removeMcpServer',String(server.rowId));
-      announce(mutation,server.name,'mcpRemoved');
+      announce(mutation,server.name,'mcpRemoved',mutation&&mutation.applied==='live'?'ok':'warn');
       start();
     }catch(failed){
-      setDeleteIssue({sentence:mcpMutationSentence(t,failed),raw:mutationRaw(failed)});
+      setActionIssue({sentence:mcpMutationSentence(t,failed),raw:mutationRaw(failed)});
     }finally{
       setRemoving(null);
+    }
+  };
+  const setServerEnabled=async(server,enabled)=>{
+    const id=String(server.rowId);
+    if(toggling!==null||removing!==null)return;
+    setActionIssue(null);setToggling(id);
+    try{
+      const mutation=await mutate('setMcpServerEnabled',id,enabled);
+      announce(mutation,server.name,enabled?'mcpEnable':'mcpDisable',mutation&&mutation.applied==='live'?'ok':'warn');
+      start();
+    }catch(failed){
+      setActionIssue({sentence:mcpMutationSentence(t,failed),raw:mutationRaw(failed)});
+    }finally{
+      setToggling(null);
     }
   };
   const probe=async server=>{
@@ -296,7 +364,7 @@ export function McpTab(props){
         showToast({text:t('mcpProbeNoAnswer'),kind:'mcp-probe',closeLabel:t('closeToast')});
       }else{
         const key=MCP_RUNTIME_KEYS.get(runtime.state)??'mcpRuntimeNotConnected';
-        showToast({text:fill(t('mcpProbeDone'),{state:t(key)}),kind:'mcp-probe',closeLabel:t('closeToast')});
+        showToast({text:fill(t('mcpProbeDone'),{state:t(key)}),kind:'mcp-probe',...(runtime.state==='connected'?{tone:'ok'}:{}),closeLabel:t('closeToast')});
       }
     }catch(failed){
       setProbeIssue({sentence:mcpActionSentence(t,failed,'mcpProbeFailed'),raw:mutationRaw(failed)});
@@ -343,7 +411,7 @@ export function McpTab(props){
           if(status==='connected'){
             stopOauthWait();
             setOauthSession(null);
-            showToast({text:t('mcpOauthConnected'),kind:'mcp-oauth',closeLabel:t('closeToast')});
+            showToast({text:t('mcpOauthConnected'),kind:'mcp-oauth',tone:'ok',closeLabel:t('closeToast')});
             start();
             return;
           }
@@ -357,12 +425,12 @@ export function McpTab(props){
     };
     schedule();
   };
-  const startOauthLogin=async server=>{
+  const startOauthLogin=async(server,replaceFailed=false)=>{
     const id=String(server.rowId);
     const serverName=String(server.name);
     // One interaction at a time: while a session exists (starting, waiting, awaiting the code, submitting,
-    // signing out) the page never starts a second control-plane interaction.
-    if(oauthSession!==null)return;
+    // signing out) the page never starts a second control-plane interaction unless retrying a failed session.
+    if(oauthSession!==null&&!(replaceFailed&&oauthSession.rowId===id&&oauthSession.phase===null&&oauthSession.issue!==null))return;
     stopOauthWait();
     setOauthSession({rowId:id,serverName,authorizationUrl:null,prefer:null,waiting:false,code:'',phase:'starting',issue:null});
     const controller=new AbortController();
@@ -383,6 +451,21 @@ export function McpTab(props){
       setOauthSession({rowId:id,serverName,authorizationUrl:null,prefer:null,waiting:false,code:'',phase:null,issue:{sentence,raw:mutationRaw(failed)}});
     }finally{
       if(oauthStartAbort.current===controller)oauthStartAbort.current=null;
+    }
+  };
+  const copyOauthLink=async url=>{
+    if(typeof navigator!=='undefined'&&navigator.clipboard&&typeof navigator.clipboard.writeText==='function'){
+      try{
+        await navigator.clipboard.writeText(url);
+        showToast({text:t('mcpOauthLinkCopied'),kind:'mcp-oauth-copy',tone:'ok',closeLabel:t('closeToast')});
+      }catch{
+        // Clipboard access was refused; do not claim success.
+      }
+    }
+  };
+  const openOauthUrl=url=>{
+    if(typeof window!=='undefined'&&typeof window.open==='function'){
+      window.open(url,'_blank','noopener,noreferrer');
     }
   };
   /** ADR-052 D2: cancel ends the Host's wait (it closes the loopback listener and writes the tombstone) and the
@@ -419,7 +502,7 @@ export function McpTab(props){
       await mcpOauthPost(session.serverName,'submit',{code});
       // The code is dropped with the session: success is the only moment the page still held it.
       setOauthSession(null);
-      showToast({text:t('mcpOauthSubmitted'),kind:'mcp-oauth',closeLabel:t('closeToast')});
+      showToast({text:t('mcpOauthSubmitted'),kind:'mcp-oauth',tone:'ok',closeLabel:t('closeToast')});
       start();
     }catch(failed){
       const raw=mcpRedactCode(mutationRaw(failed),code);
@@ -433,7 +516,7 @@ export function McpTab(props){
     try{
       await mcpOauthPost(String(server.name),'logout',{});
       setOauthSession(null);
-      showToast({text:t('mcpOauthLoggedOut'),kind:'mcp-oauth',closeLabel:t('closeToast')});
+      showToast({text:t('mcpOauthLoggedOut'),kind:'mcp-oauth',tone:'ok',closeLabel:t('closeToast')});
       start();
     }catch(failed){
       setOauthSession({rowId:id,serverName:String(server.name),authorizationUrl:null,code:'',phase:null,issue:{sentence:t('mcpOauthLogoutFailed'),raw:mutationRaw(failed)}});
@@ -472,7 +555,7 @@ export function McpTab(props){
       const value=await mutate(MCP_PURPOSE_WRITE,{rowId,purpose,expectedRevision:purposes.revision});
       applyPurposeFacts(value);
       setPurposeEditing(null);setPurposeDraft('');
-      showToast({text:purpose.length===0?t('mcpPurposeCleared'):t('mcpPurposeSaved'),kind:'mcp-purpose',closeLabel:t('closeToast')});
+      showToast({text:purpose.length===0?t('mcpPurposeCleared'):t('mcpPurposeSaved'),kind:'mcp-purpose',tone:'ok',closeLabel:t('closeToast')});
     }catch(failed){
       if(mcpPurposeRefreshable(failed))await reloadPurposes();
       setPurposeIssue({rowId,sentence:mcpPurposeSentence(t,failed),raw:mutationRaw(failed)});
@@ -485,7 +568,7 @@ export function McpTab(props){
       // An explicit off is the routing:false fact; nothing else in the section changes.
       const value=await mutate(MCP_ROUTING_WRITE,{routing:next===true,expectedRevision:purposes.revision});
       applyPurposeFacts(value);
-      showToast({text:t('mcpRoutingSaved'),kind:'mcp-routing',closeLabel:t('closeToast')});
+      showToast({text:t('mcpRoutingSaved'),kind:'mcp-routing',tone:'ok',closeLabel:t('closeToast')});
     }catch(failed){
       if(mcpPurposeRefreshable(failed))await reloadPurposes();
       setPurposeIssue({sentence:mcpPurposeSentence(t,failed),raw:mutationRaw(failed)});
@@ -493,10 +576,9 @@ export function McpTab(props){
   };
   const askRemove=server=>{
     if(confirmRef.current!==null)confirmRef.current.close();
-    const loaded=server.origin==='loaded';
     confirmRef.current=showConfirm({
       title:t('mcpDeleteTitle'),
-      text:fill(loaded?t('mcpDeleteTextLoaded'):t('mcpDeleteTextProfile'),{name:String(server.name)}),
+      text:fill(t('mcpDeleteTextProfile'),{name:String(server.name)}),
       cancelLabel:t('cancel'),
       confirmLabel:t('remove'),
       tone:'danger',
@@ -504,8 +586,25 @@ export function McpTab(props){
       onConfirm:()=>{confirmRef.current=null;void remove(server);},
     });
   };
+  const askDisable=server=>{
+    if(confirmRef.current!==null)confirmRef.current.close();
+    confirmRef.current=showConfirm({
+      title:t('mcpDisableTitle'),
+      text:fill(t('mcpDisableTextLoaded'),{name:String(server.name)}),
+      cancelLabel:t('cancel'),
+      confirmLabel:t('mcpDisableConfirm'),
+      tone:'danger',
+      onCancel:()=>{confirmRef.current=null;},
+      onConfirm:()=>{confirmRef.current=null;void setServerEnabled(server,false);},
+    });
+  };
   const row=server=>{
     const id=String(server.rowId);
+    // ADR-122 D2/ADR-095 F2a: only a Suite bundle-provided MCP row gets the row-level toggle; official-client
+    // static rows and non-Suite clients stay read-only even when the Loader lists them outside insert rows.
+    // Non-MCP rows never reach the page because readMcpServers requires a resolvable MCP serverName.
+    const loaded=server.origin==='loaded'&&server.clientSource==='suite';
+    const disabled=server.state==='disabled';
     const runtime=runtimeOf(server);
     const transport=server.transport==='streamable-http'?t('mcpTransportHttp'):server.transport==='stdio'?t('mcpTransportStdio'):String(server.transport);
     const kindWord=server.kind==='oauth'?t('mcpKindOauth'):t('mcpKindStatic');
@@ -547,34 +646,39 @@ export function McpTab(props){
       detail.push(h(DiagnosticDisclosure,{key:'runtime-raw',testId:'mcp-runtime-raw-'+id,title:t('rawDetails'),text:runtime.error}));
     }
     if(session!==null&&session.phase==='starting'){
-      detail.push(h('div',{key:'oauth-starting',className:'omni-ui-stack','data-testid':'mcp-login-starting-'+serverName},
-        h(StatusLine,{tone:'muted',role:'status','data-testid':'mcp-login-starting-status-'+serverName},t('mcpOauthStarting')),
-        h(ActionGroup,null,
-          h(Button,{variant:'ghost',onClick:()=>{void cancelOauthLogin();},'data-testid':'mcp-login-cancel-'+serverName},t('mcpOauthCancel')))));
+      detail.push(h(Card,{key:'oauth-starting',as:'div',variant:'subtle','data-testid':'mcp-login-starting-'+serverName},
+        h(StatusLine,{tone:'loading',role:'status','data-testid':'mcp-login-starting-status-'+serverName},t('mcpOauthStarting')),
+        h(ActionGroup,{align:'start'},
+          h(Button,{variant:'ghost',size:'sm',onClick:()=>{void cancelOauthLogin();},'data-testid':'mcp-login-cancel-'+serverName},t('mcpOauthCancel')))));
     }
     if(session!==null&&session.authorizationUrl!==null){
       const pasteOnly=session.prefer==='paste';
-      detail.push(h('div',{key:'oauth-panel',className:'omni-ui-stack','data-testid':'mcp-login-panel-'+serverName},
+      detail.push(h(Card,{key:'oauth-panel',as:'div',variant:'subtle','data-testid':'mcp-login-panel-'+serverName},
         // ADR-052 D1/D3: the wait is the default. The sentence states what the page is doing (it checks by
         // itself) so the user is not told to paste a code that only the no-GUI downgrade ever asks for.
-        session.waiting?h('p',{className:'omni-ui-hint','data-testid':'mcp-login-waiting-'+serverName},t('mcpOauthWaiting'))
+        session.waiting?h(StatusLine,{tone:'loading',role:'status','data-testid':'mcp-login-waiting-'+serverName},t('mcpOauthWaiting'))
           :pasteOnly?null
           :h('p',{className:'omni-ui-hint'},t('mcpOauthWaitingHint')),
         session.waiting?h('p',{className:'omni-ui-hint'},t('mcpOauthWaitingHint')):null,
         pasteOnly?h('p',{className:'omni-ui-hint'},t('mcpOauthPasteHint')):null,
-        // The authorization URL is a real link (new window), never a copy-only affordance.
-        h('p',{className:'omni-ui-hint'},h('a',{href:session.authorizationUrl,target:'_blank',rel:'noreferrer','data-testid':'mcp-login-url-'+serverName},session.authorizationUrl)),
+        // The authorization URL is a real link (new window), paired with open & copy actions inside the subtle card.
+        h('a',{href:session.authorizationUrl,target:'_blank',rel:'noreferrer',className:'omni-ui-oauthUrl','data-testid':'mcp-login-url-'+serverName},session.authorizationUrl),
         // The code box is the documented no-GUI downgrade only: with a live loopback wait there is nothing to paste.
         pasteOnly?h(Field,{label:t('mcpOauthCodeLabel'),hint:t('mcpOauthCodeHint')},
-          h(TextInput,{name:'oauthCode',autoComplete:'off',value:session.code,disabled:sessionBusy,onChange:event=>setOauthSession(current=>current===null?current:{...current,code:event.target.value}),'data-testid':'mcp-login-code-'+serverName})):null,
-        h(ActionGroup,null,
-          session.waiting?h(Button,{variant:'ghost',busy:session.phase==='cancelling',disabled:sessionBusy&&session.phase!=='cancelling',onClick:()=>{void cancelOauthLogin();},'data-testid':'mcp-login-cancel-'+serverName},t('mcpOauthCancel')):null,
-          pasteOnly?h(Button,{busy:session.phase==='submitting',disabled:sessionBusy||String(session.code).trim().length===0,onClick:()=>{void submitOauthCode();},'data-testid':'mcp-login-submit-'+serverName},t('mcpOauthSubmit')):null)));
+          h(TextInput,{name:'oauthCode',autoComplete:'off',className:'omni-ui-mono',value:session.code,disabled:sessionBusy,onChange:event=>setOauthSession(current=>current===null?current:{...current,code:event.target.value}),'data-testid':'mcp-login-code-'+serverName})):null,
+        h(ActionGroup,{align:'start'},
+          h(Button,{variant:'default',size:'sm',onClick:()=>{openOauthUrl(session.authorizationUrl);},'data-testid':'mcp-login-open-'+serverName},t('mcpOauthOpen')),
+          h(Button,{variant:'default',size:'sm',onClick:()=>{void copyOauthLink(session.authorizationUrl);},'data-testid':'mcp-login-copy-'+serverName},t('mcpOauthCopyLink')),
+          session.waiting?h(Button,{variant:'ghost',size:'sm',busy:session.phase==='cancelling',disabled:sessionBusy&&session.phase!=='cancelling',onClick:()=>{void cancelOauthLogin();},'data-testid':'mcp-login-cancel-'+serverName},t('mcpOauthCancel')):null,
+          pasteOnly?h(Button,{variant:'primary',size:'sm',busy:session.phase==='submitting',disabled:sessionBusy||String(session.code).trim().length===0,onClick:()=>{void submitOauthCode();},'data-testid':'mcp-login-submit-'+serverName},t('mcpOauthSubmit')):null)));
     }
     if(session!==null&&session.issue!==null){
-      detail.push(h('div',{key:'oauth-issue',className:'omni-ui-stack','data-testid':'mcp-login-failure-'+serverName},
-        h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-login-error-'+serverName},session.issue.sentence),
-        h(DiagnosticDisclosure,{testId:'mcp-login-raw-'+serverName,title:t('rawDetails'),text:session.issue.raw})));
+      detail.push(h(Card,{key:'oauth-issue',as:'div',variant:'subtle','data-testid':'mcp-login-failure-'+serverName},
+        h(StatusLine,{tone:'err',role:'alert','data-testid':'mcp-login-error-'+serverName},session.issue.sentence),
+        h(DiagnosticDisclosure,{testId:'mcp-login-raw-'+serverName,title:t('rawDetails'),text:session.issue.raw}),
+        h(ActionGroup,{align:'start'},
+          h(Button,{variant:'default',size:'sm',onClick:()=>{void startOauthLogin(server,true);},'data-testid':'mcp-login-retry-'+serverName},t('mcpOauthRetry')),
+          h(Button,{variant:'ghost',size:'sm',onClick:()=>{stopOauthWait();setOauthSession(null);},'data-testid':'mcp-login-dismiss-'+serverName},t('mcpOauthDismiss')))));
     }
     // ADR-032: the purpose is one line per row. It renders once — either the stored value or the edit buffer —
     // and it renders at all only while the snapshot is readable. A broken or absent snapshot is not "no purpose":
@@ -588,14 +692,15 @@ export function McpTab(props){
     };
     // ADR-046 / task-74: the design draft's "click anywhere on this row to start filling" is a pointer shortcut.
     // It is deliberately not a control: the row stays out of the tab order and the value button remains the only
-    // keyboard path. Clicks inside an interactive child — row actions, an OAuth link/code box, a switch label or
-    // a disclosure — keep their own behaviour and never open the purpose editor.
+    // keyboard path. Clicks inside an interactive child — row actions, nested OAuth card, a link/code box, a
+    // switch label or a disclosure — keep their own behaviour and never open the purpose editor.
     const purposeRowClick=purposeReadable?event=>{
       if(purposeEditing!==null||purposeBusy!==null)return;
       const target=event.target;
-      const control=target!==null&&typeof target.closest==='function'
-        ?target.closest('button,a,input,select,textarea,label,summary,details,[role="button"],[role="tab"],[contenteditable="true"],.omni-ui-inlineEdit,.omni-ui-listActions,.omni-ui-disclosure')
-        :null;
+      if(target===null||typeof target.closest!=='function')return;
+      const nestedCard=target.closest('.omni-ui-card');
+      if(nestedCard!==null&&event.currentTarget.contains(nestedCard))return;
+      const control=target.closest('button,a,input,select,textarea,label,summary,details,[role="button"],[role="tab"],[contenteditable="true"],.omni-ui-inlineEdit,.omni-ui-listActions,.omni-ui-disclosure,.omni-ui-card--subtle');
       if(control!==null)return;
       startPurposeEdit();
     }:undefined;
@@ -606,12 +711,31 @@ export function McpTab(props){
       detail.push(h('div',{key:'purpose',ref:node=>{if(node===null)purposeRowRefs.current.delete(id);else purposeRowRefs.current.set(id,node);},className:'omni-ui-stack','data-testid':'mcp-purpose-'+id},
         purposeHere
           ?h(React.Fragment,null,
-            h(Field,{label:t('mcpPurpose'),hint:t('mcpPurposeHint')},
-              h(TextInput,{name:'purpose',autoComplete:'off',maxLength:MCP_PURPOSE_MAX,value:purposeDraft,disabled:purposeBusy!==null,onChange:event=>setPurposeDraft(event.target.value),'data-testid':'mcp-purpose-input-'+id})),
-            h(ActionGroup,null,
-              h(Button,{variant:'primary',busy:purposeBusy===id,disabled:purposeBusy!==null,onClick:()=>{void savePurpose(id);},'data-testid':'mcp-purpose-save-'+id},t('save')),
-              h(Button,{variant:'ghost',disabled:purposeBusy!==null,onClick:()=>{setPurposeEditing(null);setPurposeDraft('');},'data-testid':'mcp-purpose-cancel-'+id},t('cancel')),
-              purposeText.length>0?h(Button,{variant:'ghost',disabled:purposeBusy!==null,onClick:()=>{void savePurpose(id,'');},'data-testid':'mcp-purpose-clear-'+id},t('mcpPurposeClear')):null))
+            h(Field,{label:t('mcpPurpose'),hint:t('mcpPurposeHint'),counter:purposeDraft.length+'/'+MCP_PURPOSE_MAX},
+              h(TextInput,{
+                name:'purpose',
+                autoComplete:'off',
+                autoFocus:true,
+                maxLength:MCP_PURPOSE_MAX,
+                value:purposeDraft,
+                disabled:purposeBusy!==null,
+                onChange:event=>setPurposeDraft(event.target.value),
+                onKeyDown:event=>{
+                  if(event.key==='Enter'&&!event.nativeEvent?.isComposing){
+                    event.preventDefault();
+                    void savePurpose(id);
+                  }else if(event.key==='Escape'){
+                    event.preventDefault();
+                    setPurposeEditing(null);
+                    setPurposeDraft('');
+                  }
+                },
+                'data-testid':'mcp-purpose-input-'+id,
+              })),
+            h(ActionGroup,{align:'start'},
+              h(Button,{variant:'primary',size:'sm',busy:purposeBusy===id,disabled:purposeBusy!==null,onClick:()=>{void savePurpose(id);},'data-testid':'mcp-purpose-save-'+id},t('save')),
+              purposeText.length>0?h(Button,{variant:'ghost',size:'sm',disabled:purposeBusy!==null,onClick:()=>{void savePurpose(id,'');},'data-testid':'mcp-purpose-clear-'+id},t('mcpPurposeClear')):null,
+              h(Button,{variant:'ghost',size:'sm',disabled:purposeBusy!==null,onClick:()=>{setPurposeEditing(null);setPurposeDraft('');},'data-testid':'mcp-purpose-cancel-'+id},t('cancel'))))
           :h('div',{className:'omni-ui-valueLine','data-testid':'mcp-purpose-line-'+id},
             h(Button,{
               variant:'link',
@@ -632,10 +756,11 @@ export function McpTab(props){
     }
     if(purposeIssue!==null&&purposeIssue.rowId===id){
       detail.push(h('div',{key:'purpose-issue',className:'omni-ui-stack','data-testid':'mcp-purpose-failure-'+id},
-        h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-purpose-error-'+id},purposeIssue.sentence),
+        h(StatusLine,{tone:'err',role:'alert','data-testid':'mcp-purpose-error-'+id},purposeIssue.sentence),
         h(DiagnosticDisclosure,{testId:'mcp-purpose-raw-'+id,title:t('rawDetails'),text:purposeIssue.raw})));
     }
     // One grey line instead of five chips; each fact keeps its own testid so the gates can still read it.
+    const sourceKey=mcpSourceKey(server,loaded);
     const mcpMeta=()=>{
       const parts=[
         h('span',{key:'transport','data-testid':'mcp-transport-'+id},transport),
@@ -646,11 +771,28 @@ export function McpTab(props){
       if(server.state==='running'&&(runtime===null||runtime===undefined))parts.push(h('span',{key:'runtime-none',className:'omni-ui-hint','data-testid':'mcp-runtime-none-'+id},t('mcpRuntimeNone')));
       // One count per row, always the Loader/tool-table fact; the connection word never repeats it.
       parts.push(h('span',{key:'tools','data-testid':'mcp-toolcount-'+id},fill(t('mcpToolCount'),{count})));
+      if(sourceKey!==null)parts.push(h('span',{key:'source','data-testid':'mcp-source-'+id},t(sourceKey)));
       return h('span',null,parts.flatMap((part,index)=>index===0?[part]:[' · ',part]));
     };
+    const normalActions=[
+      loaded&&disabled?h(Button,{key:'enable',variant:'ghost',busy:toggling===id,disabled:(toggling!==null&&toggling!==id)||removing!==null,onClick:()=>{void setServerEnabled(server,true);},'data-testid':'mcp-toggle-'+id},t('mcpEnable')):null,
+      oauthRow&&runtime!==null&&runtime!==undefined&&(runtime.state==='needs-login'||runtime.state==='failed')?h(Button,{key:'login',variant:'ghost',busy:session!==null,onClick:()=>{void startOauthLogin(server);},'data-testid':'mcp-login-'+serverName},t('mcpOauthLogin')):null,
+      oauthRow&&runtime!==null&&runtime!==undefined&&runtime.state==='connected'?h(Button,{key:'logout',variant:'ghost',busy:sessionBusy&&session.phase==='logging-out',onClick:()=>{void logoutOauth(server);},'data-testid':'mcp-logout-'+serverName},t('mcpOauthLogout')):null,
+      probeable?h(Button,{key:'probe',variant:'ghost',busy:probing===id,onClick:()=>{void probe(server);},'data-testid':'mcp-probe-'+id},t('mcpCheckConnection')):null,
+      server.editable===true?h(Button,{key:'edit',variant:'ghost','data-testid':'mcp-edit-'+id,onClick:event=>openEdit(server,event)},t('mcpSettings')):null,
+    ].filter(Boolean);
+    const disableButton=loaded&&!disabled?h(Button,{variant:'danger-ghost',busy:toggling===id,disabled:(toggling!==null&&toggling!==id)||removing!==null,onClick:()=>{askDisable(server);},'data-testid':'mcp-toggle-'+id},t('mcpDisable')):null;
+    const deleteButton=server.editable===true?h(Button,{variant:'danger-ghost',busy:removing===id,'data-testid':'mcp-delete-'+id,onClick:()=>askRemove(server)},t('remove')):null;
+    const dangerAction=disableButton!==null&&deleteButton!==null
+      ?[React.cloneElement(disableButton,{key:'disable'}),React.cloneElement(deleteButton,{key:'delete'})]
+      :(disableButton??deleteButton);
+    const rowActions=unsupported||(normalActions.length===0&&dangerAction===null)
+      ?null
+      :h(ActionGroup,{danger:dangerAction},normalActions);
     return h(ListRow,{
       key:id,
       'data-testid':'mcp-server-'+id,
+      selected:form!==null&&form.mode==='edit'&&form.server!==null&&String(form.server.rowId)===id,
       onClick:purposeRowClick,
       title:h('span',{className:'omni-ui-mono','data-testid':'mcp-name-'+id},String(server.name)),
       // ADR-049 D1: one badge, and only for the fact with consequences (connection state). Transport, kind,
@@ -658,23 +800,15 @@ export function McpTab(props){
       badge:h(Badge,{key:'state',tone:stateTone,'data-testid':'mcp-state-'+id},stateWord),
       meta:mcpMeta(),
       children:detail.length>0?h('div',{className:'omni-ui-listFacts','data-testid':'mcp-facts-zone-'+id},detail):undefined,
-      actions:unsupported?null:h(ActionGroup,null,
-        // ADR-034 D1: sign-in is offered whenever the client is not authorized (needs-login or a failed
-        // attempt); an unknown runtime published no connection fact, so it offers no action at all.
-        oauthRow&&runtime!==null&&runtime!==undefined&&(runtime.state==='needs-login'||runtime.state==='failed')?h(Button,{variant:'ghost',busy:session!==null,onClick:()=>{void startOauthLogin(server);},'data-testid':'mcp-login-'+serverName},t('mcpOauthLogin')):null,
-        oauthRow&&runtime!==null&&runtime!==undefined&&runtime.state==='connected'?h(Button,{variant:'ghost',busy:sessionBusy&&session.phase==='logging-out',onClick:()=>{void logoutOauth(server);},'data-testid':'mcp-logout-'+serverName},t('mcpOauthLogout')):null,
-        probeable?h(Button,{variant:'ghost',busy:probing===id,onClick:()=>{void probe(server);},'data-testid':'mcp-probe-'+id},t('mcpCheckConnection')):null,
-        server.editable===true?h(Button,{variant:'ghost','data-testid':'mcp-edit-'+id,onClick:()=>openEdit(server)},t('mcpSettings')):null,
-        // F2a: on rc.2 only a Suite-owned patch row is editable; a bundle/legacy row is read-only.
-        server.editable===true?h(Button,{variant:'danger-ghost',busy:removing===id,'data-testid':'mcp-delete-'+id,onClick:()=>askRemove(server)},t('remove')):null),
+      actions:rowActions,
     });
   };
   const pairEditor=(kind,rows)=>h('div',{className:'omni-ui-stack','data-testid':'mcp-'+kind+'-editor'},
-    rows.map((pair,index)=>h(FormGrid,{key:index},
+    rows.map((pair,index)=>h('div',{key:index,className:'omni-ui-kvEditorRow','data-testid':'mcp-'+kind+'-row-'+index},
       h(TextInput,{name:kind+'-key-'+index,autoComplete:'off','aria-label':t('mcpKeyLabel'),placeholder:t('mcpKeyPlaceholder'),value:pair.key,onChange:event=>updatePair(kind,index,'key',event.target.value),'data-testid':'mcp-'+kind+'-key-'+index}),
       h(TextInput,{type:'password',name:kind+'-value-'+index,autoComplete:'new-password','aria-label':t('mcpValueLabel'),placeholder:t('mcpValuePlaceholder'),value:pair.value,onChange:event=>updatePair(kind,index,'value',event.target.value),'data-testid':'mcp-'+kind+'-value-'+index}),
-      h(Button,{variant:'ghost',disabled:rows.length===1,onClick:()=>removePair(kind,index),'data-testid':'mcp-'+kind+'-remove-'+index},t('mcpRemoveRow')))),
-    h(Button,{variant:'ghost',onClick:()=>addPair(kind),'data-testid':'mcp-'+kind+'-add-row'},t('mcpAddRow')));
+      h(Button,{variant:'danger-ghost',disabled:rows.length===1,onClick:()=>removePair(kind,index),'data-testid':'mcp-'+kind+'-remove-'+index},t('mcpRemoveRow')))),
+    h(Button,{variant:'default',size:'sm',className:'omni-ui-kvAdd',onClick:()=>addPair(kind),'data-testid':'mcp-'+kind+'-add-row'},t('mcpAddRow')));
   /** ADR-055: `env`/`headers` are written in one of three ways, and the page states which one before saving —
    * keeping the stored object, clearing it, or replacing it with exactly the rows below. "Untouched" is the
    * default, so merely opening an edit never destroys values this page cannot echo. */
@@ -707,98 +841,137 @@ export function McpTab(props){
     // ADR-094 D4：官方 manager 托管的条目与套件自有客户端共用一张表单，但官方 schema 没有的字段不出现。
     const managed=!add&&server!==null&&server.managed===true;
     const officialTarget=add?(authority==='official'&&values.kind!=='oauth'):managed;
-    return h('section',{className:'omni-ui-stack','data-testid':'mcp-form-section'},
-      h(SheetHead,{title:add?t('mcpAddTitle'):t('mcpEditTitle'),dismissLabel:t('back'),onDismiss:closeForm}),
+    return h(Drawer,{
+      open:true,
+      size:'lg',
+      placement:'right',
+      'data-testid':'mcp-form-section',
+      title:add?t('mcpAddTitle'):t('mcpEditTitle'),
+      badge:h('span',{hidden:!dirty,'data-testid':'mcp-form-dirty'},h(Badge,{tone:'warn'},t('unsavedBadge'))),
+      closeLabel:t('closeToast'),
+      busy:savePhase==='saving',
+      onClose:()=>requestCloseForm(),
+      footer:h(ActionGroup,{align:'end',stackOnMobile:true},
+        h(Button,{variant:'ghost',disabled:savePhase==='saving',onClick:requestCloseForm,'data-testid':'mcp-form-cancel'},t('cancel')),
+        h(Button,{variant:'primary',busy:savePhase==='saving',onClick:()=>{void submit();},'data-testid':'mcp-form-save'},savePhase==='saving'?t('saving'):t('save'))),
+    },
       h('div',{className:'omni-ui-stack','data-testid':'mcp-form'},
-        h(Field,{label:t('mcpServerName'),hint:t('mcpServerNameHint'),required:true},
-          h(TextInput,{name:'serverName',autoComplete:'off',value:values.name,readOnly:managed,onChange:event=>setValue('name',event.target.value),'data-testid':'mcp-form-name'})),
-        add?h('div',{'data-testid':'mcp-form-kind'},h(Field,{label:t('mcpKind')},
-          // Both arms are real now (ADR-033 D1): CapsuleSwitch is this library's segmented control that lets the
-          // page switch the carried client; OAuth rows are HTTP-only, so that arm fixes the transport.
-          h(CapsuleSwitch,{options:[{id:'static',label:t('mcpKindStatic')},{id:'oauth',label:t('mcpKindOauth')}],value:values.kind,onChange:id=>setValues(current=>({...current,kind:id,...(id==='oauth'?{transport:'streamable-http',headersMode:'keep',envMode:'keep'}:{})})),'aria-label':t('mcpKind')}),
-          values.kind==='oauth'?h('p',{className:'omni-ui-hint','data-testid':'mcp-form-kind-oauth-note'},t('mcpOauthFlowHint')):null)):null,
-        httpOnlyClient
-          ?h('div',{'data-testid':'mcp-form-transport-hint'},h(Field,{label:t('mcpTransport'),hint:t('mcpHttpOnlyClientHint')},null))
-          :values.kind==='oauth'?null:h('div',{'data-testid':'mcp-form-transport'},h(Field,{label:t('mcpTransport')},
-          h(CapsuleSwitch,{options:[{id:'streamable-http',label:t('mcpTransportHttp')},{id:'stdio',label:t('mcpTransportStdio')}],value:values.transport,onChange:id=>setValues(current=>({
-            ...current,
-            transport:id,
-            // Changing transport changes what an endpoint even means, so the new endpoint must be typed here.
-            ...(form!==null&&form.mode==='edit'&&form.server!==null&&id!==form.server.transport?{endpointOpen:true}:{}),
-          })),'aria-label':t('mcpTransport')}))),
-        // ADR-055 wording: a stdio row has a launch command, not an "endpoint"; the same section serves both, so
-        // the label follows the transport instead of calling a command line an address.
-        add?null:h(Field,{label:values.transport==='stdio'?t('mcpStartCommand'):t('mcpEndpoint'),hint:values.endpointOpen?(values.transport==='stdio'?t('mcpStartCommandReplaceHint'):t('mcpEndpointReplaceHint')):(values.transport==='stdio'?t('mcpStartCommandConfigured'):t('mcpEndpointConfigured'))},
-          h(Switch,{label:values.transport==='stdio'?t('mcpStartCommandReplace'):t('mcpEndpointReplace'),checked:values.endpointOpen,onChange:event=>setValue('endpointOpen',event.target.checked),'data-testid':'mcp-endpoint-replace'})),
-        values.kind==='oauth'?h(Field,{label:t('mcpStaticClientId'),hint:add?t('mcpStaticClientIdHint'):t('mcpStaticClientIdHintEdit')},
-          h(TextInput,{name:'staticClientId',autoComplete:'off',value:values.staticClientId,onChange:event=>setValue('staticClientId',event.target.value),'data-testid':'mcp-form-static-client-id'})):null,
-        values.kind==='oauth'?h(Field,{label:t('mcpAuthTimeout'),hint:add?t('mcpAuthTimeoutHint'):t('mcpAuthTimeoutHintEdit')},
-          h(NumberInput,{name:'authorizationTimeoutMs',min:1000,step:1,value:values.authTimeoutMs,onChange:event=>setValue('authTimeoutMs',event.target.value),'data-testid':'mcp-form-auth-timeout'})):null,
-        add||values.endpointOpen
-          ?values.transport==='streamable-http'
-            ?h(Field,{label:t('mcpUrl'),hint:t('mcpUrlHint'),required:true},
-              h(TextInput,{name:'url',inputMode:'url',autoComplete:'off',value:values.url,onChange:event=>setValue('url',event.target.value),'data-testid':'mcp-form-url'}))
-            :h(React.Fragment,null,
-              h(Field,{label:t('mcpCommand'),hint:t('mcpCommandHint'),required:true},
-                h(TextInput,{name:'command',autoComplete:'off',value:values.command,onChange:event=>setValue('command',event.target.value),'data-testid':'mcp-form-command'})),
-              h(Field,{label:t('mcpArgs'),hint:t('mcpArgsHint')},
-                h(TextArea,{name:'args',rows:4,value:values.args,onChange:event=>setValue('args',event.target.value),'data-testid':'mcp-form-args'})),
-              h(Field,{label:t('mcpCwd'),hint:add?t('mcpCwdHint'):t('mcpCwdHintEdit')},
-                h(TextInput,{name:'cwd',autoComplete:'off',value:values.cwd,onChange:event=>setValue('cwd',event.target.value),'data-testid':'mcp-form-cwd'})))
-          :null,
-        h(Field,{label:t('mcpTimeout'),hint:add?t('mcpTimeoutHint'):t('mcpTimeoutHintEdit')},
-          h(NumberInput,{name:'toolCallTimeoutMs',min:1,step:1,value:values.timeoutMs,onChange:event=>setValue('timeoutMs',event.target.value),'data-testid':'mcp-form-timeout'})),
-        managed?h(Switch,{label:t('mcpEnabled'),description:t('mcpEnabledHint'),checked:values.enabled,onChange:event=>setValues(current=>({...current,enabled:event.target.checked,enabledDirty:true})),'data-testid':'mcp-form-enabled'}):null,
-        officialTarget?null:h(Switch,{label:t('mcpFailOnStartup'),description:add?t('mcpFailOnStartupHint'):t('mcpKeepUnlessChanged'),checked:values.failOnStartupError,onChange:event=>setValues(current=>({...current,failOnStartupError:event.target.checked,failDirty:true})),'data-testid':'mcp-form-fail-on-startup'}),
-        values.transport==='streamable-http'&&values.kind!=='oauth'?pairBlock('headers',t('mcpHeaders'),server?server.headerCount:0,add):null,
-        // ADR-034/0.2.0-5: the OAuth client's Config carries neither headers nor env; the Host refuses that
-        // combination, so the page never offers it.
-        values.kind!=='oauth'?pairBlock('env',t('mcpEnv'),server?server.envCount:0,add):null,
-        saveIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-save-failure'},
-          h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-save-error'},saveIssue.sentence),
-          h(DiagnosticDisclosure,{testId:'mcp-save-raw',title:t('rawDetails'),text:saveIssue.raw})),
-        h(ActionGroup,null,
-          h(Button,{variant:'primary',busy:savePhase==='saving',onClick:()=>{void submit();},'data-testid':'mcp-form-save'},savePhase==='saving'?t('saving'):t('save')),
-          h(Button,{variant:'ghost',onClick:closeForm,'data-testid':'mcp-form-cancel'},t('cancel')))));
+        h(Card,{title:t('mcpFormIdentityTitle'),'data-testid':'mcp-form-identity-card'},
+          h(Field,{label:t('mcpServerName'),hint:t('mcpServerNameHint'),required:true},
+            h(TextInput,{name:'serverName',autoComplete:'off',className:'omni-ui-mono',value:values.name,readOnly:managed,onChange:event=>setValue('name',event.target.value),'data-testid':'mcp-form-name'})),
+          add?h('div',{'data-testid':'mcp-form-kind'},h(Field,{label:t('mcpKind')},
+            // Both arms are real now (ADR-033 D1): CapsuleSwitch is this library's segmented control that lets the
+            // page switch the carried client; OAuth rows are HTTP-only, so that arm fixes the transport.
+            h(CapsuleSwitch,{options:[{id:'static',label:t('mcpKindStatic')},{id:'oauth',label:t('mcpKindOauth')}],value:values.kind,onChange:id=>setValues(current=>({...current,kind:id,...(id==='oauth'?{transport:'streamable-http',headersMode:'keep',envMode:'keep'}:{})})),'aria-label':t('mcpKind')}),
+            values.kind==='oauth'?h('p',{className:'omni-ui-hint','data-testid':'mcp-form-kind-oauth-note'},t('mcpOauthFlowHint')):null)):null,
+          httpOnlyClient
+            ?h('div',{'data-testid':'mcp-form-transport-hint'},h(Field,{label:t('mcpTransport'),hint:t('mcpHttpOnlyClientHint')},null))
+            :values.kind==='oauth'?null:h('div',{'data-testid':'mcp-form-transport'},h(Field,{label:t('mcpTransport')},
+            h(CapsuleSwitch,{options:[{id:'streamable-http',label:t('mcpTransportHttp')},{id:'stdio',label:t('mcpTransportStdio')}],value:values.transport,onChange:id=>setValues(current=>({
+              ...current,
+              transport:id,
+              // Changing transport changes what an endpoint even means, so the new endpoint must be typed here.
+              ...(form!==null&&form.mode==='edit'&&form.server!==null&&id!==form.server.transport?{endpointOpen:true}:{}),
+            })),'aria-label':t('mcpTransport')})))),
+        h(Card,{title:t('mcpFormEndpointTitle'),'data-testid':'mcp-form-endpoint-card'},
+          // ADR-055 wording: a stdio row has a launch command, not an "endpoint"; the same section serves both, so
+          // the label follows the transport instead of calling a command line an address.
+          add?null:h(Field,{label:values.transport==='stdio'?t('mcpStartCommand'):t('mcpEndpoint'),hint:values.endpointOpen?(values.transport==='stdio'?t('mcpStartCommandReplaceHint'):t('mcpEndpointReplaceHint')):(values.transport==='stdio'?t('mcpStartCommandConfigured'):t('mcpEndpointConfigured'))},
+            h(Switch,{label:values.transport==='stdio'?t('mcpStartCommandReplace'):t('mcpEndpointReplace'),align:'between',checked:values.endpointOpen,onChange:event=>setValue('endpointOpen',event.target.checked),'data-testid':'mcp-endpoint-replace'})),
+          add||values.endpointOpen
+            ?values.transport==='streamable-http'
+              ?h(Field,{label:t('mcpUrl'),hint:t('mcpUrlHint'),required:true},
+                h(TextInput,{name:'url',inputMode:'url',autoComplete:'off',className:'omni-ui-mono',value:values.url,onChange:event=>setValue('url',event.target.value),'data-testid':'mcp-form-url'}))
+              :h(React.Fragment,null,
+                h(Field,{label:t('mcpCommand'),hint:t('mcpCommandHint'),required:true},
+                  h(TextInput,{name:'command',autoComplete:'off',className:'omni-ui-mono',value:values.command,onChange:event=>setValue('command',event.target.value),'data-testid':'mcp-form-command'})),
+                h(Field,{label:t('mcpArgs'),hint:t('mcpArgsHint'),optionalLabel:t('optional')},
+                  h(TextArea,{name:'args',rows:4,className:'omni-ui-mono',value:values.args,onChange:event=>setValue('args',event.target.value),'data-testid':'mcp-form-args'})),
+                h(Field,{label:t('mcpCwd'),hint:add?t('mcpCwdHint'):t('mcpCwdHintEdit'),optionalLabel:t('optional')},
+                  h(TextInput,{name:'cwd',autoComplete:'off',className:'omni-ui-mono',value:values.cwd,onChange:event=>setValue('cwd',event.target.value),'data-testid':'mcp-form-cwd'})))
+            :null,
+          values.kind==='oauth'?h(Field,{label:t('mcpStaticClientId'),hint:add?t('mcpStaticClientIdHint'):t('mcpStaticClientIdHintEdit'),optionalLabel:t('optional')},
+            h(TextInput,{name:'staticClientId',autoComplete:'off',className:'omni-ui-mono',value:values.staticClientId,onChange:event=>setValue('staticClientId',event.target.value),'data-testid':'mcp-form-static-client-id'})):null,
+          values.kind==='oauth'?h(Field,{label:t('mcpAuthTimeout'),hint:add?t('mcpAuthTimeoutHint'):t('mcpAuthTimeoutHintEdit'),optionalLabel:t('optional')},
+            h(NumberInput,{name:'authorizationTimeoutMs',min:1000,step:1,value:values.authTimeoutMs,onChange:event=>setValue('authTimeoutMs',event.target.value),'data-testid':'mcp-form-auth-timeout'})):null),
+        h(Card,{title:t('mcpFormRuntimeTitle'),'data-testid':'mcp-form-runtime-card'},
+          h(Field,{label:t('mcpTimeout'),hint:add?t('mcpTimeoutHint'):t('mcpTimeoutHintEdit'),optionalLabel:t('optional')},
+            h(NumberInput,{name:'toolCallTimeoutMs',min:1,step:1,value:values.timeoutMs,onChange:event=>setValue('timeoutMs',event.target.value),'data-testid':'mcp-form-timeout'})),
+          managed?h(Switch,{label:t('mcpEnabled'),description:t('mcpEnabledHint'),align:'between',checked:values.enabled,onChange:event=>setValues(current=>({...current,enabled:event.target.checked,enabledDirty:true})),'data-testid':'mcp-form-enabled'}):null,
+          officialTarget?null:h(Switch,{label:t('mcpFailOnStartup'),description:add?t('mcpFailOnStartupHint'):t('mcpKeepUnlessChanged'),align:'between',checked:values.failOnStartupError,onChange:event=>setValues(current=>({...current,failOnStartupError:event.target.checked,failDirty:true})),'data-testid':'mcp-form-fail-on-startup'}),
+          values.transport==='streamable-http'&&values.kind!=='oauth'?pairBlock('headers',t('mcpHeaders'),server?server.headerCount:0,add):null,
+          // ADR-034/0.2.0-5: the OAuth client's Config carries neither headers nor env; the Host refuses that
+          // combination, so the page never offers it.
+          values.kind!=='oauth'?pairBlock('env',t('mcpEnv'),server?server.envCount:0,add):null),
+        saveIssue===null?null:h(Banner,{tone:'err',role:'alert','data-testid':'mcp-save-failure'},
+          h('span',{'data-testid':'mcp-save-error'},saveIssue.sentence),
+          h(DiagnosticDisclosure,{testId:'mcp-save-raw',title:t('rawDetails'),text:saveIssue.raw}))));
   };
-  if(form!==null&&values!==null)return formSection();
   return h('section',{className:'omni-ui-stack','data-testid':'mcp-section','aria-label':t('tabMcp')},
-    h(StatusLine,{'data-testid':'mcp-summary'},summary),
-    catalog!==null&&unsupported?h(StatusLine,{tone:'warn',role:'status','data-testid':'mcp-unsupported'},t('mcpUnsupported')):null,
-    purposesIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-purpose-read-failure'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-purpose-read-error'},t('mcpPurposeReadFailed')),
-      h(DiagnosticDisclosure,{testId:'mcp-purpose-read-raw',title:t('rawDetails'),text:purposesIssue.raw})),
-    purposes===null?null:purposesUnreadable
-      ?h('div',{className:'omni-ui-stack','data-testid':'mcp-purpose-unreadable'},
-        h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-purpose-unreadable-line'},t('mcpPurposeUnreadable')),
-        h(DiagnosticDisclosure,{testId:'mcp-purpose-unreadable-raw',title:t('rawDetails'),text:String(purposes.unreadable.code??'')+'\n'+String(purposes.unreadable.raw??'')}))
-      :h('div',{'data-testid':'mcp-routing-row'},
-        h(Switch,{label:t('mcpRouting'),description:t('mcpRoutingHint'),checked:purposes.routing===true,disabled:unsupported||purposeBusy!==null,onChange:event=>{void saveRouting(event.target.checked);},'data-testid':'mcp-routing'})),
-    h('div',{className:'omni-ui-toolbar','data-testid':'mcp-toolbar'},
-      h(ActionGroup,null,
-        h(Button,{onClick:openAdd,disabled:unsupported,'data-testid':'mcp-add-server'},t('mcpAdd')),
-        h(Button,{'data-testid':'mcp-refresh',busy,onClick:()=>start()},busy?t('refreshing'):t('refresh')),
-        receipt)),
-    sentence===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-failure-block'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-failure'},sentence),
-      h(DiagnosticDisclosure,{testId:'mcp-failure-raw',title:t('rawDetails'),text:String(failureIssue.raw??'')})),
-    deleteIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-action-failure'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-action-error'},deleteIssue.sentence),
-      h(DiagnosticDisclosure,{testId:'mcp-action-raw',title:t('rawDetails'),text:deleteIssue.raw})),
-    probeIssue===null?null:h('div',{className:'omni-ui-stack','data-testid':'mcp-probe-failure'},
-      h(StatusLine,{tone:'warn',role:'alert','data-testid':'mcp-probe-error'},probeIssue.sentence),
-      h(DiagnosticDisclosure,{testId:'mcp-probe-raw',title:t('rawDetails'),text:probeIssue.raw})),
-    servers.length===0?null:authority==='official'
-      ?h(React.Fragment,null,
-        officialRows.length===0?null:h('section',{className:'omni-ui-stack','data-testid':'mcp-group-official'},
-          h('h3',{className:'omni-ui-itemCardTitle','data-testid':'mcp-group-official-title'},t('mcpGroupOfficial')),
-          h('p',{className:'omni-ui-hint','data-testid':'mcp-group-official-hint'},t('mcpGroupOfficialHint')),
-          h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list-official'},officialRows.map(row))),
-        ownRows.length===0?null:h('section',{className:'omni-ui-stack','data-testid':'mcp-group-suite'},
-          h('h3',{className:'omni-ui-itemCardTitle','data-testid':'mcp-group-suite-title'},t('mcpGroupSuite')),
-          h('p',{className:'omni-ui-hint','data-testid':'mcp-group-suite-hint'},t('mcpGroupSuiteHint')),
-          h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list-suite'},ownRows.map(row))))
-      :h('ul',{className:'omni-ui-list','data-testid':'mcp-server-list'},servers.map(row)),
-    catalog!==null&&servers.length===0&&sentence===null?h('div',{'data-testid':'mcp-empty'},
-      h(EmptyState,{title:t('mcpEmptyTitle'),description:t('mcpEmptyDescription'),action:h(Button,{onClick:openAdd,disabled:unsupported,'data-testid':'mcp-empty-add'},t('mcpAdd'))})):null);
+    h(Card,{
+      'data-testid':'mcp-overview-card',
+      title:t('mcpOverviewTitle'),
+      meta:receipt,
+      headerActions:h(ActionGroup,null,h(Button,{'data-testid':'mcp-refresh',busy,onClick:()=>start()},busy?t('refreshing'):t('refresh'))),
+    },
+      h(StatusLine,{'data-testid':'mcp-summary',tone:catalog===null&&busy?'loading':catalogIssue!==null?'err':'neutral'},summary),
+      purposes!==null&&!purposesUnreadable
+        ?h('div',{'data-testid':'mcp-routing-row'},
+          h(Switch,{
+            label:t('mcpRouting'),
+            description:t('mcpRoutingHint'),
+            align:'between',
+            busy:purposeBusy==='routing',
+            checked:purposes.routing===true,
+            disabled:unsupported||purposeBusy!==null,
+            onChange:event=>{void saveRouting(event.target.checked);},
+            'data-testid':'mcp-routing',
+          }))
+        :null,
+      catalog!==null&&unsupported?h(Banner,{tone:'warn',role:'status','data-testid':'mcp-unsupported'},t('mcpUnsupported')):null,
+      sentence===null?null:h(Banner,{tone:'err',role:'alert','data-testid':'mcp-failure-block'},
+        h('span',{'data-testid':'mcp-failure'},sentence),
+        h(DiagnosticDisclosure,{testId:'mcp-failure-raw',title:t('rawDetails'),text:String(failureIssue.raw??'')})),
+      purposesIssue===null?null:h(Banner,{tone:'err',role:'alert','data-testid':'mcp-purpose-read-failure'},
+        h('span',{'data-testid':'mcp-purpose-read-error'},t('mcpPurposeReadFailed')),
+        h(DiagnosticDisclosure,{testId:'mcp-purpose-read-raw',title:t('rawDetails'),text:purposesIssue.raw})),
+      purposes!==null&&purposesUnreadable
+        ?h(Banner,{tone:'err',role:'alert','data-testid':'mcp-purpose-unreadable'},
+          h('span',{'data-testid':'mcp-purpose-unreadable-line'},t('mcpPurposeUnreadable')),
+          h(DiagnosticDisclosure,{testId:'mcp-purpose-unreadable-raw',title:t('rawDetails'),text:String(purposes.unreadable.code??'')+'\n'+String(purposes.unreadable.raw??'')}))
+        :null,
+      actionIssue===null?null:h(Banner,{tone:'err',role:'alert','data-testid':'mcp-action-failure'},
+        h('span',{'data-testid':'mcp-action-error'},actionIssue.sentence),
+        h(DiagnosticDisclosure,{testId:'mcp-action-raw',title:t('rawDetails'),text:actionIssue.raw})),
+      probeIssue===null?null:h(Banner,{tone:'err',role:'alert','data-testid':'mcp-probe-failure'},
+        h('span',{'data-testid':'mcp-probe-error'},probeIssue.sentence),
+        h(DiagnosticDisclosure,{testId:'mcp-probe-raw',title:t('rawDetails'),text:probeIssue.raw}))),
+    h(Card,{
+      'data-testid':'mcp-custom-card',
+      title:t('mcpServersCardTitle'),
+      description:t('mcpServersCardDesc'),
+      headerActions:servers.length>0&&!unsupported?h(ActionGroup,null,h(Button,{variant:'primary',onClick:event=>openAdd(event),'data-testid':'mcp-add-server'},t('mcpAdd'))):null,
+    },
+      catalog===null&&busy
+        ?h('ul',{className:'omni-ui-list omni-ui-list--flush','data-testid':'mcp-loading-list'},
+          h(ListRow,{key:'loading-0',loading:true,title:''}),
+          h(ListRow,{key:'loading-1',loading:true,title:''}),
+          h(ListRow,{key:'loading-2',loading:true,title:''}))
+        :catalog===null&&!busy&&sentence!==null
+          ?h('p',{className:'omni-ui-hint','data-testid':'mcp-read-failed-hint'},t('mcpReadFailedBody'))
+          :servers.length>0
+            ?h('ul',{className:'omni-ui-list omni-ui-list--flush','data-testid':'mcp-server-list-custom'},servers.map(row))
+            :catalog!==null&&servers.length===0&&sentence===null
+              ?h('div',{'data-testid':'mcp-empty'},
+                h(EmptyState,{
+                  surface:'inline',
+                  align:'center',
+                  title:t('mcpEmptyTitle'),
+                  description:unsupported?t('mcpEmptyReadonlyDesc'):t('mcpEmptyDescription'),
+                  action:unsupported?undefined:h(Button,{variant:'primary',onClick:event=>openAdd(event),'data-testid':'mcp-empty-add'},t('mcpAdd')),
+                }))
+              :catalog!==null&&servers.length===0&&sentence!==null
+                ?h('p',{className:'omni-ui-hint','data-testid':'mcp-read-failed-hint'},t('mcpReadFailedBody'))
+                :null),
+    form!==null&&values!==null?formSection():null);
 }

@@ -1,19 +1,42 @@
 import { Children, useEffect, useId, useState, type HTMLAttributes, type ReactNode, type DetailsHTMLAttributes } from "react";
+import { Skeleton } from "./Progress.js";
+
+export type ActionGroupAlign = "end" | "start" | "between";
 
 export interface ActionGroupProps extends HTMLAttributes<HTMLDivElement> {
   danger?: ReactNode;
+  readonly align?: ActionGroupAlign;
+  readonly stackOnMobile?: boolean;
 }
 
 /** Separate destructive commands without giving ordinary text actions danger semantics. */
-export function ActionGroup({ children, danger, className = "", ...rest }: ActionGroupProps) {
-  return <div {...rest} className={`omni-ui-actionGroup ${className}`}>
+export function ActionGroup({
+  children,
+  danger,
+  align = "end",
+  stackOnMobile = false,
+  className = "",
+  ...rest
+}: ActionGroupProps) {
+  const classes = ["omni-ui-actionGroup"];
+  if (align !== "end") classes.push(`omni-ui-actionGroup--align-${align}`);
+  if (stackOnMobile) classes.push("omni-ui-actionGroup--stackMobile");
+  if (className !== "") classes.push(className);
+  return <div {...rest} className={classes.join(" ")}>
     {Children.toArray(children).length > 0 && <div className="omni-ui-actionCluster">{children}</div>}
     {Children.toArray(danger).length > 0 && <div className="omni-ui-actionCluster">{danger}</div>}
   </div>;
 }
 
-export function FormGrid({ className = "", ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={`omni-ui-formGrid ${className}`} />;
+export interface FormGridProps extends HTMLAttributes<HTMLDivElement> {
+  readonly columns?: "auto" | "2";
+}
+
+export function FormGrid({ columns = "auto", className = "", ...props }: FormGridProps) {
+  const classes = ["omni-ui-formGrid"];
+  if (columns === "2") classes.push("omni-ui-formGrid--2");
+  if (className !== "") classes.push(className);
+  return <div {...props} className={classes.join(" ")} />;
 }
 
 export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, "title"> {
@@ -23,15 +46,49 @@ export interface ListRowProps extends Omit<HTMLAttributes<HTMLLIElement>, "title
   /** Background facts (transport, protocol, tool count): one grey line, never more badges (ADR-049). */
   meta?: ReactNode;
   actions?: ReactNode;
+  readonly loading?: boolean;
+  readonly disabled?: boolean;
+  readonly selected?: boolean;
 }
 
-export function ListRow({ title, description, badge, meta, actions, children, className = "", ...rest }: ListRowProps) {
+export function ListRow({
+  title,
+  description,
+  badge,
+  meta,
+  actions,
+  loading = false,
+  disabled = false,
+  selected = false,
+  children,
+  className = "",
+  ...rest
+}: ListRowProps) {
   // ADR-052 / gaps §5.2: a row that carries actions opts into the first-line baseline rule (`--actions`), because
   // that rule only makes sense where there is a right-hand control column to align the title with.
-  return <li {...rest} className={`omni-ui-listRow ${actions != null ? "omni-ui-listRow--actions " : ""}${className}`}>
-    <div className="omni-ui-listMain"><div className="omni-ui-badgeRow"><span className="omni-ui-listTitle">{title}</span>{badge}</div>
-      {description != null && <span className="omni-ui-hint">{description}</span>}
-      {meta != null && <span className="omni-ui-metaLine">{meta}</span>}{children}</div>
+  const classes = ["omni-ui-listRow"];
+  if (actions != null) classes.push("omni-ui-listRow--actions");
+  if (className !== "") classes.push(className);
+  return <li
+    {...rest}
+    className={classes.join(" ")}
+    aria-busy={loading ? "true" : rest["aria-busy"]}
+    aria-disabled={disabled ? "true" : rest["aria-disabled"]}
+    data-loading={loading ? "true" : undefined}
+    data-selected={selected ? "true" : undefined}
+  >
+    <div className="omni-ui-listMain">
+      {loading ? (
+        <Skeleton lines={2} />
+      ) : (
+        <>
+          <div className="omni-ui-badgeRow"><span className="omni-ui-listTitle">{title}</span>{badge}</div>
+          {description != null && <span className="omni-ui-hint">{description}</span>}
+          {meta != null && <span className="omni-ui-metaLine">{meta}</span>}
+          {children}
+        </>
+      )}
+    </div>
     {actions != null && <div className="omni-ui-listActions">{actions}</div>}
   </li>;
 }

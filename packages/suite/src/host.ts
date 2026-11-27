@@ -36,7 +36,7 @@ import {BootGuard} from './recovery.js';
 import {StartupHealer} from './heal.js';
 import {SuiteUpgrade} from './upgrade.js';
 import {readSkillsCatalog} from './skills-catalog.js';
-import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,probeMcpServer,readMcpServers,removeMcpServer,updateMcpServer,withProfileLock} from './mcp-servers.js';
+import {CLIENT_ADAPTERS,addMcpServer,loopbackOrigin,mcpRowsOf,probeMcpServer,readMcpServers,removeMcpServer,setMcpServerEnabled,updateMcpServer,withProfileLock} from './mcp-servers.js';
 import {PURPOSE_SECTION_NAME,PURPOSE_SECTION_ORDER,createPurposeStore,purposeUnavailable} from './mcp-purpose.js';
 import {LIMIT_MODE_ORDER,LIMIT_MODE_SECTION,firstReadableSelection,limitModeSectionText,matchesLimitModels,normalizeLimitMode,selectionOf} from './limit-mode.js';
 import type {LimitModeConfig} from './limit-mode.js';
@@ -416,10 +416,15 @@ export class SuiteDevelopment extends TypertRemoteService {
  async updateMcpServer(rowId:string,draft:McpServerDraft):Promise<McpServerMutation>{
   return updateMcpServer(this.mcpContext(),rowId,draft);
  }
- /** Remove one editable row; bundle-provided and non-Suite patch rows are read-only. */
+ /** Remove one editable row; bundle-provided and non-Suite patch rows use the separate bundle toggle. */
  @Remote
  async removeMcpServer(rowId:string):Promise<McpServerMutation>{
   return removeMcpServer(this.mcpContext(),rowId);
+ }
+ /** ADR-122: disable/enable one bundle-provided row through its profile-patch disabled override. */
+ @Remote
+ async setMcpServerEnabled(rowId:string,enabled:boolean):Promise<McpServerMutation>{
+  return setMcpServerEnabled(this.mcpContext(),rowId,enabled);
  }
  /** ADR-032 D5: the purpose snapshot (memory, never a re-read of the bypass file) plus the current rows,
   * disabled ones included so the page can edit them. */

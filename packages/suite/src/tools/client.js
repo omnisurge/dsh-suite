@@ -1,5 +1,5 @@
 /**
- * The "Skills & MCP" sidebar panel: one whole-page surface with two management tabs.
+ * The "Capabilities & Connections" sidebar panel: one whole-page surface with management tabs.
  *
  * Entry and page are one contribution (ADR-023): the sidebar slot supplies the button and its own SVG
  * glyph, and the keyed main slot supplies the page under the same id. The official shell owns the button
@@ -19,7 +19,7 @@
  * failed to mount its generated Remote still leaves the user a page that names the reason (AGENTS 5.8).
  */
 import * as React from 'react';
-import {PageHead,SectionTabs,injectStyles} from '@omnisurge/dsh-ui';
+import {Badge,Card,EmptyState,PageHead,SectionTabs,injectStyles,showConfirm} from '@omnisurge/dsh-ui';
 import {CLIENT_ACTION_TIMEOUT_MS,CLIENT_READ_TIMEOUT_MS,RemoteTimeoutError,boundedRemoteCall} from '../remote-timeout.js';
 import {assertRemoteEnvelope} from '../shared/client-remote.js';
 import {clock,codeOf,failure,reason,refusalKind} from './client-format.js';
@@ -33,7 +33,7 @@ export {MCP_OAUTH_REQUEST_TIMEOUT_MS,mcpOauthCall};
 /** Sidebar id and main-panel key are the same value: the shell dispatches one by the other. */
 export const TOOLS_PANEL_ID='omnisurge-skills-mcp';
 export const TOOLS_LOCALE_NS='omnisurge.tools';
-/** The 0.1.3 skills dictionary keeps its namespace and its exact 30 keys; the tab still reads from it. */
+/** The 0.1.3 skills dictionary keeps its namespace and its exact 34 keys; the tab still reads from it. */
 export const SKILLS_LOCALE_NS='omnisurge.skills';
 
 const h=React.createElement;
@@ -72,7 +72,7 @@ const DETACHED={tab:'skills',skills:{data:null,complete:null,lastRead:null,phase
 const noopSubscribe=()=>()=>{};
 const zeroRevision=()=>0;
 
-/** The whole page: one head, two tabs, and each tab's own read chain. */
+/** The whole page: one head, two tabs (plus optional gated SSH placeholder), and each tab's own read chain. */
 export function ToolsPanel(props){
   const t=typeof props.t==='function'?props.t:key=>typeof en[key]==='string'?en[key]:key;
   const tSkills=typeof props.tSkills==='function'?props.tSkills:key=>typeof skillsEn[key]==='string'?skillsEn[key]:key;
@@ -81,14 +81,21 @@ export function ToolsPanel(props){
   const getRevision=typeof props.getRevision==='function'?props.getRevision:zeroRevision;
   const start=typeof props.start==='function'?props.start:()=>undefined;
   const notify=typeof props.notify==='function'?props.notify:()=>undefined;
+  const mutate=typeof props.mutate==='function'?props.mutate:async()=>{throw failure('namespace','SUITE_MUTATE_MISSING the page was mounted without its writer');};
   // The registration-time state object is the only store: switching tabs re-renders, it never re-reads.
   React.useSyncExternalStore(subscribe,getRevision,getRevision);
-  const tab=panel.tab==='mcp'?'mcp':'skills';
+  const sshEnabled=props.sshEnabled===true;
+  const tab=sshEnabled&&panel.tab==='ssh'?'ssh':panel.tab==='mcp'?'mcp':'skills';
+  const dirtyRef=React.useRef(false);
+  const confirmRef=React.useRef(null);
+  const handleDirtyChange=React.useCallback(dirty=>{dirtyRef.current=dirty===true;},[]);
+  React.useEffect(()=>()=>{if(confirmRef.current!==null){confirmRef.current.close();confirmRef.current=null;}},[]);
   // "This tab already ran its first read" is this page's own fact, keyed by tab: it must not depend on the identity
   // of the slot object the Host/registration store owns, and it must survive switching tabs (this component stays
   // mounted while the tab content swaps). The slot keeps its own started flag for the store's readers.
   const firstReadRef=React.useRef({skills:false,mcp:false});
   React.useEffect(()=>{
+    if(tab==='ssh')return;
     const slot=panel[tab];
     if(slot&&firstReadRef.current[tab]!==true){
       firstReadRef.current[tab]=true;
@@ -96,15 +103,44 @@ export function ToolsPanel(props){
       start(tab);
     }
   },[tab,panel,start]);
-  const select=id=>{if(panel.tab===id)return;panel.tab=id;notify();};
+  const select=nextId=>{
+    if(panel.tab===nextId)return;
+    if(dirtyRef.current===true){
+      if(confirmRef.current!==null)confirmRef.current.close();
+      confirmRef.current=showConfirm({
+        title:t('unsavedTitle'),
+        text:tab==='mcp'?t('unsavedMcpText'):t('unsavedSkillsText'),
+        cancelLabel:t('keepEditing'),
+        confirmLabel:t('discardChanges'),
+        tone:'danger',
+        onCancel:()=>{confirmRef.current=null;},
+        onConfirm:()=>{
+          confirmRef.current=null;
+          dirtyRef.current=false;
+          panel.tab=nextId;
+          notify();
+        },
+      });
+      return;
+    }
+    panel.tab=nextId;
+    notify();
+  };
+  const tabOptions=sshEnabled
+    ?[{id:'skills',label:t('tabSkills')},{id:'mcp',label:t('tabMcp')},{id:'ssh',label:t('tabSsh')}]
+    :[{id:'skills',label:t('tabSkills')},{id:'mcp',label:t('tabMcp')}];
   // A main-panel page root, not the settings column: .omni-ui-page fills the panel and carries the page
   // padding (.omni-ui is the 760px settings bar width — using it here is what shifted 0.1.4's content).
   return h('div',{className:'omni-ui-tokens omni-ui-page','data-testid':'tools-panel'},
     h('div',{'data-testid':'skills-page-head'},h(PageHead,{title:t('title'),description:t('intro')})),
-    h(SectionTabs,{value:tab,ariaLabel:t('tabsLabel'),options:[{id:'skills',label:t('tabSkills')},{id:'mcp',label:t('tabMcp')}],onChange:select}),
-    tab==='mcp'
-      ?h(McpTab,{t,panel:panel.mcp,start:()=>start('mcp'),mutate:typeof props.mutate==='function'?props.mutate:async()=>{throw failure('namespace','SUITE_MUTATE_MISSING the page was mounted without its writer');}})
-      :h(SkillsTab,{t,skillsT:tSkills,panel:panel.skills,start:()=>start('skills'),mutate:typeof props.mutate==='function'?props.mutate:async()=>{throw failure('namespace','SUITE_MUTATE_MISSING the page was mounted without its writer');}}));
+    h(SectionTabs,{value:tab,ariaLabel:t('tabsLabel'),panelIdPrefix:'tools',options:tabOptions,onChange:select}),
+    h('div',{role:'tabpanel',id:'tools-panel-'+tab,'aria-labelledby':'tools-tab-'+tab,className:'omni-ui-stack'},
+      tab==='ssh'
+        ?h(Card,{'data-testid':'ssh-placeholder-card',title:t('sshCardTitle'),badge:h(Badge,{tone:'muted'},t('sshPlannedBadge'))},
+          h(EmptyState,{surface:'inline',align:'center',title:t('sshEmptyTitle'),description:t('sshEmptyDesc')}))
+        :tab==='mcp'
+          ?h(McpTab,{t,panel:panel.mcp,start:()=>start('mcp'),mutate,onDirtyChange:handleDirtyChange})
+          :h(SkillsTab,{t,skillsT:tSkills,panel:panel.skills,start:()=>start('skills'),mutate,onDirtyChange:handleDirtyChange})));
 }
 
 /**

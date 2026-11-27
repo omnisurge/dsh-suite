@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-ui",
-  "version": "0.1.52",
+  "version": "0.2.2",
   "private": true,
   "description": "Build-time OEM controls for Omnisurge suite plugins (ADR-028). Not a seed plugin.",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "@omnisurge/dsh-suite",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "private": true,
   "description": "面向 the agent harness 的扩展套件：联网搜索、手写识别、文档解析、Agent Teams 与环境。",
   "type": "module",
@@ -199,7 +199,7 @@
     "verifiedRuntimes": [
       {
         "version": "0.2.2-rc.5",
-        "gateScope": "G1-G5"
+        "gateScope": "G1-G5 (isolated loopback native GUI + Batch E 4-viewport Light/Dark matrix)"
       }
     ],
     "note": "Runtimes this generation was actually exercised on. The Client compares the official boot manifest's release version against this list and reports anything else as unverified. Admission to load is a separate decision owned by engines.dsh (ADR-015, this repository's own decision log).",
@@ -211,7 +211,7 @@
         "win32",
         "linux"
       ],
-      "note": "This 0.3.7 stable release targets macOS DSH 0.2.2-rc.5; final artifact-bound G5 results and limitations are recorded in docs/evidence/release-0.3.7.md. Windows and Linux remain unverified; NAS execution is frozen by ADR0048. Earlier rc.3 and internal-iteration results are historical only, not this stable release."
+      "note": "This 0.4.0 stable release targets macOS DSH 0.2.2-rc.5; macOS isolated loopback native GUI G5 (verify:gui) and Batch E 4-viewport Light/Dark matrix results are recorded in docs/evidence/release-0.4.0.md and docs/evidence/release-0.4.0-1.md. Production Desktop post-restart G5, Windows and Linux remain unverified; NAS execution is frozen by ADR0048. Earlier rc.3 and stable-release results are historical only, not this candidate."
     }
   },
   "dependencies": {

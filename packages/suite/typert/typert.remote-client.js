@@ -145,7 +145,7 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_addMcpServer_parameter_0$schema = (
 }))
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_addMcpServer_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_addMcpServer_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_addMcpServer_result$schema$value ??= z.object({
-  'mode': z.union([z.literal("added"), z.literal("updated"), z.literal("removed")]),
+  'mode': z.union([z.literal("disabled"), z.literal("added"), z.literal("updated"), z.literal("removed"), z.literal("enabled")]),
   'rowId': z.string(),
   'name': z.string(),
   'applied': z.union([z.literal("pending"), z.literal("live")]),
@@ -194,7 +194,8 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_checkRelease_parameter_0$schema = (
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_checkRelease_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_checkRelease_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_checkRelease_result$schema$value ??= z.object({
   'mode': z.union([z.literal("release"), z.literal("source")]),
-  'currentVersion': z.string(),
+  'currentVersion': z.string().describe('The running Suite manifest. May be unreadable during an official replacement; distinct from the disk.'),
+  'onDiskVersion': z.union([z.undefined(), z.literal(null), z.string()]).optional().describe('The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update.'),
   'releaseDirectory': z.string(),
   'latest': z.union([z.literal(null), z.object({
   'version': z.string(),
@@ -482,7 +483,7 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_listMcpServers_result$schema = () =
   'editable': z.boolean().describe('是否可编辑：只有 profile 行的 config 归本页面所有。'),
   'headerCount': z.number().describe('headers/env 的条目数，仅计数；值永不出 Host。'),
   'envCount': z.number(),
-  'command': z.union([z.undefined(), z.string()]).optional().describe('stdio 行的启动方式（ADR-055）：编辑表单要能让用户核对与微调。它不是秘值——秘值是 headers/env 的值与 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑的 stdio 行** 才带这三个键（bundle 行的启动方式归它的作者，不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。'),
+  'command': z.union([z.undefined(), z.string()]).optional().describe('stdio 行的启动方式（ADR-055）：编辑表单要能让用户核对与微调。它不是秘值——秘值是 headers/env 的值与 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑且非官方 manager 托管的 stdio 行**才带这三个键（bundle/loader 行的启动方式归它的作者，官方 manager 行归官方 config.servers，均不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。'),
   'args': z.union([z.undefined(), z.array(z.string())]).optional(),
   'cwd': z.union([z.undefined(), z.string()]).optional(),
   'clientPackage': z.string().describe('该行由哪个客户端包加载：`static` / `oauth` 由它判定（ADR-030 D1）。'),
@@ -843,7 +844,7 @@ let _omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_parameter_0$schema$va
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_parameter_0$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_parameter_0$schema$value ??= z.string())
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_result$schema$value ??= z.object({
-  'mode': z.union([z.literal("added"), z.literal("updated"), z.literal("removed")]),
+  'mode': z.union([z.literal("disabled"), z.literal("added"), z.literal("updated"), z.literal("removed"), z.literal("enabled")]),
   'rowId': z.string(),
   'name': z.string(),
   'applied': z.union([z.literal("pending"), z.literal("live")]),
@@ -886,6 +887,17 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpRouting_result$schema = () =>
   'revision': z.number(),
   'routing': z.boolean(),
   'purposes': z.record(z.string(), z.string()),
+}))
+let _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0$schema$value
+const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0$schema$value ??= z.string())
+let _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1$schema$value
+const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1$schema$value ??= z.boolean())
+let _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_result$schema$value
+const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_result$schema$value ??= z.object({
+  'mode': z.union([z.literal("disabled"), z.literal("added"), z.literal("updated"), z.literal("removed"), z.literal("enabled")]),
+  'rowId': z.string(),
+  'name': z.string(),
+  'applied': z.union([z.literal("pending"), z.literal("live")]),
 }))
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_status_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_status_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_status_result$schema$value ??= z.object({
@@ -957,7 +969,7 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_parameter_1$schema 
 }))
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_result$schema$value ??= z.object({
-  'mode': z.union([z.literal("added"), z.literal("updated"), z.literal("removed")]),
+  'mode': z.union([z.literal("disabled"), z.literal("added"), z.literal("updated"), z.literal("removed"), z.literal("enabled")]),
   'rowId': z.string(),
   'name': z.string(),
   'applied': z.union([z.literal("pending"), z.literal("live")]),
@@ -986,7 +998,8 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeStatus_parameter_0$schema = 
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeStatus_result$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeStatus_result$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeStatus_result$schema$value ??= z.object({
   'mode': z.union([z.literal("release"), z.literal("source")]),
-  'currentVersion': z.string(),
+  'currentVersion': z.string().describe('The running Suite manifest. May be unreadable during an official replacement; distinct from the disk.'),
+  'onDiskVersion': z.union([z.undefined(), z.literal(null), z.string()]).optional().describe('The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update.'),
   'releaseDirectory': z.string(),
   'latest': z.union([z.literal(null), z.object({
   'version': z.string(),
@@ -1039,7 +1052,8 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeSuite_result$schema = () => 
   'diagnostic': z.union([z.literal(null), z.string()]),
   'status': z.union([z.literal(null), z.object({
   'mode': z.union([z.literal("release"), z.literal("source")]),
-  'currentVersion': z.string(),
+  'currentVersion': z.string().describe('The running Suite manifest. May be unreadable during an official replacement; distinct from the disk.'),
+  'onDiskVersion': z.union([z.undefined(), z.literal(null), z.string()]).optional().describe('The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update.'),
   'releaseDirectory': z.string(),
   'latest': z.union([z.literal(null), z.object({
   'version': z.string(),
@@ -1227,6 +1241,10 @@ const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpRouting_parameter_0_strict$sc
   'routing': z.boolean(),
   'expectedRevision': z.number(),
 }))
+let _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0_strict$schema$value
+const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0_strict$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0_strict$schema$value ??= z.string())
+let _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1_strict$schema$value
+const _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1_strict$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1_strict$schema$value ??= z.boolean())
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_parameter_0_strict$schema$value
 const _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_parameter_0_strict$schema = () => (_omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_parameter_0_strict$schema$value ??= z.string())
 let _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_parameter_1_strict$schema$value
@@ -1378,9 +1396,9 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#McpServerMutation',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_addMcpServer_result$schema,
-        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["added","updated","removed"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["disabled","added","updated","removed","enabled"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":415,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":411,"column":8},
     },
     'omnisurgeSuiteDev/build': {
       service: 'omnisurgeSuiteDev',
@@ -1438,7 +1456,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#UpgradeStatus',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_checkRelease_result$schema,
-        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string"},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string","description":"The running Suite manifest. May be unreadable during an official replacement; distinct from the disk."},"onDiskVersion":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update."},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/suite/src/host.ts","line":914,"column":8},
     },
@@ -1453,7 +1471,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_componentsStatus_result$schema,
         jsonSchema: {"type":"object","properties":{"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"display":{"type":"object","properties":{"en":{"type":"string"},"zh":{"type":"string"}},"required":["en","zh"],"additionalProperties":true},"module":{"type":"string"},"rowId":{"type":"string"},"carriedVersion":{"type":"string","description":"The version of the Suite that carries and serves this module."},"loadedVersion":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"What the running module advertises for itself; null when the module declares no runtime probe."},"rowEnabled":{"type":"boolean","description":"The Suite-owned row state; enabling it is the official switch's fact."},"state":{"type":"string","enum":["ready","restart-required","disabled","config-only","unconfirmed","owner-missing","covered","waiting","partial","rejected","policy-disabled","retired"]},"effect":{"type":"object","properties":{"protocol":{"type":"number","const":1},"scope":{"type":"string","const":"live-agent-bindings"},"state":{"type":"string","enum":["unconfirmed","covered","waiting","partial","rejected","policy-disabled","retired"]},"complete":{"type":"boolean"},"total":{"oneOf":[{"type":"null","const":null},{"type":"number"}]},"covered":{"type":"number"},"waiting":{"type":"number"},"rejected":{"type":"number"},"unknown":{"oneOf":[{"type":"null","const":null},{"type":"number"}]},"reasons":{"type":"array","items":{"type":"string"}},"policy":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"checkpointTokens":{"type":"number"},"safetyTokens":{"type":"number"},"timeoutMs":{"type":"number"}},"required":["checkpointTokens","safetyTokens","timeoutMs"],"additionalProperties":true}]}},"required":["protocol","scope","state","complete","total","covered","waiting","rejected","unknown","reasons"],"additionalProperties":true},"nextAction":{"type":"string","enum":["none","restart","enable-row","check-runtime","check-owner"],"description":"The one remaining user action, or 'none'. 'enable-row' is performed on the official plugin page."},"diagnostic":{"type":"string","description":"Raw diagnostic for the developer view; never the primary user-facing message."}},"required":["id","display","module","rowId","carriedVersion","loadedVersion","rowEnabled","state","nextAction","diagnostic"],"additionalProperties":true}},"recovery":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"at":{"type":"string"},"previousPid":{"oneOf":[{"type":"null","const":null},{"type":"number"}]},"reason":{"type":"string"},"rows":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"rowId":{"type":"string"},"application":{"type":"string"},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["id","rowId","application","code"],"additionalProperties":true}},"action":{"type":"string","enum":["none","rows-disabled"],"description":"'rows-disabled' means the official row toggle applied and the next boot will not load them."}},"required":["at","previousPid","reason","rows","action"],"additionalProperties":true}]},"heal":{"type":"array","items":{"type":"object","properties":{"entryId":{"type":"string","description":"Stable identity of the target: the official entry id, branded and never reconstructed."},"moduleName":{"type":"string","description":"The exact module specifier the Loader entry imports, so the user sees a name, not an id."},"owner":{"type":"string","enum":["suite","third-party"],"description":"'suite' for our own rows, 'third-party' for anything else that is not an official package."},"outcome":{"type":"string","enum":["disabled","recovered","refused-readonly","not-disabled","toggle-failed","absent","protected"],"description":"'disabled' only after the official toggle answered `applied`; every other value is a diagnosis. 'recovered' means the retry brought the entry back up, so nothing was disabled."},"reason":{"type":"object","properties":{"code":{"type":"string"},"text":{"type":"string"}},"required":["code","text"],"additionalProperties":true,"description":"Why the entry failed, taken from the official operation diagnostic (never from a stack trace). The inventory carries enablement and phase but not the error, so this is the only public source."},"bootId":{"type":"string","description":"Which boot spent the last judgement on this row. A re-open happens once per boot, not once per pass."},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The control-plane code behind a non-applied outcome, or the official application value."},"at":{"type":"string"},"attempts":{"type":"number","description":"How many times this Suite attempted the containment. Retries are bounded, never a loop."},"acknowledged":{"type":"boolean","description":"The user has seen this notice and dismissed it; a dismissed notice is never shown again."}},"required":["entryId","moduleName","owner","outcome","code","at","attempts","acknowledged"],"additionalProperties":true}}},"required":["components","recovery","heal"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":367,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":363,"column":8},
     },
     'omnisurgeSuiteDev/createSkill': {
       service: 'omnisurgeSuiteDev',
@@ -1482,7 +1500,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_createSkill_result$schema,
         jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["updated","removed","created"]},"name":{"type":"string"},"scope":{"type":"string","enum":["user","project"]},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","name","scope","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":458,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":459,"column":8},
     },
     'omnisurgeSuiteDev/documentParse': {
       service: 'omnisurgeSuiteDev',
@@ -1511,7 +1529,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_documentParse_result$schema,
         jsonSchema: {"type":"object","properties":{"provider":{"type":"string","enum":["mineru","paddleocr"]},"mode":{"type":"string","enum":["mineru-agent","mineru-api","paddleocr-vl-1.6-async","paddleocr-pp-ocrv6-async","paddleocr-pp-structurev3-async"]},"state":{"type":"string","const":"done"},"warnings":{"type":"array","items":{"type":"string"}},"pages":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"extracted":{"type":"number"},"total":{"type":"number"}},"required":["extracted","total"],"additionalProperties":true}]},"markdown":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"artifacts":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"url":{"type":"string"},"mediaType":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["name","url","mediaType"],"additionalProperties":true}},"requestId":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"ms":{"type":"number"}},"required":["provider","mode","state","warnings","pages","markdown","artifacts","requestId","ms"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":390,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":386,"column":8},
     },
     'omnisurgeSuiteDev/documentParseCapabilities': {
       service: 'omnisurgeSuiteDev',
@@ -1524,7 +1542,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_documentParseCapabilities_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":388,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":384,"column":8},
     },
     'omnisurgeSuiteDev/documentParseSetEnabled': {
       service: 'omnisurgeSuiteDev',
@@ -1553,7 +1571,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_documentParseSetEnabled_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":392,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":388,"column":8},
     },
     'omnisurgeSuiteDev/environmentNotes': {
       service: 'omnisurgeSuiteDev',
@@ -1567,7 +1585,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_environmentNotes_result$schema,
         jsonSchema: {"type":"object","properties":{"available":{"type":"boolean"},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"text":{"type":"string"},"bytes":{"type":"number"}},"required":["available","code","text","bytes"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":600,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":601,"column":8},
     },
     'omnisurgeSuiteDev/healAcknowledge': {
       service: 'omnisurgeSuiteDev',
@@ -1596,7 +1614,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_healAcknowledge_result$schema,
         jsonSchema: {"type":"object","properties":{"acknowledged":{"type":"boolean"}},"required":["acknowledged"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":394,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":390,"column":8},
     },
     'omnisurgeSuiteDev/healScan': {
       service: 'omnisurgeSuiteDev',
@@ -1609,7 +1627,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_healScan_result$schema,
         jsonSchema: {"type":"array","items":{"type":"object","properties":{"entryId":{"type":"string","description":"Stable identity of the target: the official entry id, branded and never reconstructed."},"moduleName":{"type":"string","description":"The exact module specifier the Loader entry imports, so the user sees a name, not an id."},"owner":{"type":"string","enum":["suite","third-party"],"description":"'suite' for our own rows, 'third-party' for anything else that is not an official package."},"outcome":{"type":"string","enum":["disabled","recovered","refused-readonly","not-disabled","toggle-failed","absent","protected"],"description":"'disabled' only after the official toggle answered `applied`; every other value is a diagnosis. 'recovered' means the retry brought the entry back up, so nothing was disabled."},"reason":{"type":"object","properties":{"code":{"type":"string"},"text":{"type":"string"}},"required":["code","text"],"additionalProperties":true,"description":"Why the entry failed, taken from the official operation diagnostic (never from a stack trace). The inventory carries enablement and phase but not the error, so this is the only public source."},"bootId":{"type":"string","description":"Which boot spent the last judgement on this row. A re-open happens once per boot, not once per pass."},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The control-plane code behind a non-applied outcome, or the official application value."},"at":{"type":"string"},"attempts":{"type":"number","description":"How many times this Suite attempted the containment. Retries are bounded, never a loop."},"acknowledged":{"type":"boolean","description":"The user has seen this notice and dismissed it; a dismissed notice is never shown again."}},"required":["entryId","moduleName","owner","outcome","code","at","attempts","acknowledged"],"additionalProperties":true}},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":396,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":392,"column":8},
     },
     'omnisurgeSuiteDev/limitModeStatus': {
       service: 'omnisurgeSuiteDev',
@@ -1634,9 +1652,9 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#McpServerCatalog',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_listMcpServers_result$schema,
-        jsonSchema: {"type":"object","properties":{"servers":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string","description":"服务器名（`serverName`）：模型可见工具名的命名空间，页面按它排序与定位。"},"transport":{"type":"string","enum":["stdio","streamable-http"]},"state":{"type":"string","enum":["disabled","running","failed","pending"]},"toolCount":{"type":"number","description":"该服务器当前注册到工具表的工具数；'mcp__<name>__' 前缀计数，不反解工具名。"},"rowId":{"type":"string","description":"行的稳定 id（profile patch 里 `insert` 行的 id），编辑/删除的定位键。"},"origin":{"type":"string","enum":["profile","loaded"],"description":"'profile' = 用户可编辑的配置（本 profile 的 patch 行，或 rc.2+ 官方 config.servers 条目）；'loaded' = 行来自某个 bundle，只读。"},"managed":{"type":"boolean","description":"该行由官方 MCP manager 托管（ADR-094）：写走 config.servers；表单据此隐藏官方没有的字段。"},"enabled":{"type":"boolean","enum":[false,true],"description":"官方条目的 durable enabled（仅 managed 行带；其余行省略，不是一个默认值）。"},"editable":{"type":"boolean","description":"是否可编辑：只有 profile 行的 config 归本页面所有。"},"headerCount":{"type":"number","description":"headers/env 的条目数，仅计数；值永不出 Host。"},"envCount":{"type":"number"},"command":{"type":"string","description":"stdio 行的启动方式（ADR-055）：编辑表单要能让用户核对与微调。它不是秘值——秘值是 headers/env 的值与 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑的 stdio 行** 才带这三个键（bundle 行的启动方式归它的作者，不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string"},"clientPackage":{"type":"string","description":"该行由哪个客户端包加载：`static` / `oauth` 由它判定（ADR-030 D1）。"},"clientSource":{"type":"string","enum":["suite","official","external-legacy","unknown"],"description":"该行的客户端由谁提供（ADR-033 D4）：`official` = 官方内置；`external-legacy` = 历史外部包（迁移源）； `suite` = 套件携带的子路径模块；`unknown` = 不认识的包。页面按这个事实说话，不在 Client 侧维护包名表。"},"kind":{"type":"string","enum":["static","oauth"]},"staticClientId":{"type":"string","description":"OAuth 行的两个非密事实（0.2.0-5）：预注册 client id（空串 = 未设置）与授权等待上限（未设置时键不出现）。 仅 OAuth 行带这两个键；凭据（credentialId、secret）永不进入目录。"},"authorizationTimeoutMs":{"type":"number"},"runtime":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"state":{"type":"string","enum":["failed","unknown","connected","not-connected","needs-login"]},"toolCount":{"type":"number","description":"该客户端报告的工具数；缺省表示它没报这个事实，不由页面推断。"},"protocolEra":{"type":"string","enum":["modern","legacy"],"description":"`modern` = 2026-07-28 协议（v2），`legacy` = 旧协议（v1）。"},"error":{"type":"string","description":"原始诊断文本：只进「原始技术诊断」，不当消息显示。"}},"required":["state"],"additionalProperties":true}],"description":"客户端插件报告的连接态；null = 该客户端没有状态控制面（官方/stdio/未知包），页面显示“无连接态可查”。"},"probeAvailable":{"type":"boolean","description":"该行可以发起用户触发的实时探测（客户端有控制面，且本进程有 loopback 可问）。"},"protocolSupport":{"type":"string","enum":["unknown","v1-only","negotiable"],"description":"该行可能谈成的协议：`negotiable` = 客户端支持 v2 协商；`v1-only` = 官方客户端/stdio/OAuth（只能 v1）； `unknown` = 不认识的客户端包——不猜它能谈什么，页面因此不显示协议徽标（ADR-030 D4）。"}},"required":["name","transport","state","toolCount","rowId","origin","managed","editable","headerCount","envCount","clientPackage","clientSource","kind","runtime","probeAvailable","protocolSupport"],"additionalProperties":true}},"reload":{"type":"string","enum":["live","manual"]},"authority":{"type":"string","enum":["official","unsupported"]},"issue":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"code":{"type":"string","enum":["read-failed","namespace-missing"]},"raw":{"type":"string"}},"required":["code","raw"],"additionalProperties":true}]}},"required":["servers","reload","authority"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"servers":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string","description":"服务器名（`serverName`）：模型可见工具名的命名空间，页面按它排序与定位。"},"transport":{"type":"string","enum":["stdio","streamable-http"]},"state":{"type":"string","enum":["disabled","running","failed","pending"]},"toolCount":{"type":"number","description":"该服务器当前注册到工具表的工具数；'mcp__<name>__' 前缀计数，不反解工具名。"},"rowId":{"type":"string","description":"行的稳定 id（profile patch 里 `insert` 行的 id），编辑/删除的定位键。"},"origin":{"type":"string","enum":["profile","loaded"],"description":"'profile' = 用户可编辑的配置（本 profile 的 patch 行，或 rc.2+ 官方 config.servers 条目）；'loaded' = 行来自某个 bundle，只读。"},"managed":{"type":"boolean","description":"该行由官方 MCP manager 托管（ADR-094）：写走 config.servers；表单据此隐藏官方没有的字段。"},"enabled":{"type":"boolean","enum":[false,true],"description":"官方条目的 durable enabled（仅 managed 行带；其余行省略，不是一个默认值）。"},"editable":{"type":"boolean","description":"是否可编辑：只有 profile 行的 config 归本页面所有。"},"headerCount":{"type":"number","description":"headers/env 的条目数，仅计数；值永不出 Host。"},"envCount":{"type":"number"},"command":{"type":"string","description":"stdio 行的启动方式（ADR-055）：编辑表单要能让用户核对与微调。它不是秘值——秘值是 headers/env 的值与 凭据引用；启动命令写在 profile patch 里，本来就是用户自己可读的。**只有本 profile 拥有、可编辑且非官方 manager 托管的 stdio 行**才带这三个键（bundle/loader 行的启动方式归它的作者，官方 manager 行归官方 config.servers，均不由本页回显）；非 stdio 行三个键都不出现，不是一个空串。"},"args":{"type":"array","items":{"type":"string"}},"cwd":{"type":"string"},"clientPackage":{"type":"string","description":"该行由哪个客户端包加载：`static` / `oauth` 由它判定（ADR-030 D1）。"},"clientSource":{"type":"string","enum":["suite","official","external-legacy","unknown"],"description":"该行的客户端由谁提供（ADR-033 D4）：`official` = 官方内置；`external-legacy` = 历史外部包（迁移源）； `suite` = 套件携带的子路径模块；`unknown` = 不认识的包。页面按这个事实说话，不在 Client 侧维护包名表。"},"kind":{"type":"string","enum":["static","oauth"]},"staticClientId":{"type":"string","description":"OAuth 行的两个非密事实（0.2.0-5）：预注册 client id（空串 = 未设置）与授权等待上限（未设置时键不出现）。 仅 OAuth 行带这两个键；凭据（credentialId、secret）永不进入目录。"},"authorizationTimeoutMs":{"type":"number"},"runtime":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"state":{"type":"string","enum":["failed","unknown","connected","not-connected","needs-login"]},"toolCount":{"type":"number","description":"该客户端报告的工具数；缺省表示它没报这个事实，不由页面推断。"},"protocolEra":{"type":"string","enum":["modern","legacy"],"description":"`modern` = 2026-07-28 协议（v2），`legacy` = 旧协议（v1）。"},"error":{"type":"string","description":"原始诊断文本：只进「原始技术诊断」，不当消息显示。"}},"required":["state"],"additionalProperties":true}],"description":"客户端插件报告的连接态；null = 该客户端没有状态控制面（官方/stdio/未知包），页面显示“无连接态可查”。"},"probeAvailable":{"type":"boolean","description":"该行可以发起用户触发的实时探测（客户端有控制面，且本进程有 loopback 可问）。"},"protocolSupport":{"type":"string","enum":["unknown","v1-only","negotiable"],"description":"该行可能谈成的协议：`negotiable` = 客户端支持 v2 协商；`v1-only` = 官方客户端/stdio/OAuth（只能 v1）； `unknown` = 不认识的客户端包——不猜它能谈什么，页面因此不显示协议徽标（ADR-030 D4）。"}},"required":["name","transport","state","toolCount","rowId","origin","managed","editable","headerCount","envCount","clientPackage","clientSource","kind","runtime","probeAvailable","protocolSupport"],"additionalProperties":true}},"reload":{"type":"string","enum":["live","manual"]},"authority":{"type":"string","enum":["official","unsupported"]},"issue":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"code":{"type":"string","enum":["read-failed","namespace-missing"]},"raw":{"type":"string"}},"required":["code","raw"],"additionalProperties":true}]}},"required":["servers","reload","authority"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":410,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":406,"column":8},
     },
     'omnisurgeSuiteDev/listSkills': {
       service: 'omnisurgeSuiteDev',
@@ -1665,7 +1683,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_listSkills_result$schema,
         jsonSchema: {"type":"object","properties":{"skills":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"whenToUse":{"type":"string"},"path":{"type":"string"},"provider":{"type":"string"},"source":{"type":"string"},"modelInvocable":{"type":"boolean"},"userInvocable":{"type":"boolean"}},"required":["name","description","provider","modelInvocable","userInvocable"],"additionalProperties":true}},"complete":{"type":"boolean"},"roots":{"type":"object","properties":{"user":{"type":"string"},"project":{"type":"string"}},"required":[],"additionalProperties":true}},"required":["skills","complete","roots"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":398,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":394,"column":8},
     },
     'omnisurgeSuiteDev/ocrCapabilities': {
       service: 'omnisurgeSuiteDev',
@@ -1678,7 +1696,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrCapabilities_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":369,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":365,"column":8},
     },
     'omnisurgeSuiteDev/ocrRecentImages': {
       service: 'omnisurgeSuiteDev',
@@ -1691,7 +1709,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrRecentImages_result$schema,
         jsonSchema: {"type":"array","items":{"type":"object","properties":{"attachment":{"type":"object","properties":{"attachmentId":{"type":"string"},"mediaType":{"type":"string","enum":["image/png","image/jpeg","image/webp","image/gif"]},"bytes":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"name":{"type":"string"}},"required":["attachmentId","mediaType","bytes","width","height"],"additionalProperties":true},"label":{"type":"string"}},"required":["attachment","label"],"additionalProperties":true}},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":382,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":378,"column":8},
     },
     'omnisurgeSuiteDev/ocrRecognize': {
       service: 'omnisurgeSuiteDev',
@@ -1720,7 +1738,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrRecognize_result$schema,
         jsonSchema: {"type":"object","properties":{"provider":{"type":"string"},"pages":{"type":"array","items":{"type":"number"}},"dpi":{"type":"number","description":"The raster resolution the polygons are measured in, so a crop can convert pixels to points."},"channels":{"type":"array","items":{"type":"object","properties":{"channel":{"type":"string","enum":["accurate","handwriting"]},"lines":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"confidence":{"type":"number"},"polygon":{"type":"array","items":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"],"additionalProperties":true}}},"required":["text","confidence","polygon"],"additionalProperties":true}},"ms":{"type":"number"}},"required":["channel","lines","ms"],"additionalProperties":true}},"lines":{"type":"array","items":{"type":"object","properties":{"text":{"type":"string"},"confidence":{"type":"number"},"polygon":{"type":"array","items":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"],"additionalProperties":true}}},"required":["text","confidence","polygon"],"additionalProperties":true}},"reconciled":{"type":"array","items":{"type":"object","properties":{"page":{"type":"number"},"channels":{"type":"array","items":{"type":"object","properties":{"channel":{"type":"string","enum":["accurate","handwriting"]},"text":{"type":"string"},"confidence":{"type":"number"},"polygon":{"type":"array","items":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"],"additionalProperties":true}}},"required":["channel","text","confidence","polygon"],"additionalProperties":true}},"agreement":{"type":"boolean"},"similarity":{"type":"number"},"disagreements":{"type":"array","items":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"required":["a","b"],"additionalProperties":true}},"confirmed":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["page","channels","agreement","similarity","disagreements","confirmed"],"additionalProperties":true}},"usageRecorded":{"type":"boolean"}},"required":["provider","pages","dpi","channels","lines","reconciled","usageRecorded"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":384,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":380,"column":8},
     },
     'omnisurgeSuiteDev/ocrRender': {
       service: 'omnisurgeSuiteDev',
@@ -1749,7 +1767,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrRender_result$schema,
         jsonSchema: {"type":"object","properties":{"path":{"type":"string"},"width":{"type":"number"},"height":{"type":"number"},"dpi":{"type":"number"},"box":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"x0":{"type":"number"},"y0":{"type":"number"},"x1":{"type":"number"},"y1":{"type":"number"}},"required":["x0","y0","x1","y1"],"additionalProperties":true}]},"temporary":{"type":"boolean"}},"required":["path","width","height","dpi","box","temporary"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":386,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":382,"column":8},
     },
     'omnisurgeSuiteDev/ocrSetEnabled': {
       service: 'omnisurgeSuiteDev',
@@ -1778,7 +1796,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrSetEnabled_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":371,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":367,"column":8},
     },
     'omnisurgeSuiteDev/ocrSetProvider': {
       service: 'omnisurgeSuiteDev',
@@ -1807,7 +1825,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_ocrSetProvider_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":376,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":372,"column":8},
     },
     'omnisurgeSuiteDev/probeMcpServer': {
       service: 'omnisurgeSuiteDev',
@@ -1837,7 +1855,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_probeMcpServer_result$schema,
         jsonSchema: {"type":"object","properties":{"rowId":{"type":"string"},"name":{"type":"string"},"runtime":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"state":{"type":"string","enum":["failed","unknown","connected","not-connected","needs-login"]},"toolCount":{"type":"number","description":"该客户端报告的工具数；缺省表示它没报这个事实，不由页面推断。"},"protocolEra":{"type":"string","enum":["modern","legacy"],"description":"`modern` = 2026-07-28 协议（v2），`legacy` = 旧协议（v1）。"},"error":{"type":"string","description":"原始诊断文本：只进「原始技术诊断」，不当消息显示。"}},"required":["state"],"additionalProperties":true}]}},"required":["rowId","name","runtime"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":449,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":450,"column":8},
     },
     'omnisurgeSuiteDev/readMcpPurposes': {
       service: 'omnisurgeSuiteDev',
@@ -1851,7 +1869,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_readMcpPurposes_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":431,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":432,"column":8},
     },
     'omnisurgeSuiteDev/readSkill': {
       service: 'omnisurgeSuiteDev',
@@ -1898,11 +1916,11 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_readSkill_result$schema,
         jsonSchema: {"type":"object","properties":{"name":{"type":"string"},"description":{"type":"string"},"whenToUse":{"type":"string"},"body":{"type":"string"},"modelInvocable":{"type":"boolean"},"userInvocable":{"type":"boolean"},"scope":{"type":"string","enum":["user","project"]},"path":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"指令文件的绝对路径；只给可写来源，随包来源为 null。"},"editable":{"type":"boolean","description":"可编辑性：随包/office/runtime 提供的技能为只读。"}},"required":["name","description","body","modelInvocable","userInvocable","scope","path","editable"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":454,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":455,"column":8},
     },
     'omnisurgeSuiteDev/removeMcpServer': {
       service: 'omnisurgeSuiteDev',
-      description: 'Remove one editable row; bundle-provided and non-Suite patch rows are read-only.',
+      description: 'Remove one editable row; bundle-provided and non-Suite patch rows use the separate bundle toggle.',
       invocation: { kind: 'direct' },
       parameters: [
         {
@@ -1926,9 +1944,9 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#McpServerMutation',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_removeMcpServer_result$schema,
-        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["added","updated","removed"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["disabled","added","updated","removed","enabled"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":425,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":421,"column":8},
     },
     'omnisurgeSuiteDev/removeSkill': {
       service: 'omnisurgeSuiteDev',
@@ -1974,7 +1992,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_removeSkill_result$schema,
         jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["updated","removed","created"]},"name":{"type":"string"},"scope":{"type":"string","enum":["user","project"]},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","name","scope","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":466,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":467,"column":8},
     },
     'omnisurgeSuiteDev/saveEnvironmentNotes': {
       service: 'omnisurgeSuiteDev',
@@ -2004,7 +2022,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_saveEnvironmentNotes_result$schema,
         jsonSchema: {"type":"object","properties":{"available":{"type":"boolean"},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"text":{"type":"string"},"bytes":{"type":"number"}},"required":["available","code","text","bytes"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":606,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":607,"column":8},
     },
     'omnisurgeSuiteDev/saveTeamModeDefault': {
       service: 'omnisurgeSuiteDev',
@@ -2064,7 +2082,53 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpRouting_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":444,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":445,"column":8},
+    },
+    'omnisurgeSuiteDev/setMcpServerEnabled': {
+      service: 'omnisurgeSuiteDev',
+      description: 'ADR-122: disable/enable one bundle-provided row through its profile-patch disabled override.',
+      invocation: { kind: 'direct' },
+      parameters: [
+        {
+          name: 'rowId',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@omnisurge/dsh-suite#omnisurgeSuiteDev/setMcpServerEnabled:rowId',
+            create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0$schema,
+            jsonSchema: {"type":"string"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@omnisurge/dsh-suite#omnisurgeSuiteDev/setMcpServerEnabled:rowId',
+            create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_0_strict$schema,
+            jsonSchema: {"type":"string"},
+          },
+        },
+        {
+          name: 'enabled',
+          source: 'json',
+          codec: {
+            mode: 'strict',
+            typeSymbol: '@omnisurge/dsh-suite#omnisurgeSuiteDev/setMcpServerEnabled:enabled',
+            create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1$schema,
+            jsonSchema: {"type":"boolean"},
+          },
+          strictCodec: {
+            mode: 'strict',
+            typeSymbol: '@omnisurge/dsh-suite#omnisurgeSuiteDev/setMcpServerEnabled:enabled',
+            create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_parameter_1_strict$schema,
+            jsonSchema: {"type":"boolean"},
+          },
+        },
+      ],
+      result: {
+        mode: 'strict',
+        typeSymbol: '@omnisurge/dsh-suite/types#McpServerMutation',
+        create: _omnisurge_dsh_suite_omnisurgeSuiteDev_setMcpServerEnabled_result$schema,
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["disabled","added","updated","removed","enabled"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
+      },
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":426,"column":8},
     },
     'omnisurgeSuiteDev/status': {
       service: 'omnisurgeSuiteDev',
@@ -2135,9 +2199,9 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#McpServerMutation',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_updateMcpServer_result$schema,
-        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["added","updated","removed"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["disabled","added","updated","removed","enabled"]},"rowId":{"type":"string"},"name":{"type":"string"},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","rowId","name","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":420,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":416,"column":8},
     },
     'omnisurgeSuiteDev/updateSkill': {
       service: 'omnisurgeSuiteDev',
@@ -2182,7 +2246,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_updateSkill_result$schema,
         jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["updated","removed","created"]},"name":{"type":"string"},"scope":{"type":"string","enum":["user","project"]},"applied":{"type":"string","enum":["pending","live"]}},"required":["mode","name","scope","applied"],"additionalProperties":true},
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":462,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":463,"column":8},
     },
     'omnisurgeSuiteDev/upgradeStatus': {
       service: 'omnisurgeSuiteDev',
@@ -2210,7 +2274,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#UpgradeStatus',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeStatus_result$schema,
-        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string"},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string","description":"The running Suite manifest. May be unreadable during an official replacement; distinct from the disk."},"onDiskVersion":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update."},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/suite/src/host.ts","line":908,"column":8},
     },
@@ -2257,7 +2321,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         mode: 'strict',
         typeSymbol: '@omnisurge/dsh-suite/types#UpgradeResult',
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_upgradeSuite_result$schema,
-        jsonSchema: {"type":"object","properties":{"code":{"type":"string"},"target":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile actually holds after the transaction, read from disk (ADR-047 D3): the install call's own outcome is never the authority for \"did the bytes land\"."},"activationUnconfirmed":{"type":"boolean","enum":[false,true],"description":"True when the transaction did not confirm activation but the target version is already on disk: the receipt is a restart requirement, not a failure."},"operations":{"type":"array","items":{"type":"object","properties":{"stage":{"type":"string","enum":["component-install","component-deselect","suite-install"]},"target":{"type":"string"},"application":{"type":"string"},"changed":{"type":"boolean"},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["stage","target","application","changed","code","diagnostic"],"additionalProperties":true}},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"status":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string"},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true}]},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"The record this attempt wrote, so the receipt the caller may never receive is also readable here."}},"required":["code","target","operations","diagnostic","status"],"additionalProperties":true},
+        jsonSchema: {"type":"object","properties":{"code":{"type":"string"},"target":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile actually holds after the transaction, read from disk (ADR-047 D3): the install call's own outcome is never the authority for \"did the bytes land\"."},"activationUnconfirmed":{"type":"boolean","enum":[false,true],"description":"True when the transaction did not confirm activation but the target version is already on disk: the receipt is a restart requirement, not a failure."},"operations":{"type":"array","items":{"type":"object","properties":{"stage":{"type":"string","enum":["component-install","component-deselect","suite-install"]},"target":{"type":"string"},"application":{"type":"string"},"changed":{"type":"boolean"},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["stage","target","application","changed","code","diagnostic"],"additionalProperties":true}},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"status":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"mode":{"type":"string","enum":["release","source"]},"currentVersion":{"type":"string","description":"The running Suite manifest. May be unreadable during an official replacement; distinct from the disk."},"onDiskVersion":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile actually holds on disk, or null when it cannot be read. The Client uses this to keep an earlier durable install record from becoming a permanent restart banner after an external (official CLI) update."},"releaseDirectory":{"type":"string"},"latest":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"version":{"type":"string"},"filename":{"type":"string"},"directory":{"type":"string"},"suiteSha256":{"type":"string"},"suiteBytes":{"type":"number"},"components":{"type":"array","items":{"type":"object","properties":{"id":{"type":"string"},"module":{"type":"string"},"rowId":{"type":"string"}},"required":["id","module","rowId"],"additionalProperties":true}}},"required":["version","filename","directory","suiteSha256","suiteBytes","components"],"additionalProperties":true}]},"refusals":{"type":"array","items":{"type":"object","properties":{"directory":{"type":"string"},"code":{"type":"string"},"diagnostic":{"oneOf":[{"type":"null","const":null},{"type":"string"}]}},"required":["directory","code","diagnostic"],"additionalProperties":true}},"canUpgrade":{"type":"boolean"},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"ADR-079: the durable record of the last install attempt this profile saw. The install's own reply can be lost when the plugin tree reloads (the Suite is replacing the plugin that hosts the RPC), so the record — not the reply — is how a later reader learns what happened. `null` when no attempt was recorded (a fixture without a profile, or a profile that never installed anything)."}},"required":["mode","currentVersion","releaseDirectory","latest","refusals","canUpgrade"],"additionalProperties":true}]},"lastInstall":{"oneOf":[{"type":"null","const":null},{"type":"object","properties":{"schema":{"type":"number","const":1},"target":{"type":"string"},"sha256":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"SHA256 of the archive the attempt was bound to, when the caller knew it."},"phase":{"type":"string","enum":["failed","installing","written","interrupted"],"description":"`installing` is written BEFORE the official transaction starts, so a process that dies mid-install still leaves the intent behind; the other three are written at every exit."},"startedAt":{"type":"string"},"finishedAt":{"oneOf":[{"type":"null","const":null},{"type":"string"}]},"code":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The Host's own verdict code for that attempt (`SUITE_UPGRADE_RESTART_REQUIRED` / a failure code), or the code the reconciler inferred when it found an `installing` record after a restart."},"onDisk":{"oneOf":[{"type":"null","const":null},{"type":"string"}],"description":"The version the profile held when the phase was last written, read from disk."},"pid":{"oneOf":[{"type":"null","const":null},{"type":"number"}],"description":"Who wrote the attempt. A status read must never settle the attempt of the process that is still running it: the reviewer's race turned a live `installing` into `interrupted` (ADR-079 D6)."}},"required":["schema","target","phase","startedAt"],"additionalProperties":true}],"description":"The record this attempt wrote, so the receipt the caller may never receive is also readable here."}},"required":["code","target","operations","diagnostic","status"],"additionalProperties":true},
       },
       sourceLocation: {"file":"packages/suite/src/host.ts","line":916,"column":8},
     },
@@ -2289,7 +2353,7 @@ export const TYPERT_REMOTE = createTypertRemoteInfo({
         create: _omnisurge_dsh_suite_omnisurgeSuiteDev_writeMcpPurpose_result$schema,
         jsonSchemaError: 'typert tool schema: selected dictionaries require string keys and unconstrained JSON values',
       },
-      sourceLocation: {"file":"packages/suite/src/host.ts","line":439,"column":8},
+      sourceLocation: {"file":"packages/suite/src/host.ts","line":440,"column":8},
     },
   },
 }, z)

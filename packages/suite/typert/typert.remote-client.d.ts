@@ -45,6 +45,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     saveEnvironmentNotes: (text: string) => Promise<RemoteResult<EnvironmentNotesState>>
     saveTeamModeDefault: (enabled: boolean) => Promise<RemoteResult<TeamModeStatus>>
     setMcpRouting: (input: { routing: boolean; expectedRevision: number; }) => Promise<RemoteResult<McpPurposeWriteResult>>
+    setMcpServerEnabled: (rowId: string, enabled: boolean) => Promise<RemoteResult<McpServerMutation>>
     status: () => Promise<RemoteResult<DevelopmentStatus>>
     teamModeStatus: () => Promise<RemoteResult<TeamModeStatus>>
     updateMcpServer: (rowId: string, draft: McpServerDraft) => Promise<RemoteResult<McpServerMutation>>
@@ -86,6 +87,7 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     'omnisurgeSuiteDev/saveEnvironmentNotes': (text: string) => Promise<RemoteResult<EnvironmentNotesState>>
     'omnisurgeSuiteDev/saveTeamModeDefault': (enabled: boolean) => Promise<RemoteResult<TeamModeStatus>>
     'omnisurgeSuiteDev/setMcpRouting': (input: { routing: boolean; expectedRevision: number; }) => Promise<RemoteResult<McpPurposeWriteResult>>
+    'omnisurgeSuiteDev/setMcpServerEnabled': (rowId: string, enabled: boolean) => Promise<RemoteResult<McpServerMutation>>
     'omnisurgeSuiteDev/status': () => Promise<RemoteResult<DevelopmentStatus>>
     'omnisurgeSuiteDev/teamModeStatus': () => Promise<RemoteResult<TeamModeStatus>>
     'omnisurgeSuiteDev/updateMcpServer': (rowId: string, draft: McpServerDraft) => Promise<RemoteResult<McpServerMutation>>
@@ -133,6 +135,7 @@ export declare const TYPERT_REMOTE: TypertRemoteInfo<{
   readonly 'omnisurgeSuiteDev/saveEnvironmentNotes': TypertRemoteMethod<{ readonly 'text': string }, EnvironmentNotesState>
   readonly 'omnisurgeSuiteDev/saveTeamModeDefault': TypertRemoteMethod<{ readonly 'enabled': boolean }, TeamModeStatus>
   readonly 'omnisurgeSuiteDev/setMcpRouting': TypertRemoteMethod<{ readonly 'input': { routing: boolean; expectedRevision: number; } }, McpPurposeWriteResult>
+  readonly 'omnisurgeSuiteDev/setMcpServerEnabled': TypertRemoteMethod<{ readonly 'rowId': string; readonly 'enabled': boolean }, McpServerMutation>
   readonly 'omnisurgeSuiteDev/status': TypertRemoteMethod<{  }, DevelopmentStatus>
   readonly 'omnisurgeSuiteDev/teamModeStatus': TypertRemoteMethod<{  }, TeamModeStatus>
   readonly 'omnisurgeSuiteDev/updateMcpServer': TypertRemoteMethod<{ readonly 'rowId': string; readonly 'draft': McpServerDraft }, McpServerMutation>

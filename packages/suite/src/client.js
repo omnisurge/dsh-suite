@@ -1,5 +1,5 @@
 import * as React from 'react';
-import {ActionGroup,Badge,Banner,Button,Checkbox,Disclosure,Field,FormGrid,KeyValueList,ListRow,Select,SettingsCard,StatusLine,TextInput,injectStyles,showConfirm,showToast} from '@omnisurge/dsh-ui';
+import {ActionGroup,Badge,Banner,Button,Checkbox,Disclosure,Field,FormGrid,KeyValueList,ListRow,Select,SettingsCard,Skeleton,StatusLine,TextInput,injectStyles,showConfirm,showToast} from '@omnisurge/dsh-ui';
 import {TYPERT_REMOTE as REMOTE} from '../lib/typert.remote-client.js';
 import {developmentReadiness} from './src/readiness.js';
 import {apply as applySearchClient, inject as SEARCH_CLIENT_INJECT} from './src/search/client.js';
@@ -9,10 +9,11 @@ import {applyCompactionBudgetCard, BUDGET_CARD_INJECT} from './src/compaction-bu
 import {apply as applyOcrCard, inject as OCR_CARD_INJECT} from './src/ocr/client.js';
 import {apply as applyEffortSlider, inject as EFFORT_SLIDER_INJECT} from './src/effort-slider/client/index.tsx';
 import * as SEARCH_FLOW from './src/search/client-flow.js';
-import {renderTechnicalFailure} from './src/failure-view.js';
 import {fillTemplate} from './src/shared/client-copy.js';
 import {unwrapRemoteResult} from './src/shared/client-remote.js';
+import {DiagnosticDisclosure} from './src/shared/DiagnosticDisclosure.js';
 import {buildCapabilityOverview} from './src/suite/capability-overview.js';
+import {formatSuiteDiagnostics} from './src/suite/diagnostics-redact.js';
 import {createSuiteTransport} from './src/suite/upgrade-flow.js';
 import {UpgradeAnnouncer} from './src/ambient.ts';
 import {en,zh} from './src/suite/locale.js';
@@ -45,6 +46,7 @@ const UPDATE_CHANNELS=['stable','prerelease'];
  * technical disclosure. A code with no entry here is still named as a code (refusalOther), never hidden. */
 const FETCH_KEYS={FETCH_NETWORK_UNREACHABLE:'fetchNetworkUnreachable',FETCH_ASSET_MISSING:'fetchAssetMissing',FETCH_CHECKSUM_MISMATCH:'fetchChecksumMismatch',FETCH_COMPONENT_MANIFEST_MISMATCH:'fetchComponentManifestMismatch',FETCH_VERSION_STALE:'fetchVersionStale',FETCH_TOKEN_MISSING:'fetchTokenMissing',FETCH_ABORTED:'fetchAborted',FETCH_REDIRECT_REFUSED:'fetchRedirectRefused'};
 const isFetchCode=code=>typeof code==='string'&&Object.prototype.hasOwnProperty.call(FETCH_KEYS,code);
+const maskDirName=dir=>{const text=String(dir??'').trim();if(!text)return '\u2014';const parts=text.split(/[\\/]+/).filter(Boolean);return parts.length>0?parts[parts.length-1]:text;};
 
 export default {
  inject:['slots','locale','remote'],
@@ -127,18 +129,18 @@ export default {
       const installAmbient=version=>{
        showConfirm({title:say('upgradeConfirmTitle',{version}),text:say('upgradeConfirmBody'),cancelLabel:say('upgradeCancel'),confirmLabel:say('upgradeConfirmRun'),tone:'danger',
         onConfirm:()=>{void(async()=>{
-         const progress=showToast({text:say('upgradeInstalling',{version}),kind:'suite-upgrade-progress',tone:'info',durationMs:null,closeLabel:say('closeLabel')});
+         const progress=showToast({text:say('upgradeInstalling',{version}),kind:'suite-upgrade-progress',tone:'loading',durationMs:null,closeLabel:say('closeLabel')});
          const outcome=await upgradeOutcome(version);
          progress.close();
-          // review B3: the announcement path writes the same receipt the card reads, so a success cannot
-          // leave the card saying "no action needed" and a failure cannot vanish with its toast.
-          if(outcomeSink.current)outcomeSink.current(outcome,version);
+         // review B3: the announcement path writes the same receipt the card reads, so a success cannot
+         // leave the card saying "no action needed" and a failure cannot vanish with its toast.
+         if(outcomeSink.current)outcomeSink.current(outcome,version);
          if(outcome.state==='restart')showToast({text:say('upgradeInstalledRestart',{version:outcome.target}),kind:'suite-upgrade-progress',tone:'ok',durationMs:20000,closeLabel:say('closeLabel')});
-         else if(outcome.state==='submitted')showToast({text:say('upgradeInstallSubmitted').replace('{code}',String(outcome.code??'SUITE_UPGRADE_SUBMITTED')),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
-         else if(outcome.state==='unknown')showToast({text:say('upgradeInstallUnconfirmed').replace('{code}',String(outcome.code??'SUITE_UPGRADE_UNCONFIRMED')),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
+         else if(outcome.state==='submitted')showToast({text:say('upgradeInstallSubmitted'),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
+         else if(outcome.state==='unknown')showToast({text:say('upgradeInstallUnconfirmed'),kind:'suite-upgrade-progress',tone:'warn',durationMs:30000,closeLabel:say('closeLabel')});
          // 失败提示不再常驻：以前是 durationMs:null，一次早期失败会一直挂着，看起来像“这次也没装上”。
-         else if(outcome.code==='UPGRADE_PROFILE_STORE_MISMATCH')showToast({text:say('upgradeDetailStoreMismatch'),kind:'suite-upgrade-progress',tone:'error',durationMs:30000,closeLabel:say('closeLabel')});
-         else showToast({text:say('upgradeInstallFailed').replace('{code}',String(outcome.code??'UPGRADE_UNCONFIRMED')),kind:'suite-upgrade-progress',tone:'error',durationMs:30000,closeLabel:say('closeLabel')});
+         else if(outcome.code==='UPGRADE_PROFILE_STORE_MISMATCH')showToast({text:say('upgradeDetailStoreMismatch'),kind:'suite-upgrade-progress',tone:'danger',durationMs:30000,closeLabel:say('closeLabel')});
+         else showToast({text:say('upgradeInstallFailed'),kind:'suite-upgrade-progress',tone:'danger',durationMs:30000,closeLabel:say('closeLabel')});
         })();}});
       };
       // Returns whether the Host answered at all; silence about a candidate is still a reached Host.
@@ -187,41 +189,62 @@ export default {
        // 自己活下来，直到下一次检查覆盖它；这也是“用户点过检查”的唯一可见回执（AGENTS 5.9）。
        const [checkReceipt,setCheckReceipt]=React.useState(null),[checkFailure,setCheckFailure]=React.useState(null);
        // 更新来源是这一行自己的配置（Config.updateSource 已 volatile），页面只做草稿 + 官方设置表单写入。
-       const [sourceDraft,setSourceDraft]=React.useState(null),[sourceNotice,setSourceNotice]=React.useState(null),[configTick,setConfigTick]=React.useState(0),[credentialState,setCredentialState]=React.useState('unknown');
-      // A release install is the normal case and is already stated once, in the developer panel; the other
-      // three notices are developer facts. The Host sends codes; the wording above is this page's own.
-      const noticeText=(()=>{const code=state?.notice?.code;
-       if(code==='HMR_ENABLED')return translate('noticeHmrEnabled');
-       if(code==='HMR_UNCONFIRMED')return translate('noticeHmrUnconfirmed');
-       if(code==='HOST_PROTOCOL_OLD')return translate('noticeHostProtocolOld');
-       return null;})();
+       const [sourceDraft,setSourceDraft]=React.useState(null),[sourceNotice,setSourceNotice]=React.useState(null),[sourceError,setSourceError]=React.useState(null),[sourceBusy,setSourceBusy]=React.useState(false),[configTick,setConfigTick]=React.useState(0),[credentialState,setCredentialState]=React.useState('unknown');
+       const sourceFormRef=React.useRef(null),sourceBaseRevRef=React.useRef(null),sourceDraftRef=React.useRef(null),sourceNoticeRef=React.useRef(null),sourceBusyRef=React.useRef(false);
+       sourceDraftRef.current=sourceDraft;sourceNoticeRef.current=sourceNotice;sourceBusyRef.current=sourceBusy;
+       const [checkBusy,setCheckBusy]=React.useState(false),[checkedAt,setCheckedAt]=React.useState(null),[retryBusy,setRetryBusy]=React.useState(false);
+       const [healBusy,setHealBusy]=React.useState(null);
+       const [op,setOp]=React.useState(null);
+       // A release install is the normal case and is already stated once, in the developer panel; the other
+       // three notices are developer facts. The Host sends codes; the wording above is this page's own.
+       const noticeText=(()=>{const code=state?.notice?.code;
+        if(code==='HMR_ENABLED')return translate('noticeHmrEnabled');
+        if(code==='HMR_UNCONFIRMED')return translate('noticeHmrUnconfirmed');
+        if(code==='HOST_PROTOCOL_OLD')return translate('noticeHostProtocolOld');
+        return null;})();
        React.useEffect(()=>{outcomeSink.current=(outcome,version)=>{setUpgradeReceipt(outcome.state==='restart'?{code:'SUITE_UPGRADE_RESTART_REQUIRED',target:version,operations:outcome.operations,diagnostic:outcome.diagnostic,onDisk:outcome.onDisk??version,activationUnconfirmed:true}:{code:outcome.code,target:version,operations:outcome.operations,diagnostic:outcome.diagnostic,onDisk:outcome.onDisk??null});};},[]);
-        const [developer,setDeveloper]=React.useState(()=>{try{return window.localStorage.getItem('omnisurge.suite.developer')==='1';}catch{return false;}});
-        const toggleDeveloper=value=>{setDeveloper(value);try{window.localStorage.setItem('omnisurge.suite.developer',value?'1':'0');}catch{}};
-       // A click that changes nothing visible looks like a dead button: a user-initiated read announces
-       // itself while it runs and records when it last answered. The background poll stays silent.
-        // ADR-047 D3 + review B1: one convergence point for the install receipt. A receipt survives only
-        // while it still describes the current attempt: bytes at the target turn it into "installed, restart
-        // required"; a candidate no longer offered (or a profile that never reached the target) drops it. This
-        // runs on every read -- including the silent poll -- so a stale failure can never outlive the fact.
-        // A written durable record is its own verdict even when the current Client generation has no receipt
-        // (the upgrade reloaded the Client before its old instance could receive the reply). Adopt it once per
-        // generation: after the app restarts, running===target and the record stops producing a banner.
-        // The decision lives in one pure module (ADR-047 D3 / ADR-079). In particular, a durable record
-        // from an earlier attempt must not outlive the profile's actual on-disk identity; otherwise an
-        // official CLI update from 0.3.6-4 to 0.3.6-5 leaves an orange "installed 0.3.6-4 / restart" card.
-        const convergeReceipt=convergeUpgradeReceipt;
-        const receiptRef=React.useRef(null);
-        React.useEffect(()=>{receiptRef.current=upgradeReceipt;});
-       const read=async announce=>{
+       const [developer,setDeveloper]=React.useState(()=>{try{return window.localStorage.getItem('omnisurge.suite.developer')==='1';}catch{return false;}});
+       const toggleDeveloper=value=>{setDeveloper(value);try{window.localStorage.setItem('omnisurge.suite.developer',value?'1':'0');}catch{}};
+       const confirmRef=React.useRef(null);
+       React.useEffect(()=>()=>{confirmRef.current?.close?.();confirmRef.current=null;},[]);
+       const convergeReceipt=convergeUpgradeReceipt;
+       const receiptRef=React.useRef(null);
+       React.useEffect(()=>{receiptRef.current=upgradeReceipt;});
+       const readInFlightRef=React.useRef(null);
+       const runReadOnce=async announce=>{
         if(announce)setCheckBusy(true);
         try{
          const next=await callRead('status'),set=await callRead('componentsStatus'),candidates=await callWithRuntimeRead('upgradeStatus');
          setState(next);setComponents(set);setUpgrade(candidates);setError(null);
-          {const converged=convergeReceipt(receiptRef.current,candidates);if(converged!==receiptRef.current){receiptRef.current=converged;setUpgradeReceipt(converged);if(converged===null)setUpgradeError(null);}}
+         {const converged=convergeReceipt(receiptRef.current,candidates);if(converged!==receiptRef.current){receiptRef.current=converged;setUpgradeReceipt(converged);if(converged===null)setUpgradeError(null);}}
          if(announce)setCheckedAt(new Date().toLocaleTimeString());
         }catch(issue){setError(String(issue&&issue.message?issue.message:issue));}
         finally{if(announce)setCheckBusy(false);}
+       };
+       // GAP-API-C-02: coalesce overlapping passive polls so 750ms ticks never fight manual retry or stack requests.
+       const read=async(announce=false,{force=false}={})=>{
+        if(readInFlightRef.current){
+         if(!force)return readInFlightRef.current;
+         await readInFlightRef.current;
+        }
+        const pending=runReadOnce(announce).finally(()=>{if(readInFlightRef.current===pending)readInFlightRef.current=null;});
+        readInFlightRef.current=pending;
+        return pending;
+       };
+       const retryRead=async()=>{
+        if(retryBusy)return;
+        setRetryBusy(true);
+        try{await read(true,{force:true});}
+        finally{setRetryBusy(false);}
+       };
+       const copyText=async(text,okText)=>{
+        try{
+         if(!globalThis.navigator?.clipboard?.writeText)throw new Error('clipboard unavailable');
+         await globalThis.navigator.clipboard.writeText(String(text??''));
+         showToast({text:okText,kind:'suite-copy',tone:'ok',durationMs:3000,closeLabel:translate('closeLabel')});
+        }catch{
+         showToast({text:translate('copyFailed'),kind:'suite-copy',tone:'danger',durationMs:5000,closeLabel:translate('closeLabel')});
+        }
        };
        // ADR-068 D5: “检查更新” is the one user action that may touch the network, so it asks the one Remote that
        // is allowed to: checkRelease(). upgradeStatus reads the disk only, so using it here would mean the button
@@ -246,35 +269,47 @@ export default {
          if(/^SUITE_NAMESPACE_MISSING checkRelease/.test(raw)&&wire.namespace){markStaleHost();}
          else setCheckFailure({code:typeof issue?.code==='string'&&issue.code.length>0?issue.code:raw,at:new Date().toLocaleTimeString()});
         }finally{
-         await read();
+         await read(false,{force:true});
          if(answered)setCheckedAt(new Date().toLocaleTimeString());
          setCheckBusy(false);
         }
        };
        const dismissHeal=async entryId=>{
         setHealBusy(entryId);
-        try{await call('healAcknowledge',entryId);await read(true);}
-        catch(issue){setError(String(issue&&issue.message?issue.message:issue));}
+        try{
+         await call('healAcknowledge',entryId);
+         await read(true,{force:true});
+         showToast({text:translate('healDismissedToast'),kind:'suite-heal-action',tone:'ok',durationMs:4000,closeLabel:translate('closeLabel')});
+        }catch(issue){setError(String(issue&&issue.message?issue.message:issue));}
         finally{setHealBusy(null);}
        };
-       const rescanHeal=async()=>{setCheckBusy(true);try{await call('healScan');await read(true);}catch(issue){setError(String(issue&&issue.message?issue.message:issue));}finally{setCheckBusy(false);}};
+       const rescanHeal=async()=>{
+        setCheckBusy(true);
+        try{
+         await call('healScan');
+         await read(true,{force:true});
+         showToast({text:translate('healRescanDoneToast'),kind:'suite-heal-action',tone:'ok',durationMs:4000,closeLabel:translate('closeLabel')});
+        }catch{
+         showToast({text:translate('healScanFailed'),kind:'suite-heal-action',tone:'danger',durationMs:6000,closeLabel:translate('closeLabel')});
+        }finally{setCheckBusy(false);}
+       };
        React.useEffect(()=>{void read();const timer=setInterval(()=>{void read();},750);return ()=>clearInterval(timer);},[]);
-        // Optional capability reads may time out independently of the Suite state and user actions.
-        React.useEffect(()=>{
-         let stopped=false,inFlight=false;
-         const readOptional=method=>callRead(method).catch(()=>null);
-         const readMultimodal=async()=>{
-          if(stopped||inFlight)return;
-          inFlight=true;
-          try{
-           const [ocr,docParse]=await Promise.all([readOptional('ocrCapabilities'),readOptional('documentParseCapabilities')]);
-           if(!stopped)setMultimodal({ocr,docParse});
-          }finally{inFlight=false;}
-         };
-         void readMultimodal();
-         const timer=setInterval(()=>void readMultimodal(),MULTIMODAL_POLL_INTERVAL_MS);
-         return ()=>{stopped=true;clearInterval(timer);};
-        },[]);
+       // Optional capability reads may time out independently of the Suite state and user actions.
+       React.useEffect(()=>{
+        let stopped=false,inFlight=false;
+        const readOptional=method=>callRead(method).catch(()=>null);
+        const readMultimodal=async()=>{
+         if(stopped||inFlight)return;
+         inFlight=true;
+         try{
+          const [ocr,docParse]=await Promise.all([readOptional('ocrCapabilities'),readOptional('documentParseCapabilities')]);
+          if(!stopped)setMultimodal({ocr,docParse});
+         }finally{inFlight=false;}
+        };
+        void readMultimodal();
+        const timer=setInterval(()=>void readMultimodal(),MULTIMODAL_POLL_INTERVAL_MS);
+        return ()=>{stopped=true;clearInterval(timer);};
+       },[]);
        // One toast per new containment, once per page session: the durable line below is the record, the
        // toast is the interruption. A dismissed notice never interrupts again.
        const toasted=React.useRef(new Set());
@@ -285,377 +320,550 @@ export default {
          if(record.outcome==='disabled')showToast({text:translate('healToast').replace('{module}',String(record.moduleName??'')),kind:'suite-heal',tone:'warn',durationMs:12000,closeLabel:translate('closeLabel')});
         }
        },[components]);
-        // The host owns the authoritative operation epoch and phase; this only records the request this
-        // window made, so a failed build reports its own reason instead of looking idle.
-        const [checkBusy,setCheckBusy]=React.useState(false),[checkedAt,setCheckedAt]=React.useState(null);
-        // The containment notice is a user action: dismissing it must leave a visible receipt, so the same
-        // announcing read carries it.
-        const [healBusy,setHealBusy]=React.useState(null);
-        const [op,setOp]=React.useState(null);
-        const busy=op?.phase==='building';
-        // The Host owns the operation phase; this page owns the sentence and the tone.
-        const operationText=(()=>{const phase=op?.phase;
-         if(phase==='building')return translate('building');
-         if(phase==='failed')return translate('failed');
-         if(phase==='published')return translate(state?.hostHmr?'applied':'restart');
-         return null;})();
-        const build=async()=>{
-         if(!state)return;
-         setOp({phase:'building',error:null});
-         try{const next=await call('build',state.operation.epoch);setState(next);setOp({phase:next?.operation?.phase??'idle',error:next?.operation?.error??null});}
-         catch(issue){setOp({phase:'failed',error:String((issue&&issue.message)||issue)});}
-        };
-        const runUpgrade=async()=>{
-         setUpgradeBusy(true);setUpgradeError(null);setUpgradeReceipt(null);
-         const outcome=await upgradeOutcome(upgrade?.latest?.version);
-         // ADR-047 D3/D4: the receipt is the record for every outcome -- the row reads 'installed, restart pending'
-         // from it, and a failure keeps its machine reason in the one technical area.
-         setUpgradeReceipt({code:outcome.code,target:outcome.target,operations:outcome.operations,diagnostic:outcome.diagnostic,readback:outcome.readback,onDisk:outcome.onDisk,activationUnconfirmed:outcome.activationUnconfirmed});
-         if(outcome.state!=='restart'&&outcome.state!=='submitted')setUpgradeError(outcome.code+(outcome.diagnostic?' · '+outcome.diagnostic:''));
-         await read();
-         setUpgradeBusy(false);
-        };
-        // Readiness is the loaded generation's own proof: stamped and remote dispatch at the protocol this
-        // manager speaks. Anything else is a stale builder and is reported instead of assumed ready.
-        const readiness=state?{ready:Boolean(state.hostCapabilities&&state.hostCapabilities.hostStamped&&state.hostCapabilities.hostRemote&&state.hostProtocol===state.managerProtocol)}:null;
-        // The collapsed badge and notice share the same capability projection as the expanded list.
-        const list=components?.components??[];
-        const capabilityRows=buildCapabilityOverview(list,translate,multimodal);
-        const attentionRows=capabilityRows.filter(row=>row.needsAction);
-        const attention=attentionRows.length;
-        const effectWords={covered:['stateCovered','effectCovered','ok'],waiting:['stateWaiting','effectWaiting','muted'],partial:['statePartial','effectPartial','warn'],rejected:['stateRejected','effectRejected','warn'],unconfirmed:['stateEffectUnknown','effectUnconfirmed','warn'],'policy-disabled':['statePolicyDisabled','effectPolicyDisabled','muted'],retired:['stateRetired','effectRetired','muted']};
-        const effectWordsFor=component=>component.effect?effectWords[component.state]:undefined;
-        const nextStepFor=component=>effectWordsFor(component)?.[1]??nextStepKey(component.nextAction);
-        const recovery=components?.recovery;
-        const nextStepKey=action=>action==='restart'?'next_restart':action==='enable-row'?'next_enable-row':action==='check-runtime'?'next_check-runtime':action==='check-owner'?'next_check-owner':'next_none';
-        const stateBadge=component=>{
-         const effect=effectWordsFor(component);
-         if(effect)return {tone:effect[2],text:translate(effect[0])};
-         return component.state==='ready'?{tone:'ok',text:translate('stateReady')}:component.state==='disabled'?{tone:'muted',text:translate('rowDisabledLabel')}:component.state==='config-only'?{tone:'muted',text:translate('stateConfigOnly')}:component.state==='retired'?{tone:'muted',text:translate('stateRetired')}:component.state==='restart-required'?{tone:'warn',text:translate('stateRestart')}:{tone:'warn',text:translate('stateUnconfirmed')};
-        };
-        // The developer view keeps the per-component carried/loaded pair inside a collapsed disclosure:
-        // it is where a developer reads the one fact that explains a restart-required row without
-        // crowding the run-information card. The daily collapsed view never renders it.
-        const identity=list.length===0?null:h(Disclosure,{'data-testid':'suite-identity-disclosure',title:translate('devComponentDetails').replace('{count}',String(list.length))},
-         h('ul',{'data-testid':'suite-identity','className':'omni-ui-list'},list.map(component=>h(ListRow,{key:component.id,'data-testid':'suite-identity-'+component.id,
+       const busy=op?.phase==='building';
+       const operationText=(()=>{const phase=op?.phase;
+        if(phase==='building')return translate('buildingDetail');
+        if(phase==='failed')return translate('failed');
+        if(phase==='published')return translate(state?.hostHmr?'applied':'restart');
+        return null;})();
+       const build=async()=>{
+        if(!state)return;
+        setOp({phase:'building',error:null});
+        try{
+         const next=await call('build',state.operation.epoch);
+         setState(next);
+         const phase=next?.operation?.phase??'idle';
+         setOp({phase,error:next?.operation?.error??null});
+         if(phase==='published')showToast({text:translate(next?.hostHmr?'buildAppliedToast':'buildDoneToast'),kind:'suite-dev-build',tone:'ok',durationMs:5000,closeLabel:translate('closeLabel')});
+        }catch(issue){setOp({phase:'failed',error:String((issue&&issue.message)||issue)});}
+       };
+       const runUpgrade=async targetVersion=>{
+        const target=targetVersion??upgrade?.latest?.version;
+        if(!target)return;
+        setUpgradeBusy(true);setUpgradeError(null);setUpgradeReceipt(null);
+        const outcome=await upgradeOutcome(target);
+        // ADR-047 D3/D4: the receipt is the record for every outcome -- the row reads 'installed, restart pending'
+        // from it, and a failure keeps its machine reason in the one technical area.
+        setUpgradeReceipt({code:outcome.code,target:outcome.target,operations:outcome.operations,diagnostic:outcome.diagnostic,readback:outcome.readback,onDisk:outcome.onDisk,activationUnconfirmed:outcome.activationUnconfirmed});
+        if(outcome.state!=='restart'&&outcome.state!=='submitted')setUpgradeError(outcome.code+(outcome.diagnostic?' \u00b7 '+outcome.diagnostic:''));
+        await read(false,{force:true});
+        setUpgradeBusy(false);
+       };
+       const confirmUpgrade=()=>{
+        const target=upgrade?.latest?.version;
+        if(!target||upgradeBusy)return;
+        const trigger=globalThis.document?.querySelector?.('[data-testid="suite-upgrade-run"]');
+        confirmRef.current?.close?.();
+        confirmRef.current=showConfirm({
+         title:translate('upgradeConfirmTitle').replace('{version}',String(target)),
+         text:translate('upgradeConfirmBody'),
+         cancelLabel:translate('upgradeCancel'),
+         confirmLabel:translate('upgradeConfirmRun'),
+         tone:'danger',
+         returnFocusTo:trigger instanceof HTMLElement?trigger:undefined,
+         onCancel:()=>{confirmRef.current=null;},
+         onConfirm:()=>{confirmRef.current=null;void runUpgrade(target);}
+        });
+       };
+       // Readiness is the loaded generation's own proof: stamped and remote dispatch at the protocol this
+       // manager speaks. Anything else is a stale builder and is reported instead of assumed ready.
+       const readiness=state?{ready:Boolean(state.hostCapabilities&&state.hostCapabilities.hostStamped&&state.hostCapabilities.hostRemote&&state.hostProtocol===state.managerProtocol)}:null;
+       // The collapsed badge and notice share the same capability projection as the expanded list.
+       const list=components?.components??[];
+       const capabilityRows=buildCapabilityOverview(list,translate,multimodal);
+       const attentionRows=capabilityRows.filter(row=>row.needsAction);
+       const attention=attentionRows.length;
+       const effectWords={covered:['stateCovered','effectCovered','ok'],waiting:['stateWaiting','effectWaiting','muted'],partial:['statePartial','effectPartial','warn'],rejected:['stateRejected','effectRejected','warn'],unconfirmed:['stateEffectUnknown','effectUnconfirmed','warn'],'policy-disabled':['statePolicyDisabled','effectPolicyDisabled','muted'],retired:['stateRetired','effectRetired','muted']};
+       const effectWordsFor=component=>component.effect?effectWords[component.state]:undefined;
+       const nextStepFor=component=>effectWordsFor(component)?.[1]??nextStepKey(component.nextAction);
+       const recovery=components?.recovery;
+       const nextStepKey=action=>action==='restart'?'next_restart':action==='enable-row'?'next_enable-row':action==='check-runtime'?'next_check-runtime':action==='check-owner'?'next_check-owner':'next_none';
+       const stateBadge=component=>{
+        const effect=effectWordsFor(component);
+        if(effect)return {tone:effect[2],text:translate(effect[0])};
+        return component.state==='ready'?{tone:'ok',text:translate('stateReady')}:component.state==='disabled'?{tone:'muted',text:translate('rowDisabledLabel')}:component.state==='config-only'?{tone:'muted',text:translate('stateConfigOnly')}:component.state==='retired'?{tone:'muted',text:translate('stateRetired')}:component.state==='restart-required'?{tone:'warn',text:translate('stateRestart')}:{tone:'warn',text:translate('stateUnconfirmed')};
+       };
+       // The developer view keeps the per-component carried/loaded pair inside a collapsed disclosure:
+       // it is where a developer reads the one fact that explains a restart-required row without
+       // crowding the run-information card. The daily collapsed view never renders it.
+       const identity=list.length===0?null:h(Disclosure,{'data-testid':'suite-identity-disclosure',title:translate('devComponentDetails').replace('{count}',String(list.length))},
+        h('ul',{'data-testid':'suite-identity','className':'omni-ui-list omni-ui-list--flush'},list.map(component=>h(ListRow,{key:component.id,'data-testid':'suite-identity-'+component.id,
          title:component.id,badge:h(Badge,{tone:stateBadge(component).tone},stateBadge(component).text),
          description:h('span',null,
           h('span',{'data-testid':'suite-component-version-'+component.id},translate('componentCarried')+' '+String(component.carriedVersion)),
           ' \u00b7 ',h('span',{'data-testid':'suite-component-loaded-'+component.id},translate('componentLoaded')+' '+(component.loadedVersion===null?translate('loadedUnknown'):String(component.loadedVersion))),
           ' \u00b7 ',h('span',{'data-testid':'suite-component-row-'+component.id},translate(component.rowEnabled?'rowEnabled':'rowDisabledLabel')+(effectWordsFor(component)?' \u00b7 '+translate(nextStepFor(component)):'')))}))));
-        // The update card answers three different questions and used to answer all three with the same
-        // string: what is installed, what is running, and what can be installed. Only a *differing* running
-        // version earns a row -- it is the one fact that explains a restart.
-        const modeWord=mode=>mode==='release'?translate('modeRelease'):mode==='source'?translate('modeSource'):null;
-        const runningVersions=[...new Set(list.map(component=>component.loadedVersion).filter(version=>version!==null))];
-        const runningDiffers=Boolean(upgrade)&&runningVersions.length>0&&runningVersions.some(version=>version!==upgrade.currentVersion);
-        const upgradeDetails=upgrade?[
-         {label:translate('upgradeDirectory'),value:upgrade.releaseDirectory??null,mono:true,copy:upgrade.releaseDirectory??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-upgrade-directory'},
-         {label:translate('upgradeModeLabel'),value:modeWord(upgrade.mode),'data-value-testid':'suite-upgrade-mode'},
-         {label:translate('upgradeInstalledLabel'),value:upgrade.currentVersion??null,'data-value-testid':'suite-upgrade-installed'},
-         runningDiffers?{label:translate('upgradeRunning'),value:runningVersions.join(' / '),hint:translate('upgradeRunningHint'),'data-value-testid':'suite-upgrade-running'}:null,
-         upgrade.latest?{label:translate('upgradeLatest'),value:String(upgrade.latest.version),hint:translate('upgradeComponents')+'\u00b7'+upgrade.latest.components.map(component=>component.module).join('\u3001'),'data-value-testid':'suite-upgrade-latest'}:null
-        ].filter(Boolean):[];
-        // ── 更新来源（ADR-068）───────────────────────────────────────────────────────────────────────
-        // 唯一事实源是这一行的配置（Config.updateSource，volatile → 官方 settings.describe 会服务它）。页面只
-        // 持有草稿；写入走 configForms.mutate（revision CAS，官方保存链路），所以不存在第二份存储或第二个写入口。
-        const sourceSnapshot=(()=>{try{return wire.form?wire.form.getSnapshot():null;}catch{return null;}})();
-        const sourceStored=(sourceSnapshot&&sourceSnapshot.value&&typeof sourceSnapshot.value==='object'?sourceSnapshot.value.updateSource:null)??{};
-        const sourceKind=sourceStored.kind==='github'?'github':'local';
-        const sourceChannel=sourceStored.channel==='prerelease'?'prerelease':'stable';
-        const sourceOwner=typeof sourceStored.owner==='string'?sourceStored.owner:'';
-        const sourceRepoName=typeof sourceStored.repo==='string'?sourceStored.repo:'';
-        const sourceRef=typeof sourceStored.credentialRef==='string'?sourceStored.credentialRef:'';
-        const sourceStoredText=(sourceOwner&&sourceRepoName?sourceOwner+'/'+sourceRepoName:(sourceOwner||sourceRepoName))||'';
-        const sourceReady=Boolean(sourceSnapshot)&&sourceSnapshot.status==='ready'&&sourceSnapshot.writable===true;
-        const sourceEdit=sourceDraft??{repo:sourceStoredText,channel:sourceChannel,credentialRef:sourceRef};
-        // 存进配置的仓库被改动后草稿要跟着重置：否则页面会一直显示一个已经不存在的草稿（或相反）。
-        const sourceSignature=sourceStoredText+'|'+sourceChannel+'|'+sourceRef+'|'+sourceKind;
-        React.useEffect(()=>{setSourceDraft(null);},[sourceSignature]);
-        // 凭据“存在性”是官方凭据服务的事实，只按引用问一次（引用名上屏，秘值不上屏）。没有该服务时如实说
-        // “状态不可确认”，不把“读不到”说成“没配置”。
-        React.useEffect(()=>{
-         if(sourceKind!=='github'||sourceRef===''){setCredentialState('unknown');return undefined;}
-         const credentials=wire.credentials;
-         if(!credentials||typeof credentials.describe!=='function'){setCredentialState('unknown');return undefined;}
-         let active=true;
-         Promise.resolve(credentials.describe([sourceRef])).then(answer=>{
-          if(!active)return;
-          const row=unwrapRemoteResult(answer)?.[sourceRef];
-          setCredentialState(row&&row.configured===true?'configured':row?'missing':'unknown');
-         }).catch(()=>{if(active)setCredentialState('unknown');});
-         return ()=>{active=false;};
-        },[sourceKind,sourceRef,configTick]);
-        const sourceRepoParts=()=>{const raw=String(sourceEdit.repo??'').trim(),cut=raw.indexOf('/');
-         return cut<0?{owner:raw,repo:''}:{owner:raw.slice(0,cut).trim(),repo:raw.slice(cut+1).trim()};};
-        // 一个写入函数：整对象 set（不依赖嵌套 path 语义），带快照 revision 做 CAS。任何人先写过就拒绝，不覆盖。
-        const writeSource=async patch=>{
-         const form=wire.form;
-         if(!form){setSourceNotice('unavailable');return false;}
-         const snapshot=form.getSnapshot();
-         if(snapshot.status!=='ready'||snapshot.writable!==true){setSourceNotice('unavailable');return false;}
-         const current=snapshot.value&&typeof snapshot.value==='object'?snapshot.value.updateSource:null;
-         const stored=current&&typeof current==='object'?current:{};
-         const next={kind:stored.kind==='github'?'github':'local',owner:String(stored.owner??''),repo:String(stored.repo??''),
-          channel:stored.channel==='prerelease'?'prerelease':'stable',credentialRef:String(stored.credentialRef??''),...patch};
-         let accepted=false;
-         try{accepted=await form.mutate([{op:'set',path:['updateSource'],value:next}],snapshot.revision);}
-         catch{accepted=false;}
-         setSourceNotice(accepted?'saved':'refused');
+       // The update card answers three different questions and used to answer all three with the same
+       // string: what is installed, what is running, and what can be installed. Only a *differing* running
+       // version earns a row -- it is the one fact that explains a restart.
+       const modeWord=mode=>mode==='release'?translate('modeRelease'):mode==='source'?translate('modeSource'):null;
+       const runningVersions=[...new Set(list.map(component=>component.loadedVersion).filter(version=>version!==null))];
+       const runningDiffers=Boolean(upgrade)&&runningVersions.length>0&&runningVersions.some(version=>version!==upgrade.currentVersion);
+       const upgradeDetails=upgrade?[
+        {label:translate('upgradeDirectory'),value:upgrade.releaseDirectory??null,mono:true,copy:upgrade.releaseDirectory??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-upgrade-directory'},
+        {label:translate('upgradeModeLabel'),value:modeWord(upgrade.mode),'data-value-testid':'suite-upgrade-mode'},
+        {label:translate('upgradeInstalledLabel'),value:upgrade.currentVersion??null,'data-value-testid':'suite-upgrade-installed'},
+        runningDiffers?{label:translate('upgradeRunning'),value:runningVersions.join(' / '),hint:translate('upgradeRunningHint'),'data-value-testid':'suite-upgrade-running'}:null,
+        upgrade.latest?{label:translate('upgradeLatest'),value:String(upgrade.latest.version),hint:translate('upgradeComponents')+'\u00b7'+upgrade.latest.components.map(component=>component.module).join('\u3001'),'data-value-testid':'suite-upgrade-latest'}:null
+       ].filter(Boolean):[];
+       // ── 更新来源（ADR-068 / BLOCK-01 / GAP-API-C-01）─────────────────────────────────────────────
+       const activeForm=wire.form;
+       if(sourceFormRef.current!==activeForm){sourceFormRef.current=activeForm;sourceBaseRevRef.current=null;}
+       const sourceSnapshot=(()=>{try{return activeForm?activeForm.getSnapshot():null;}catch{return null;}})();
+       if(sourceBaseRevRef.current===null&&sourceSnapshot&&sourceSnapshot.status==='ready'&&typeof sourceSnapshot.revision==='number'){
+        sourceBaseRevRef.current=sourceSnapshot.revision;
+       }
+       React.useEffect(()=>{
+        if(!activeForm||typeof activeForm.subscribe!=='function')return undefined;
+        return activeForm.subscribe(()=>{
+         let nextSnap=null;
+         try{nextSnap=activeForm.getSnapshot();}catch{nextSnap=null;}
+         const clean=sourceDraftRef.current===null&&sourceNoticeRef.current!=='stale'&&!sourceBusyRef.current;
+         if(clean){
+          if(nextSnap&&nextSnap.status==='ready'&&typeof nextSnap.revision==='number')sourceBaseRevRef.current=nextSnap.revision;
+          setConfigTick(tick=>tick+1);
+         }else if(!nextSnap||nextSnap.status!=='ready'||nextSnap.writable!==true){
+          setConfigTick(tick=>tick+1);
+         }
+        });
+       },[activeForm]);
+       const sourceStored=(sourceSnapshot&&sourceSnapshot.value&&typeof sourceSnapshot.value==='object'?sourceSnapshot.value.updateSource:null)??{};
+       const sourceKind=sourceStored.kind==='github'?'github':'local';
+       const sourceChannel=sourceStored.channel==='prerelease'?'prerelease':'stable';
+       const sourceOwner=typeof sourceStored.owner==='string'?sourceStored.owner:'';
+       const sourceRepoName=typeof sourceStored.repo==='string'?sourceStored.repo:'';
+       const sourceRef=typeof sourceStored.credentialRef==='string'?sourceStored.credentialRef:'';
+       const sourceStoredText=(sourceOwner&&sourceRepoName?sourceOwner+'/'+sourceRepoName:(sourceOwner||sourceRepoName))||'';
+       const sourceReady=Boolean(sourceSnapshot)&&sourceSnapshot.status==='ready'&&sourceSnapshot.writable===true;
+       const sourceEdit=sourceDraft??{repo:sourceStoredText,channel:sourceChannel,credentialRef:sourceRef};
+       React.useEffect(()=>{
+        if(sourceKind!=='github'||sourceRef===''){setCredentialState('unknown');return undefined;}
+        const credentials=wire.credentials;
+        if(!credentials||typeof credentials.describe!=='function'){setCredentialState('unknown');return undefined;}
+        let active=true;
+        Promise.resolve(credentials.describe([sourceRef])).then(answer=>{
+         if(!active)return;
+         const row=unwrapRemoteResult(answer)?.[sourceRef];
+         setCredentialState(row&&row.configured===true?'configured':row?'missing':'unknown');
+        }).catch(()=>{if(active)setCredentialState('unknown');});
+        return ()=>{active=false;};
+       },[sourceKind,sourceRef,configTick]);
+       const sourceRepoParts=()=>{const raw=String(sourceEdit.repo??'').trim(),cut=raw.indexOf('/');
+        return cut<0?{owner:raw,repo:''}:{owner:raw.slice(0,cut).trim(),repo:raw.slice(cut+1).trim()};};
+       const writeSource=async(patch,{clearDraft=false}={})=>{
+        if(sourceNoticeRef.current==='stale'||sourceBusyRef.current)return false;
+        const form=wire.form;
+        if(!form){sourceNoticeRef.current='unavailable';setSourceNotice('unavailable');setSourceError(null);return false;}
+        let snapshot=null;
+        try{snapshot=form.getSnapshot();}catch{snapshot=null;}
+        if(!snapshot||snapshot.status!=='ready'||snapshot.writable!==true){sourceNoticeRef.current='unavailable';setSourceNotice('unavailable');setSourceError(null);return false;}
+        const expectedRev=sourceBaseRevRef.current;
+        if(typeof expectedRev!=='number'||snapshot.revision!==expectedRev){
+         sourceNoticeRef.current='stale';
+         setSourceNotice('stale');
+         setSourceError('expectedRevision='+String(expectedRev)+', currentRevision='+String(snapshot.revision));
          setConfigTick(tick=>tick+1);
-         return accepted;
-        };
-        // 选回本地目录只改 kind：owner/repo/channel/凭据引用原样留在配置里，再切回来就是刚才那三项。
-        const chooseSource=async kind=>{if(kind===sourceKind)return;await writeSource({kind});};
-        const saveSource=async()=>{
-         const {owner,repo}=sourceRepoParts();
-         if(sourceKind==='github'&&(owner===''||repo==='')){setSourceNotice('refused');return;}
-         await writeSource({kind:'github',owner,repo,channel:String(sourceEdit.channel==='prerelease'?'prerelease':'stable'),
-          credentialRef:String(sourceEdit.credentialRef??'').trim()});
-        };
-        const sourceCanSave=sourceReady&&(sourceKind!=='github'||sourceRepoParts().owner!==''&&sourceRepoParts().repo!=='');
-        // 凭据引用只显示“引用名 + 已配置/缺失”：秘值永远不出现在页面上，也不经过这条读法。
-        const sourceCredentialSentence=(()=>{
-         if(sourceRef==='')return translate('updateSourceCredentialUnset');
-         if(credentialState==='configured')return translate('updateSourceCredentialConfigured');
-         if(credentialState==='missing')return translate('updateSourceCredentialMissing');
-         return translate('updateSourceCredentialUnknown');
-        })();
-        // Keep the existing component steps, and use the settings entry for a bundled capability.
-        // One aggregate sentence, distinct steps only, never a per-plugin row again.
-        const attentionNotice=attention===0?null:h(StatusLine,{tone:'warn','data-testid':'suite-attention-next-step'},
-         translate('attentionNextStep').replace('{count}',String(attention)).replace('{steps}',[...new Set(attentionRows.map(row=>row.component?translate(nextStepFor(row.component)):row.entry))].join(' ')));
-        // A closed channel used to look exactly like "up to date": no candidate, no sentence. The reason is
-        // a machine fact from the Host; the words are the Client's. A linked source checkout is the
-        // documented development layout, so only a real blocker or the installed-release contradiction is
-        // worth the one line -- that contradiction is the state that hid every candidate from a user.
-        const refusals=upgrade?.refusals??[];
-        const channelReason=!upgrade||upgrade.latest?null:refusals.some(item=>item.code==='UPGRADE_DIRECTORY_INVALID')?translate('upgradeDisabled'):refusals.some(item=>item.code==='UPGRADE_DIRECTORY_UNREADABLE')?translate('channelUnreadable'):state?.linked!==true&&upgrade.mode!=='release'?translate('upgradeSourceMode'):null;
-        // Loadability-first: the runtime verdict is computed from the official boot manifest, so it is
-        // available even when this plugin's Host never activated. It never claims compatibility, it says
-        // which fact it could read and points at the upgrade control that is already on this page.
-        const runtime=runtimeVerdict(bootReleaseVersion(globalThis.__DSH_BOOT__),VERIFIED_RUNTIMES);
-        const runtimeKey=runtimeNoticeKey(runtime.state);
-        const runtimeNotice=runtimeKey===null?null:h(Banner,{'data-testid':'suite-runtime-unverified',tone:'warn'},say(runtimeKey,{version:runtime.version??''}));
-        const channelNotice=channelReason===null?null:h(StatusLine,{tone:'warn','data-testid':'suite-upgrade-channel'},translate('channelUnavailable')+' \u00b7 '+channelReason);
-        // The release directory is shared with history, so the refusal list is long by nature and a raw dump
-        // tells a user nothing. One line per reason instead: the collapsed title carries the categories, the
-        // body carries one human sentence per reason with the directories behind it. An unmapped code is
-        // still named rather than hidden.
-        const refusalWords=code=>isFetchCode(code)?translate(FETCH_KEYS[code]):code==='UPGRADE_NOT_NEWER'?translate('refusalNotNewer'):code==='UPGRADE_NOT_A_CANDIDATE'?translate('refusalNotCandidate'):code==='UPGRADE_SUMS_MISSING'?translate('refusalSumsMissing'):code==='UPGRADE_CANDIDATE_INVALID'?translate('refusalInvalid'):code==='UPGRADE_RUNTIME_UNVERIFIED'?translate('refusalRuntimeUnverified'):code==='UPGRADE_RUNTIME_UNDECLARED'?translate('refusalRuntimeUndeclared'):code==='UPGRADE_RUNTIME_UNKNOWN'?translate('refusalRuntimeUnknown'):code==='UPGRADE_CURRENT_UNREADABLE'?translate('refusalCurrentUnreadable'):translate('refusalOther').replace('{code}',String(code));
-        const refusalGroups=(()=>{const groups=new Map();for(const item of upgrade?.refusals??[]){const code=String(item.code??'UPGRADE_CANDIDATE_INVALID');const group=groups.get(code)??{code,items:[]};group.items.push(item);groups.set(code,group);}return [...groups.values()];})();
-        // An expected skip is not news: an older candidate and an unrelated directory are refused by design
-        // on every read. What a user needs is the *actionable* refusal -- the directory that looks like a
-        // release and still cannot be installed -- and that stays visible below.
-        const expectedRefusal=code=>code==='UPGRADE_NOT_NEWER'||code==='UPGRADE_NOT_A_CANDIDATE'||code==='UPGRADE_SOURCE_MODE';
-        // 抓取器的码不是“某个目录拒绝安装”，它讲的是“这次联网检查没拿到东西”。把它混进 actionable 会让页面
-        // 说“有 N 个目录无法安装”，而事实是根本没有目录；码本身只进技术诊断（ADR-068 2026-10-29 追加 3）。
-        const actionableRefusals=refusalGroups.filter(group=>!expectedRefusal(group.code)&&!isFetchCode(group.code));
-        const actionableCount=actionableRefusals.reduce((total,group)=>total+group.items.length,0);
-        // The page shows what the user has to decide and nothing else: an attention row, the boot-recovery
-        // notice, a failed read and a pending Suite upgrade. Every technical surface lives behind the one
-        // developer switch below, so a healthy Suite page carries exactly one control.
-        // The Suite page owns Suite-level facts. Per-plugin status, enablement and configuration belong to the
-        // official plugin page: its Components list owns the switch and each plugin's own settings card owns
-        // configuration. The capability overview below is strictly read-only and collapsed by default.
-        const recoveryNotice=!recovery?null:h('div',{'data-testid':'suite-recovery-notice','className':'omni-ui-stack'},
-         h(StatusLine,{tone:'warn','data-testid':'suite-recovery-line'},translate('recoveryTitle')+' \u00b7 '+(recovery.action==='rows-disabled'?recovery.rows.map(row=>row.rowId).join(', '):translate('recoveryNone'))));
-        // `recovered` is not a notice: the entry came back and there is nothing for the user to do.
-        // Leaving it in the list fell through to the pending sentence ("failed; the automatic switch-off
-        // has not taken effect") for a plugin that is running — the exact false statement this batch
-        // exists to remove (0.2.2-3 review P1-1). Filtering needs no new copy.
-        const healRecords=Array.isArray(components?.heal)?components.heal.filter(record=>record.acknowledged!==true&&record.outcome!=='recovered'):[];
-        const healSentence=record=>{
-         const module=String(record.moduleName??'');
-         // Only a confirmed disable may claim the entry was switched off. `not-disabled` is the opposite
-         // fact -- the official switch was accepted but the inventory still reports it enabled -- and
-         // telling the user "switched off" there would be a false success they could never detect.
-         if(record.outcome==='disabled')return translate('healDisabled').replace('{module}',module);
-         if(record.outcome==='protected')return translate('healProtected').replace('{module}',module);
-         if(record.outcome==='refused-readonly')return translate('healRefused').replace('{module}',module);
-         return translate('healPending').replace('{module}',module);
-        };
-        const healNotice=healRecords.length===0?null:h('div',{'data-testid':'suite-heal-notice','className':'omni-ui-stack'},
-         healRecords.map(record=>h('div',{key:record.entryId,'data-testid':'suite-heal-'+record.outcome,'className':'omni-ui-stack'},
-          h(StatusLine,{tone:record.outcome==='disabled'?'warn':'error'},translate('healTitle')+' \u00b7 '+healSentence(record)),
-          h(ActionGroup,null,
-           h(Button,{'data-testid':'suite-heal-dismiss','data-entry':record.entryId,busy:healBusy===record.entryId,onClick:()=>void dismissHeal(record.entryId)},translate('healDismiss')),
-           h(Button,{'data-testid':'suite-heal-rescan',busy:checkBusy,onClick:()=>void rescanHeal()},translate('healRescan'))))));
-        // A pending upgrade is the one technical action a normal user must be able to take: the Suite installs
-        // itself, without the plugin install page. It appears only while a newer version exists.
-         // ADR-047: the row is a fixed two-line state row -- status and version, then one fact the user can
-         // check. The verdict comes from the Host (the profile's bytes are the authority); this page picks wording.
-         const upgradeRow=(()=>{
-          if(!upgrade)return {tone:'idle',title:translate('upgradeRowTitle'),version:null,detail:translate('upgradeCheckedNever')};
-          const latest=upgrade.latest?String(upgrade.latest.version):null;
-          const installed=typeof upgrade.currentVersion==='string'?upgrade.currentVersion:null;
-          if(upgradeBusy&&latest!==null)return {tone:'warn',title:translate('upgradeRowInstalling').replace('{version}',latest),version:null,detail:translate('upgradeDetailInstalling')};
-          if(checkBusy)return {tone:'idle',title:translate('upgradeChecking'),version:null,detail:translate('upgradeDetailChecking')};
-          if(upgradeReceipt){
-           const receiptCode=String(upgradeReceipt.code??'');
-           if(receiptCode==='SUITE_UPGRADE_RESTART_REQUIRED')return {tone:'warn',title:translate('upgradeRowInstalled').replace('{version}',String(upgradeReceipt.target??installed??'')),version:null,detail:translate('upgradeDetailInstalled')};
-          // 未确认不是失败：既没有宿主的码、也读不到盘上版本时，页面只能说“重启后确认”，不许断言没装上（ADR-059）。
-          // The old Client generation handed the install to the Host but was reloaded before it could read a
-          // verdict. This is not "unconfirmed by the disk": it is "submitted, confirm after restart".
-          if(receiptCode==='SUITE_UPGRADE_SUBMITTED')return {tone:'warn',title:translate('upgradeRowSubmitted'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:false,detail:translate('upgradeDetailSubmitted')};
-          if(receiptCode==='SUITE_UPGRADE_UNCONFIRMED')return {tone:'warn',title:translate('upgradeRowUnconfirmed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,detail:translate('upgradeDetailUnconfirmed')};
-          // ADR-089: the official installer refused this profile because its node_modules was linked from
-          // another pnpm store major. The bytes never changed; the one useful next step is a manual rebuild.
-          if(receiptCode==='UPGRADE_PROFILE_STORE_MISMATCH')return {tone:'error',title:translate('upgradeRowFailed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:Boolean(upgrade?.latest),
-           detail:translate('upgradeDetailStoreMismatch')+' \u00b7 '+translate('upgradeDiagnosticCode').replace('{code}',receiptCode)+(upgrade?.latest?'':' \u00b7 '+translate('upgradeDetailFailedGone'))};
-           const written=(upgradeReceipt.operations??[]).some(step=>step.changed===true);
-           return {tone:'error',title:translate('upgradeRowFailed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,
-            detail:upgrade?.latest?((written?translate('upgradeDetailFailedWritten'):translate('upgradeDetailFailed'))+translate('upgradeDiagnosticCode').replace('{code}',receiptCode)):translate('upgradeDetailFailedGone')};
-          }
-          if(latest!==null)return {tone:'warn',title:translate('upgradeRowAvailableTitle'),version:latest,detail:translate('upgradeDetailAvailable').replace('{current}',String(installed??'\u2014'))};
-          // ADR-068: 抓取失败一律是“无可用更新”+ 一句人话；八类码共用这一个形状，码只进技术诊断。
-          // 候选已经拿到了（latest!==null）就说明抓取成功，旧失败记录不能继续挂在同一行上。
-          if(checkReceipt)return {tone:'warn',title:translate('upgradeRowNoInstallable'),version:null,detail:translate(checkReceipt.reasonKey)};
-          if(upgrade.mode!=='release')return {tone:'idle',title:translate('upgradeRowSource'),version:null,detail:translate('upgradeDetailSource')};
-          if(actionableCount>0){
-           const refused=String((actionableRefusals[0]?.items?.[0]?.directory??'').split('/').pop()??'\u2014');
-           return {tone:'warn',title:translate('upgradeRowNoInstallable'),version:null,detail:translate('upgradeDetailNoInstallable').replace('{version}',refused).replace('{count}',(actionableCount===1?translate('upgradeCountDirectoryOne'):translate('upgradeCountDirectoryMany')).replace('{count}',String(actionableCount)))};
-          }
-          // ADR-080 D4: a readable channel with no candidate is not "up to date". "Up to date" needs evidence
-          // of a published Suite release that is not newer; a channel with nothing installable gets its own
-          // reason instead of an ok verdict.
-          if(!refusals.some(item=>item.code==='UPGRADE_NOT_NEWER'))return {tone:'idle',title:translate('upgradeRowNoInstallable'),version:null,detail:translate('upgradeDetailEmptyChannel')};
-          return {tone:'ok',title:translate('upgradeUpToDate'),version:installed,detail:checkedAt?translate('upgradeDetailRelease'):translate('upgradeDetailUnchecked')};
-         })();
-         // ADR-047: the update card is part of the daily surface; the developer switch below adds the
-         // technical facts, never a second copy of the same status row.
-         // One state row, rendered by the collapsed summary and by the developer card: two surfaces, one shape
-         // (ADR-047 D1). The dot only carries a tone token; the version is part of the title line.
-         const upgradeStatusRowEl=()=>h(ListRow,{'data-testid':'suite-upgrade-status-row',
-          title:h('span',{'data-testid':'suite-upgrade-status-title'},
-           h('span',{'className':'omni-ui-stateDot','data-tone':upgradeRow.tone,'aria-hidden':'true'}),
-           h('span',null,upgradeRow.title),
-           upgradeRow.version?h('span',{'data-testid':'suite-upgrade-status-version','className':'omni-ui-stateVersion'},upgradeRow.version):null),
-          description:h('span',{'data-testid':'suite-upgrade-status-detail'},upgradeRow.detail),
-          actions:h(ActionGroup,null,
-           // 检查更新 = checkRelease()（唯一联网入口），不是读盘的 upgradeStatus——后者在这里等于永不检查。
-           h(Button,{'data-testid':'suite-upgrade-check',busy:checkBusy,onClick:()=>void runCheck()},checkBusy?translate('upgradeChecking'):translate('upgradeCheck')),
-           // ADR-068 2026-10-29 修订：勾选框删掉，确认就是这一次点击；按钮文案绑定被检查出的那个版本，
-           // 版本变了按钮就跟着变——不存在“拿旧候选装”的路径。没有确认即不安装：这里只有一个动作。
-           upgrade?.latest&&h(Button,{'data-testid':'suite-upgrade-run',variant:'primary',busy:upgradeBusy,disabled:upgradeBusy,onClick:()=>void runUpgrade()},
-            upgradeBusy?translate('upgradeWorking'):((upgradeRow.retry?translate('upgradeRunRetryWithVersion'):translate('upgradeRunWithVersion')).replace('{version}',String(upgrade.latest.version)))))});
-         // ── 更新来源控件（ADR-068 / ADR-080 D1）────────────────────────────────────────────────────────
-         // ADR-080 D1：来源是部署事实，不是使用决策。控件整块只在「开发者选项」展开后渲染，日常面只保留
-         // 状态行与「检查更新」；选 GitHub 时展开三项，选回本地目录时收起且不清空。
-         const updateSourceBlock=()=>h(React.Fragment,null,
-          h('ul',{'data-testid':'suite-upgrade-source-list','className':'omni-ui-list omni-ui-list--flush'},
-           h(ListRow,{'data-testid':'suite-upgrade-source-row',title:translate('updateSource'),
-            description:sourceReady?null:translate('updateSourceUnavailable'),
-            actions:h(Select,{variant:'inline','data-testid':'suite-upgrade-source',name:'updateSource',
-             'aria-label':translate('updateSource'),value:sourceKind,disabled:!sourceReady,
-             onChange:event=>void chooseSource(event.target.value)},
-             UPDATE_KINDS.map(kind=>h('option',{key:kind,value:kind},translate(kind==='github'?'updateSourceGithub':'updateSourceLocal'))))})),
-          // 选回本地目录时这一块整块收起，但配置里的 owner/repo/channel/凭据引用一个都不清空：再切回来就是刚才的值。
-          sourceKind==='github'&&h('div',{'data-testid':'suite-upgrade-source-github','className':'omni-ui-stack'},
-           h(FormGrid,null,
-            h(Field,{label:translate('updateSourceRepo')},
-             h(TextInput,{'data-testid':'suite-upgrade-source-repo',name:'updateSourceRepo',value:sourceEdit.repo,disabled:!sourceReady,autoComplete:'off',spellCheck:false,
-              placeholder:'owner/repo',onChange:event=>{const value=event.target.value;setSourceNotice(null);setSourceDraft({...sourceEdit,repo:value});}})),
-            h(Field,{label:translate('updateSourceChannel')},
-             h(Select,{'data-testid':'suite-upgrade-source-channel',name:'updateSourceChannel',value:sourceEdit.channel,disabled:!sourceReady,
-              onChange:event=>{const value=event.target.value;setSourceNotice(null);setSourceDraft({...sourceEdit,channel:value});}},
-              UPDATE_CHANNELS.map(channel=>h('option',{key:channel,value:channel},translate(channel==='prerelease'?'updateSourcePrerelease':'updateSourceStable'))))),
-            h(Field,{label:translate('updateSourceCredential'),hint:sourceCredentialSentence},
-             h(TextInput,{'data-testid':'suite-upgrade-source-credential',name:'updateSourceCredential',value:sourceEdit.credentialRef,disabled:!sourceReady,autoComplete:'off',spellCheck:false,
-              onChange:event=>{const value=event.target.value;setSourceNotice(null);setSourceDraft({...sourceEdit,credentialRef:value});}}))),
-           h('p',{'data-testid':'suite-upgrade-source-hint','className':'omni-ui-hint'},translate('updateSourceHint')),
-           h(ActionGroup,null,
-            h(Button,{'data-testid':'suite-upgrade-source-save',disabled:!sourceCanSave,onClick:()=>void saveSource()},translate('updateSourceSave'))),
-           sourceNotice==='saved'&&h(StatusLine,{tone:'ok','data-testid':'suite-upgrade-source-result'},translate('updateSourceSaved')),
-           sourceNotice==='refused'&&h(StatusLine,{tone:'warn',role:'alert','data-testid':'suite-upgrade-source-result'},translate('updateSourceRefused')),
-           sourceNotice==='unavailable'&&h(StatusLine,{tone:'warn','data-testid':'suite-upgrade-source-result'},translate('updateSourceUnavailable'))));
-         // ADR-048: an information block exists only when it has something to state -- no empty shell
-         const upgradeCard=!upgrade?null:(
-         h(SettingsCard,{'data-testid':'suite-upgrade-card',title:h('span',{className:'omni-ui-cardTitleRow'},
-          h('span',null,translate('upgradeRowTitle')),
-          upgrade?(checkedAt?h('span',{'data-testid':'suite-upgrade-checked','className':'omni-ui-cardMeta'},translate('upgradeCheckedAt').replace('{time}',checkedAt)):h('span',{className:'omni-ui-cardMeta'},translate('upgradeCheckedNever'))):null)},
-          upgrade?h('ul',{'data-testid':'suite-upgrade-status','className':'omni-ui-list omni-ui-list--flush'},upgradeStatusRowEl()):h('p',{'data-testid':'suite-upgrade-unavailable','className':'omni-ui-hint'},translate('waitingHost')),
-          // 一次检查没有回答（通道/宿主拒绝）时，回执留在卡片上：点了按钮却什么都没发生，看起来像死按钮。
-          checkFailure&&h('div',{'data-testid':'suite-upgrade-check-failure'},h(StatusLine,{tone:'warn',role:'alert'},translate('checkFailed').replace('{code}',String(checkFailure.code)))),
-          state&&!state.linked&&upgrade&&upgrade.mode!=='release'&&h('div',{'data-testid':'suite-upgrade-mode-mismatch'},h(StatusLine,{tone:'warn'},translate('upgradeModeMismatch').replace('{mode}',String(modeWord(upgrade.mode)??upgrade.mode)))),
-          actionableCount>0&&h('div',{'data-testid':'suite-upgrade-refusal-actionable','className':'omni-ui-stack'},
-           h(StatusLine,{tone:'warn'},translate('refusalActionable').replace('{count}',(actionableCount===1?translate('upgradeCountDirectoryOne'):translate('upgradeCountDirectoryMany')).replace('{count}',String(actionableCount))).replace('{reasons}',actionableRefusals.map(group=>refusalWords(group.code)).join(' \u00b7 '))),
-           h(Disclosure,{'data-testid':'suite-upgrade-refusals',title:translate('upgradeRefusals')+' ('+actionableCount+')'},
-            h('div',null,actionableRefusals.map(group=>h('div',{key:group.code,'data-testid':'suite-upgrade-refusal-'+group.code},
-             h('p',null,refusalWords(group.code)+' \u00d7 '+group.items.length),
-             h('ul',null,group.items.map(item=>h('li',{key:item.directory},item.directory))))))))));
-        const developerPanel=!developer?null:h('div',{'data-testid':'suite-developer-options','className':'omni-ui-stack'},
-         // ADR-080 D1: the source is a deployment fact, not a usage decision; the whole control lives here.
-         updateSourceBlock(),
-         h(SettingsCard,{'data-testid':'suite-identity-card',title:translate('devIdentity')},
-          state?h(KeyValueList,{'data-testid':'suite-identity-kv',items:[
-           {label:translate('upgradeModeLabel'),value:state.linked?translate('modeSource'):translate('modeRelease'),hint:state.linked?translate('modeSourceHint'):translate('modeReleaseHint'),'data-value-testid':'suite-identity-mode'},
-           {label:translate('source'),value:state.sourceRoot??null,mono:true},
-           {label:translate('host'),value:state.hostRevision??null,mono:true,shorten:true,copy:state.hostRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-host'},
-           {label:translate('client'),value:state.operation?.target?.clientRevision??null,mono:true,shorten:true,copy:state.operation?.target?.clientRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-client'},
-           {label:translate('target'),value:state.operation?.target?.hostRevision??null,mono:true,shorten:true,copy:state.operation?.target?.hostRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-target'},
-           {label:translate('entry'),value:state.operation?.target?.entryFingerprint??null,mono:true,shorten:true,copy:state.operation?.target?.entryFingerprint??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-entry-fingerprint'},
-           {label:translate('protocol'),value:state.managerProtocol??null,mono:true}
-          ]}):h(StatusLine,{tone:'warn','data-testid':'suite-identity-state'},translate('waitingHost')),
-          identity,
-          // 构建相关的事实只在源码态有意义：发行包里没有可构建的源码，把"请先绑定源码"摆给普通用户，
-          // 只会制造"我是不是漏了一步"的错觉——发行版安装本来就是这个套件的正常形态。
-          state&&state.linked&&readiness&&!readiness.ready&&h(StatusLine,{tone:'warn','data-testid':'suite-readiness'},translate('builderStale')),
-          state&&state.linked&&!state.hostHmr&&h(StatusLine,{tone:'warn'},translate('noHmr')),
-          noticeText&&h(StatusLine,{tone:'ok','data-testid':'suite-host-notice'},noticeText),
-          op&&op.error&&renderTechnicalFailure(h,translate,'operationError',op.error)),
-         state?.linked&&h(SettingsCard,{'data-testid':'suite-dev-actions',title:translate('devActions')},
-          h(Checkbox,{'data-testid':'suite-build-confirm',checked:confirmed,label:translate('confirm'),onChange:event=>setConfirmed(event.target.checked)}),
-          h(ActionGroup,null,
-           h(Button,{'data-testid':'suite-dev-build',disabled:!confirmed||Boolean(busy)||upgradeBusy||op?.phase==='building'||Boolean(error),onClick:()=>void build()},translate(busy||op?.phase==='building'?'building':state?.hostHmr?'build':'restartBuild')))),
-         // ADR-047 D4: the profile's bytes, the transaction receipt and the page's own view live in exactly
-         // one place -- after the developer switch. Nothing in the daily surface points at it.
-         h(Disclosure,{'data-testid':'suite-technical-details',title:translate('technicalDetails'),defaultOpen:Boolean(upgradeReceipt&&String(upgradeReceipt.code??'')!=='SUITE_UPGRADE_RESTART_REQUIRED')},
-          upgradeDetails.length>0&&h(KeyValueList,{'data-testid':'suite-upgrade-kv',items:upgradeDetails}),
-          upgradeReceipt&&h('div',{'data-testid':'suite-upgrade-receipt','className':'omni-ui-stack'},
+         return false;
+        }
+        const current=snapshot.value&&typeof snapshot.value==='object'?snapshot.value.updateSource:null;
+        const stored=current&&typeof current==='object'?current:{};
+        const next={kind:stored.kind==='github'?'github':'local',owner:String(stored.owner??''),repo:String(stored.repo??''),
+         channel:stored.channel==='prerelease'?'prerelease':'stable',credentialRef:String(stored.credentialRef??''),...patch};
+        sourceBusyRef.current=true;setSourceBusy(true);
+        let accepted=false,writeError=null;
+        try{accepted=await form.mutate([{op:'set',path:['updateSource'],value:next}],expectedRev);}
+        catch(issue){accepted=false;writeError=String((issue&&issue.message)||issue);}
+        finally{sourceBusyRef.current=false;setSourceBusy(false);}
+        let latestSnapshot=null;
+        try{latestSnapshot=form.getSnapshot();}catch{latestSnapshot=null;}
+        if(accepted){
+         if(latestSnapshot&&latestSnapshot.status==='ready'&&typeof latestSnapshot.revision==='number'){
+          sourceBaseRevRef.current=latestSnapshot.revision;
+         }
+         if(clearDraft){sourceDraftRef.current=null;setSourceDraft(null);}
+         sourceNoticeRef.current='saved';setSourceNotice('saved');setSourceError(null);
+         showToast({text:translate('updateSourceSaved'),kind:'suite-source-save',tone:'ok',durationMs:4000,closeLabel:translate('closeLabel')});
+        }else{
+         const isStale=Boolean(latestSnapshot&&latestSnapshot.revision!==expectedRev);
+         const nextNotice=isStale?'stale':'refused';
+         sourceNoticeRef.current=nextNotice;
+         setSourceNotice(nextNotice);
+         setSourceError(writeError||(isStale?'expectedRevision='+String(expectedRev)+', currentRevision='+String(latestSnapshot.revision):null));
+        }
+        setConfigTick(tick=>tick+1);
+        return accepted;
+       };
+       const chooseSource=async kind=>{if(sourceNoticeRef.current==='stale'||sourceBusyRef.current||kind===sourceKind)return;await writeSource({kind},{clearDraft:false});};
+       const saveSource=async()=>{
+        if(sourceNoticeRef.current==='stale'||sourceBusyRef.current)return;
+        const {owner,repo}=sourceRepoParts();
+        if(sourceKind==='github'&&(owner===''||repo==='')){sourceNoticeRef.current='refused';setSourceNotice('refused');setSourceError(null);return;}
+        await writeSource({kind:'github',owner,repo,channel:String(sourceEdit.channel==='prerelease'?'prerelease':'stable'),
+         credentialRef:String(sourceEdit.credentialRef??'').trim()},{clearDraft:true});
+       };
+       const cancelSource=()=>{
+        if(sourceNoticeRef.current==='stale'||sourceBusyRef.current)return;
+        const latest=(()=>{try{return wire.form?wire.form.getSnapshot():null;}catch{return null;}})();
+        sourceBaseRevRef.current=latest&&latest.status==='ready'&&typeof latest.revision==='number'?latest.revision:null;
+        sourceDraftRef.current=null;sourceNoticeRef.current=null;
+        setSourceDraft(null);setSourceNotice(null);setSourceError(null);setConfigTick(tick=>tick+1);
+       };
+       const reloadSource=()=>{
+        if(sourceBusyRef.current)return;
+        const latest=(()=>{try{return wire.form?wire.form.getSnapshot():null;}catch{return null;}})();
+        sourceBaseRevRef.current=latest&&latest.status==='ready'&&typeof latest.revision==='number'?latest.revision:null;
+        sourceDraftRef.current=null;sourceNoticeRef.current=null;
+        setSourceDraft(null);setSourceNotice(null);setSourceError(null);setConfigTick(tick=>tick+1);
+        showToast({text:translate('updateSourceReloadedToast'),kind:'suite-source-reload',tone:'ok',durationMs:3000,closeLabel:translate('closeLabel')});
+       };
+       const {owner:editOwner,repo:editRepo}=sourceRepoParts();
+       const sourceRepoValid=editOwner!==''&&editRepo!=='';
+       const sourceDirty=sourceEdit.repo!==sourceStoredText||sourceEdit.channel!==sourceChannel||sourceEdit.credentialRef!==sourceRef;
+       const sourceRepoInvalid=sourceKind==='github'&&(sourceDirty||String(sourceEdit.repo??'').trim()!=='')&&!sourceRepoValid;
+       const sourceCanSave=sourceReady&&sourceNotice!=='stale'&&!sourceBusy&&(sourceKind!=='github'||(sourceDirty&&sourceRepoValid));
+       const sourceCredentialSentence=(()=>{
+        if(sourceRef==='')return translate('updateSourceCredentialUnset');
+        if(credentialState==='configured')return translate('updateSourceCredentialConfigured');
+        if(credentialState==='missing')return translate('updateSourceCredentialMissing');
+        return translate('updateSourceCredentialUnknown');
+       })();
+       const sourceCredentialTone=sourceRef===''?'neutral':credentialState==='configured'?'ok':credentialState==='missing'?'warn':'neutral';
+       // ── Refusals, Runtime Guard, Notices (CARD-EMB-05) ─────────────────────────────────────────────
+       const refusals=upgrade?.refusals??[];
+       const modeMismatchVisible=Boolean(state&&!state.linked&&upgrade&&upgrade.mode!=='release');
+       const channelReason=!upgrade||upgrade.latest?null:refusals.some(item=>item.code==='UPGRADE_DIRECTORY_INVALID')?translate('upgradeDisabled'):refusals.some(item=>item.code==='UPGRADE_DIRECTORY_UNREADABLE')?translate('channelUnreadable'):state?.linked!==true&&upgrade.mode!=='release'?translate('upgradeSourceMode'):null;
+       const runtime=runtimeVerdict(bootReleaseVersion(globalThis.__DSH_BOOT__),VERIFIED_RUNTIMES);
+       const runtimeKey=runtimeNoticeKey(runtime.state);
+       const refusalWords=code=>isFetchCode(code)?translate(FETCH_KEYS[code]):code==='UPGRADE_NOT_NEWER'?translate('refusalNotNewer'):code==='UPGRADE_NOT_A_CANDIDATE'?translate('refusalNotCandidate'):code==='UPGRADE_SUMS_MISSING'?translate('refusalSumsMissing'):code==='UPGRADE_CANDIDATE_INVALID'?translate('refusalInvalid'):code==='UPGRADE_RUNTIME_UNVERIFIED'?translate('refusalRuntimeUnverified'):code==='UPGRADE_RUNTIME_UNDECLARED'?translate('refusalRuntimeUndeclared'):code==='UPGRADE_RUNTIME_UNKNOWN'?translate('refusalRuntimeUnknown'):code==='UPGRADE_CURRENT_UNREADABLE'?translate('refusalCurrentUnreadable'):translate('refusalOther').replace('{code}',String(code));
+       const refusalGroups=(()=>{const groups=new Map();for(const item of upgrade?.refusals??[]){const code=String(item.code??'UPGRADE_CANDIDATE_INVALID');const group=groups.get(code)??{code,items:[]};group.items.push(item);groups.set(code,group);}return [...groups.values()];})();
+       const expectedRefusal=code=>code==='UPGRADE_NOT_NEWER'||code==='UPGRADE_NOT_A_CANDIDATE'||code==='UPGRADE_SOURCE_MODE';
+       const actionableRefusals=refusalGroups.filter(group=>!expectedRefusal(group.code)&&!isFetchCode(group.code));
+       const actionableCount=actionableRefusals.reduce((total,group)=>total+group.items.length,0);
+       const healRecords=Array.isArray(components?.heal)?components.heal.filter(record=>record.acknowledged!==true&&record.outcome!=='recovered'):[];
+       const healSentence=record=>{
+        const module=String(record.moduleName??'');
+        if(record.outcome==='disabled')return translate('healDisabled').replace('{module}',module);
+        if(record.outcome==='protected')return translate('healProtected').replace('{module}',module);
+        if(record.outcome==='refused-readonly')return translate('healRefused').replace('{module}',module);
+        return translate('healPending').replace('{module}',module);
+       };
+       const receiptCodeStr=String(upgradeReceipt?.code??'');
+       const restartSuppressed=receiptCodeStr==='SUITE_UPGRADE_RESTART_REQUIRED';
+       const channelSuppressed=Boolean(checkFailure)||modeMismatchVisible;
+       const p1Rows=[];
+       for(const record of healRecords){
+        const isContained=record.outcome==='disabled';
+        p1Rows.push(h(ListRow,{
+         key:'heal-'+record.entryId,
+         'data-testid':'suite-heal-'+record.outcome,
+         'data-priority':'p1',
+         title:translate(isContained?'healContainedTitle':'healUnconfirmedTitle').replace('{module}',String(record.moduleName??'')),
+         badge:h(Badge,{tone:isContained?'warn':'err'},translate(isContained?'noticeBadgeContained':'noticeBadgeImmediate')),
+         description:healSentence(record),
+         actions:h(ActionGroup,null,
+          h(Button,{'data-testid':'suite-heal-dismiss','data-entry':record.entryId,variant:'default',size:'sm',busy:healBusy===record.entryId,onClick:()=>void dismissHeal(record.entryId)},translate('healDismiss')),
+          h(Button,{'data-testid':'suite-heal-rescan',variant:'ghost',size:'sm',busy:checkBusy,onClick:()=>void rescanHeal()},translate('healRescan')))
+        }));
+       }
+       if(runtimeKey!==null){
+        p1Rows.push(h(ListRow,{
+         key:'runtime',
+         'data-testid':'suite-runtime-unverified',
+         'data-priority':'p1',
+         title:translate('noticeCompatTitle'),
+         badge:h(Badge,{tone:'warn'},translate('noticeBadgeCompat')),
+         description:say(runtimeKey,{version:runtime.version??''})
+        }));
+       }
+       if(isStaleHost()&&!restartSuppressed){
+        p1Rows.push(h(ListRow,{
+         key:'needs-restart',
+         'data-testid':'suite-needs-restart',
+         'data-priority':'p1',
+         title:translate('noticeRestartTitle'),
+         badge:h(Badge,{tone:'warn'},translate('noticeBadgeRestart')),
+         description:translate('needsRestartAfterUpdate')
+        }));
+       }
+       const p2Rows=[];
+       if(recovery){
+        p2Rows.push(h(ListRow,{
+         key:'recovery',
+         'data-testid':'suite-recovery-notice',
+         'data-priority':'p2',
+         title:translate('recoveryTitle'),
+         badge:h(Badge,{tone:'warn'},translate('noticeBadgeRecovery')),
+         description:h('span',{'data-testid':'suite-recovery-line'},recovery.action==='rows-disabled'?recovery.rows.map(row=>row.rowId).join(', '):translate('recoveryNone'))
+        }));
+       }
+       if(channelReason!==null&&!channelSuppressed){
+        p2Rows.push(h(ListRow,{
+         key:'channel',
+         'data-testid':'suite-upgrade-channel',
+         'data-priority':'p2',
+         title:translate('noticeChannelTitle'),
+         badge:h(Badge,{tone:'warn'},translate('noticeBadgeChannel')),
+         description:channelReason
+        }));
+       }
+       if(attention>0){
+        p2Rows.push(h(ListRow,{
+         key:'attention',
+         'data-testid':'suite-attention-next-step',
+         'data-priority':'p2',
+         title:translate('noticeAttentionTitle').replace('{count}',String(attention)),
+         badge:h(Badge,{tone:'warn'},translate('noticeBadgeAttention')),
+         description:translate('attentionNextStep').replace('{count}',String(attention)).replace('{steps}',[...new Set(attentionRows.map(row=>row.component?translate(nextStepFor(row.component)):row.entry))].join(' '))
+        }));
+       }
+       const p3Rows=[];
+       if(op?.phase==='building'||op?.phase==='published'||op?.phase==='failed'){
+        const suppressOpRestart=op.phase==='published'&&!state?.hostHmr&&(isStaleHost()||restartSuppressed);
+        if(!suppressOpRestart){
+         p3Rows.push(h(ListRow,{
+          key:'operation',
+          'data-testid':'suite-notice-operation',
+          'data-priority':'p3',
+          title:translate('noticeOpTitle'),
+          badge:h(Badge,{tone:op.phase==='failed'?'err':op.phase==='published'?'ok':'muted'},
+           translate(op.phase==='building'?'noticeBadgeOpRunning':op.phase==='published'?'noticeBadgeOpDone':'noticeBadgeOpFailed')),
+          description:translate(op.phase==='building'?'noticeOpBuilding':op.phase==='failed'?'noticeOpFailed':state?.hostHmr?'noticeOpApplied':'noticeOpRestart')
+         }));
+        }
+       }
+       const noticeRows=[...p1Rows,...p2Rows,...p3Rows];
+       // ── CARD-EMB-03 ────────────────────────────────────────────────────────────────────────────────
+       const upgradeRow=(()=>{
+        if(!upgrade)return {tone:'idle',title:translate('upgradeRowTitle'),version:null,detail:translate('upgradeCheckedNever')};
+        const latest=upgrade.latest?String(upgrade.latest.version):null;
+        const installed=typeof upgrade.currentVersion==='string'?upgrade.currentVersion:null;
+        if(upgradeBusy&&latest!==null)return {tone:'warn',title:translate('upgradeRowInstalling').replace('{version}',latest),version:null,detail:translate('upgradeDetailInstalling')};
+        if(checkBusy)return {tone:'idle',title:translate('upgradeChecking'),version:null,detail:translate('upgradeDetailChecking')};
+        if(upgradeReceipt){
+         const receiptCode=String(upgradeReceipt.code??'');
+         if(receiptCode==='SUITE_UPGRADE_RESTART_REQUIRED')return {tone:'warn',title:translate('upgradeRowInstalled').replace('{version}',String(upgradeReceipt.target??installed??'')),version:null,detail:translate('upgradeDetailInstalled')};
+         if(receiptCode==='SUITE_UPGRADE_SUBMITTED')return {tone:'warn',title:translate('upgradeRowSubmitted'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:false,detail:translate('upgradeDetailSubmitted')};
+         if(receiptCode==='SUITE_UPGRADE_UNCONFIRMED')return {tone:'warn',title:translate('upgradeRowUnconfirmed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,detail:translate('upgradeDetailUnconfirmed')};
+         if(receiptCode==='UPGRADE_PROFILE_STORE_MISMATCH')return {tone:'error',title:translate('upgradeRowFailed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:Boolean(upgrade?.latest),
+          detail:translate('upgradeDetailStoreMismatch')+(upgrade?.latest?'':' \u00b7 '+translate('upgradeDetailFailedGone'))};
+         const written=(upgradeReceipt.operations??[]).some(step=>step.changed===true);
+         return {tone:'error',title:translate('upgradeRowFailed'),version:upgradeReceipt.target?String(upgradeReceipt.target):null,retry:true,
+          detail:upgrade?.latest?translate(written?'upgradeDetailFailedWritten':'upgradeDetailFailed'):translate('upgradeDetailFailedGone')};
+        }
+        if(latest!==null)return {tone:'warn',title:translate('upgradeRowAvailableTitle'),version:latest,detail:translate('upgradeDetailAvailable').replace('{current}',String(installed??'\u2014'))};
+        if(checkReceipt)return {tone:'warn',title:translate('upgradeRowNoInstallable'),version:null,detail:translate(checkReceipt.reasonKey)};
+        if(upgrade.mode!=='release')return {tone:'idle',title:translate('upgradeRowSource'),version:null,detail:translate('upgradeDetailSource')};
+        if(actionableCount>0){
+         const refused=maskDirName(actionableRefusals[0]?.items?.[0]?.directory);
+         return {tone:'warn',title:translate('upgradeRowNoInstallable'),version:null,detail:translate('upgradeDetailNoInstallable').replace('{version}',refused).replace('{count}',(actionableCount===1?translate('upgradeCountDirectoryOne'):translate('upgradeCountDirectoryMany')).replace('{count}',String(actionableCount)))};
+        }
+        if(!refusals.some(item=>item.code==='UPGRADE_NOT_NEWER'))return {tone:'idle',title:translate('upgradeRowNoInstallable'),version:null,detail:translate('upgradeDetailEmptyChannel')};
+        return {tone:'ok',title:translate('upgradeUpToDate'),version:installed,detail:checkedAt?translate('upgradeDetailRelease'):translate('upgradeDetailUnchecked')};
+       })();
+       const upgradeStatusRowEl=()=>h(ListRow,{'data-testid':'suite-upgrade-status-row',
+        title:h('span',{'data-testid':'suite-upgrade-status-title'},
+         h('span',{'className':'omni-ui-stateDot','data-tone':upgradeRow.tone,'aria-hidden':'true'}),
+         h('span',null,upgradeRow.title),
+         upgradeRow.version?h('span',{'data-testid':'suite-upgrade-status-version','className':'omni-ui-stateVersion'},upgradeRow.version):null),
+        description:h('span',{'data-testid':'suite-upgrade-status-detail'},upgradeRow.detail),
+        actions:h(ActionGroup,null,
+         h(Button,{'data-testid':'suite-upgrade-check',busy:checkBusy,onClick:()=>void runCheck()},checkBusy?translate('upgradeChecking'):translate('upgradeCheck')),
+         upgrade?.latest&&h(Button,{'data-testid':'suite-upgrade-run',variant:'primary',busy:upgradeBusy,disabled:upgradeBusy,onClick:()=>confirmUpgrade()},
+          upgradeBusy?translate('upgradeWorking'):((upgradeRow.retry?translate('upgradeRunRetryWithVersion'):translate('upgradeRunWithVersion')).replace('{version}',String(upgrade.latest.version)))))});
+       const upgradeCard=!upgrade?null:(
+        h(SettingsCard,{'data-testid':'suite-upgrade-card',title:h('span',{className:'omni-ui-cardTitleRow'},
+         h('span',null,translate('upgradeRowTitle')),
+         upgrade?(checkedAt?h('span',{'data-testid':'suite-upgrade-checked','className':'omni-ui-cardMeta'},translate('upgradeCheckedAt').replace('{time}',checkedAt)):h('span',{className:'omni-ui-cardMeta'},translate('upgradeCheckedNever'))):null)},
+         h('ul',{'data-testid':'suite-upgrade-status','className':'omni-ui-list omni-ui-list--flush'},upgradeStatusRowEl()),
+         checkFailure&&h('div',{'data-testid':'suite-upgrade-check-failure'},h(StatusLine,{tone:'warn',role:'alert'},translate('checkFailed'))),
+         modeMismatchVisible&&h('div',{'data-testid':'suite-upgrade-mode-mismatch'},h(StatusLine,{tone:'warn'},translate('upgradeModeMismatch').replace('{mode}',String(modeWord(upgrade.mode)??upgrade.mode)))),
+         actionableCount>0&&h('div',{'data-testid':'suite-upgrade-refusal-actionable','className':'omni-ui-stack'},
+          h(StatusLine,{tone:'warn'},translate('refusalActionable').replace('{count}',(actionableCount===1?translate('upgradeCountDirectoryOne'):translate('upgradeCountDirectoryMany')).replace('{count}',String(actionableCount))).replace('{reasons}',actionableRefusals.map(group=>refusalWords(group.code)).join(' \u00b7 '))),
+          h(Disclosure,{'data-testid':'suite-upgrade-refusals',title:translate('upgradeRefusals')+' ('+actionableCount+')'},
+           h('div',null,actionableRefusals.map(group=>h('div',{key:group.code,'data-testid':'suite-upgrade-refusal-'+group.code},
+            h('p',null,refusalWords(group.code)+' \u00d7 '+group.items.length),
+            h('ul',null,group.items.map(item=>h('li',{key:item.directory},maskDirName(item.directory)))))))))));
+       // ── PAGE-04 Status Card (loading / read error) ─────────────────────────────────────────────────
+       const statusCard=error
+        ?h(SettingsCard,{'data-testid':'suite-status-card',title:translate('statusCardTitle'),badge:h(Badge,{tone:'err'},translate('statusCardErrorBadge'))},
+          h('div',{'data-testid':'suite-read-failure','className':'omni-ui-stack'},
+           h(Banner,{tone:'err',role:'alert'},translate('readFailed')),
+           h(ActionGroup,{align:'start'},
+            h(Button,{'data-testid':'suite-read-retry',variant:'default',size:'sm',busy:retryBusy,onClick:()=>void retryRead()},retryBusy?translate('retryingRead'):translate('retryRead'))),
+           h(DiagnosticDisclosure,{title:translate('technicalDetails'),text:String(error),testId:'suite-read-error-details',preTestId:'suite-read-error-raw'})))
+        :(!state&&!components&&!upgrade
+         ?h(SettingsCard,{'data-testid':'suite-status-card',title:translate('statusCardTitle'),badge:h(Badge,{tone:'muted'},translate('statusCardReadingBadge'))},
+           h('div',{'data-testid':'suite-read-pending','className':'omni-ui-stack'},
+            h(StatusLine,{tone:'loading'},translate('waitingHost')),
+            h(Skeleton,{lines:2})))
+         :null);
+       // ── CARD-EMB-05 Notices Card ───────────────────────────────────────────────────────────────────
+       const noticesCard=noticeRows.length===0?null:h(SettingsCard,{
+        'data-testid':'suite-notices-card',
+        title:translate('noticesCardTitle'),
+        badge:p1Rows.length>0
+         ?h(Badge,{tone:'err','data-testid':'suite-notices-badge'},translate('noticesPriorityBadge').replace('{count}',String(p1Rows.length)))
+         :h(Badge,{tone:'warn','data-testid':'suite-notices-badge'},translate('noticesCountBadge').replace('{count}',String(noticeRows.length)))
+       },
+        h('ul',{'data-testid':'suite-notices-list','className':'omni-ui-list omni-ui-list--flush'},noticeRows));
+       // ── CARD-EMB-04 Capability Overview Card ───────────────────────────────────────────────────────
+       const componentsCard=list.length===0?null:h(SettingsCard,{
+        collapsible:true,
+        defaultOpen:false,
+        'data-testid':'suite-components-card',
+        title:h('span',{'data-testid':'suite-components-summary'},
+         translate('componentsCardTitle')+' \u00b7 '+translate('componentsSummary').replace('{total}',String(capabilityRows.length))),
+        description:translate('componentsWhere'),
+        badge:attention===0
+         ?h(Badge,{tone:'ok','data-testid':'suite-components-summary-state'},translate('componentsRunning'))
+         :h(Badge,{tone:'warn','data-testid':'suite-components-summary-state'},translate('componentsAttention').replace('{count}',String(attention)))
+       },
+        capabilityRows.length>0&&h('ul',{'data-testid':'suite-capability-overview','className':'omni-ui-list omni-ui-list--flush'},
+         capabilityRows.map(item=>h(ListRow,{
+          key:item.id,
+          'data-capability':item.id,
+          title:item.title,
+          badge:h(Badge,{tone:item.tone},item.badge),
+          description:item.description,
+          meta:item.entry,
+          actions:h(Button,{variant:'ghost',size:'sm','data-testid':'suite-copy-entry-'+item.id,onClick:()=>void copyText(item.entry,translate('copiedEntry'))},translate('copyEntry'))
+         }))));
+       // ── PANEL-03 Block ①: BLOCK-01 Update Source Card ─────────────────────────────────────────────
+       const updateSourceBlock=()=>h(SettingsCard,{
+        'data-testid':'suite-update-source-card',
+        title:translate('updateSource'),
+        description:translate('updateSourceCardDesc')
+       },
+        h('div',{'className':'omni-ui-stack'},
+         h(Field,{label:translate('updateSourceKind'),hint:sourceReady?undefined:translate('updateSourceUnavailable')},
+          h(Select,{'data-testid':'suite-upgrade-source',name:'updateSource',value:sourceKind,disabled:!sourceReady||sourceBusy||sourceNotice==='stale',
+           onChange:event=>void chooseSource(event.target.value)},
+           UPDATE_KINDS.map(kind=>h('option',{key:kind,value:kind},translate(kind==='github'?'updateSourceGithub':'updateSourceLocal'))))),
+         sourceNotice==='stale'&&h(Banner,{tone:'warn',role:'status','data-testid':'suite-upgrade-source-stale'},
+          h('div',{'className':'omni-ui-stack'},
+           h('span',null,translate('updateSourceStale')),
+           h(ActionGroup,{align:'start'},
+            h(Button,{'data-testid':'suite-upgrade-source-reload',variant:'default',size:'sm',onClick:reloadSource},translate('updateSourceReload'))),
+           sourceError&&h(DiagnosticDisclosure,{title:translate('technicalDetails'),text:sourceError,testId:'suite-upgrade-source-stale-details'}))),
+         sourceNotice==='refused'&&h(Banner,{tone:'err',role:'alert','data-testid':'suite-upgrade-source-result'},
+          h('div',{'className':'omni-ui-stack'},
+           h('span',null,translate('updateSourceRefused')),
+           sourceError&&h(DiagnosticDisclosure,{title:translate('technicalDetails'),text:sourceError,testId:'suite-upgrade-source-error-details'}))),
+         sourceNotice==='unavailable'&&h(StatusLine,{tone:'warn','data-testid':'suite-upgrade-source-result'},translate('updateSourceUnavailable')),
+         sourceKind!=='github'&&h(StatusLine,{tone:'neutral','data-testid':'suite-upgrade-source-hint'},translate('updateSourceLocalHint')),
+         sourceKind==='github'&&h('div',{'data-testid':'suite-upgrade-source-github','className':'omni-ui-stack'},
+          h(FormGrid,{columns:'2'},
+           h(Field,{label:translate('updateSourceRepo'),required:true,hint:translate('updateSourceRepoHint'),error:sourceRepoInvalid?translate('updateSourceRepoInvalid'):undefined},
+            h(TextInput,{'data-testid':'suite-upgrade-source-repo',name:'updateSourceRepo',value:sourceEdit.repo,disabled:!sourceReady||sourceBusy,autoComplete:'off',spellCheck:false,placeholder:'owner/repo',
+             onChange:event=>{const value=event.target.value;if(sourceNotice!=='stale')setSourceNotice(null);setSourceDraft({...sourceEdit,repo:value});}})),
+           h(Field,{label:translate('updateSourceChannel')},
+            h(Select,{'data-testid':'suite-upgrade-source-channel',name:'updateSourceChannel',value:sourceEdit.channel,disabled:!sourceReady||sourceBusy,
+             onChange:event=>{const value=event.target.value;if(sourceNotice!=='stale')setSourceNotice(null);setSourceDraft({...sourceEdit,channel:value});}},
+             UPDATE_CHANNELS.map(channel=>h('option',{key:channel,value:channel},translate(channel==='prerelease'?'updateSourcePrerelease':'updateSourceStable')))))),
+          h(Field,{label:translate('updateSourceCredential'),hint:translate('updateSourceCredentialHint')},
+           h(TextInput,{'data-testid':'suite-upgrade-source-credential',name:'updateSourceCredential',value:sourceEdit.credentialRef,disabled:!sourceReady||sourceBusy,autoComplete:'off',spellCheck:false,
+            onChange:event=>{const value=event.target.value;if(sourceNotice!=='stale')setSourceNotice(null);setSourceDraft({...sourceEdit,credentialRef:value});}})),
+          h(StatusLine,{tone:sourceCredentialTone,'data-testid':'suite-upgrade-source-credential-state'},sourceCredentialSentence),
+          h(ActionGroup,{align:'end'},
+           h(Button,{variant:'ghost','data-testid':'suite-upgrade-source-cancel',disabled:!sourceDirty||sourceBusy||sourceNotice==='stale',onClick:cancelSource},translate('updateSourceCancel')),
+           h(Button,{variant:'primary',busy:sourceBusy,'data-testid':'suite-upgrade-source-save',disabled:!sourceCanSave,onClick:()=>void saveSource()},translate('updateSourceSave'))))));
+       // ── PANEL-03 Block ②: CARD-EMB-06 Build Identity Card ─────────────────────────────────────────
+       const unreadLabel=translate('devIdentityUnread'),naLabel=translate('devIdentityNa');
+       const identityItems=[
+        {label:translate('upgradeModeLabel'),value:state?(state.linked?translate('modeSource'):translate('modeRelease')):unreadLabel,hint:state?(state.linked?translate('modeSourceHint'):translate('modeReleaseHint')):undefined,'data-value-testid':'suite-identity-mode'},
+        state?.linked?{label:translate('source'),value:state.sourceRoot??unreadLabel,mono:true,copy:state.sourceRoot??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-source'}:null,
+        {label:translate('host'),value:state?(state.hostRevision??unreadLabel):unreadLabel,mono:true,shorten:Boolean(state?.hostRevision),copy:state?.hostRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-host'},
+        {label:translate('client'),value:state?(state.operation?.target?.clientRevision??unreadLabel):unreadLabel,mono:true,shorten:Boolean(state?.operation?.target?.clientRevision),copy:state?.operation?.target?.clientRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-client'},
+        {label:translate('target'),value:state?(state.operation?.target?.hostRevision??(state.linked?unreadLabel:naLabel)):unreadLabel,mono:true,shorten:Boolean(state?.operation?.target?.hostRevision),copy:state?.operation?.target?.hostRevision??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-identity-target'},
+        {label:translate('entry'),value:state?(state.operation?.target?.entryFingerprint??(state.linked?unreadLabel:naLabel)):unreadLabel,mono:true,shorten:Boolean(state?.operation?.target?.entryFingerprint),copy:state?.operation?.target?.entryFingerprint??undefined,copyLabel:translate('copyValue'),copiedLabel:translate('copiedValue'),'data-value-testid':'suite-entry-fingerprint'},
+        {label:translate('protocol'),value:state?(state.managerProtocol??unreadLabel):unreadLabel,mono:true}
+       ].filter(Boolean);
+       const identityCard=h(SettingsCard,{
+        'data-testid':'suite-identity-card',
+        title:translate('devIdentity'),
+        description:translate('devIdentityDesc')
+       },
+        h(KeyValueList,{'data-testid':'suite-identity-kv',items:identityItems}),
+        identity,
+        state&&state.linked&&readiness&&!readiness.ready&&h(StatusLine,{tone:'warn','data-testid':'suite-readiness'},translate('builderStale')),
+        state&&state.linked&&!state.hostHmr&&h(StatusLine,{tone:'warn'},translate('noHmr')),
+        noticeText&&h(StatusLine,{tone:'ok','data-testid':'suite-host-notice'},noticeText));
+       // ── PANEL-03 Block ③: CARD-EMB-07 Dev Actions (Linked Source Only) ─────────────────────────────
+       const devActionsCard=!state?.linked?null:h(SettingsCard,{
+        'data-testid':'suite-dev-actions',
+        title:translate('devActions'),
+        description:translate('devActionsDesc')
+       },
+        h('div',{'className':'omni-ui-stack'},
+         h(Checkbox,{'data-testid':'suite-build-confirm',checked:confirmed,label:translate('confirm'),description:translate('confirmDesc'),onChange:event=>setConfirmed(event.target.checked)}),
+         h(ActionGroup,{align:'start'},
+          h(Button,{variant:'primary','data-testid':'suite-dev-build',busy:busy||op?.phase==='building',disabled:!confirmed||Boolean(busy)||upgradeBusy||op?.phase==='building'||Boolean(error),onClick:()=>void build()},translate(busy||op?.phase==='building'?'building':state?.hostHmr?'build':'restartBuild'))),
+         op?.phase==='building'&&h('div',{'data-testid':'suite-operation-status'},h(StatusLine,{tone:'loading'},operationText)),
+         op?.phase==='published'&&h('div',{'data-testid':'suite-operation-status'},h(StatusLine,{tone:'ok'},operationText)),
+         op?.phase==='failed'&&h('div',{'data-testid':'suite-operation-status','className':'omni-ui-stack'},
+          h(Banner,{tone:'err',role:'alert'},
+           h('div',{'className':'omni-ui-stack'},
+            h('span',null,operationText),
+            op.error&&h(DiagnosticDisclosure,{title:translate('technicalDetails'),text:String(op.error),testId:'suite-build-error-details',preTestId:'suite-build-error-raw'}))))));
+       // ── PANEL-03 Block ④: DISCLOSURE-01 Card-internal Section ──────────────────────────────────────
+       const redactedDiagnostics=formatSuiteDiagnostics({state,components,upgrade,recovery,multimodal,check:{receipt:checkReceipt,failure:checkFailure},op,error});
+       const technicalDetailsSection=h('section',{
+        'data-testid':'suite-technical-details-section',
+        'aria-labelledby':'suite-technical-details-title',
+        className:'omni-ui-stack'
+       },
+        h('h4',{id:'suite-technical-details-title',className:'omni-ui-subhead'},translate('technicalSectionTitle')),
+        h('p',{className:'omni-ui-hint'},translate('technicalSectionDesc')),
+        h(Disclosure,{
+         'data-testid':'suite-technical-details',
+         title:translate('technicalDetailsToggle'),
+         defaultOpen:Boolean(upgradeReceipt&&String(upgradeReceipt.code??'')!=='SUITE_UPGRADE_RESTART_REQUIRED')
+        },
+         upgradeDetails.length>0&&h(KeyValueList,{'data-testid':'suite-upgrade-kv',items:upgradeDetails}),
+         upgradeReceipt&&(()=>{
+          const receiptCode=String(upgradeReceipt.code??'');
+          return h('div',{'data-testid':'suite-upgrade-receipt','className':'omni-ui-stack'},
            h('p',null,upgradeReceipt.code+' \u2192 '+String(upgradeReceipt.target??'\u2014')),
+           h('p',null,translate('upgradeDiagnosticCode').replace('{code}',receiptCode)),
            h('p',null,translate('technicalOnDisk').replace('{version}',String(upgradeReceipt.onDisk??'\u2014'))),
            upgradeReceipt.operations.length>0&&h('ul',null,upgradeReceipt.operations.map((step,position)=>h('li',{key:position},step.stage+': '+step.target+' \u2192 '+step.application+(step.code?' ('+step.code+')':'')))),
-           upgradeReceipt.diagnostic&&h('p',null,upgradeReceipt.diagnostic)),
-          // ADR-068: 抓取器的码只在这里出现（原始技术诊断）。用户句子里没有它，但它不能丢——它才是
-          // “为什么没有更新”的唯一事实，也是报障时要贴的那一行。
-          checkReceipt&&h('p',{'data-testid':'suite-upgrade-fetch'},checkReceipt.code+(checkReceipt.directory?' → '+checkReceipt.directory:'')),
-          checkFailure&&h('p',{'data-testid':'suite-upgrade-check-code'},'SUITE_CHECK_REFUSED → '+String(checkFailure.code)),
-          upgradeError&&h('div',{'data-testid':'suite-upgrade-error'},h(StatusLine,{tone:'error'},upgradeError)),
-          h('pre',{'data-testid':'suite-raw-state'},JSON.stringify({state,components,upgrade,recovery,multimodal,check:{receipt:checkReceipt,failure:checkFailure}},null,2))));
-        const componentsCard=list.length===0?null:h(SettingsCard,{
-         collapsible:true,
-         defaultOpen:false,
-         'data-testid':'suite-components-card',
-         title:h('span',{'data-testid':'suite-components-summary'},
-          translate('componentsCardTitle')+' \u00b7 '+translate('componentsSummary').replace('{total}',String(capabilityRows.length))),
-         description:translate('componentsWhere'),
-         badge:attention===0
-          ?h(Badge,{tone:'ok','data-testid':'suite-components-summary-state'},translate('componentsRunning'))
-          :h(Badge,{tone:'warn','data-testid':'suite-components-summary-state'},translate('componentsAttention').replace('{count}',String(attention)))
-        },
-         capabilityRows.length>0&&h('ul',{'data-testid':'suite-capability-overview','className':'omni-ui-list omni-ui-list--flush'},
-          capabilityRows.map(item=>h(ListRow,{key:item.id,'data-capability':item.id,title:item.title,badge:h(Badge,{tone:item.tone},item.badge),description:item.description,meta:item.entry}))));
-        const notices=[runtimeNotice,attentionNotice,channelNotice,recoveryNotice,healNotice].filter(Boolean);
-        const noticesCard=notices.length===0?null:h(SettingsCard,{'data-testid':'suite-notices-card',title:translate('noticesCardTitle')},
-         h('div',{'className':'omni-ui-stack'},notices));
-        // The library token root must wrap the whole contribution: the bare developer switch is not a
-        // control root of its own, so outside a card it would render without resolved tokens.
-        return h('div',{'data-testid':'suite-development-manager','className':'omni-ui-tokens omni-ui-pageContent'},
-         error&&h('div',{'data-testid':'suite-read-failure'},h(StatusLine,{tone:'warn'},translate('readFailed').replace('{reason}',String(error))),h('p',{'data-testid':'suite-read-retry','className':'omni-ui-hint'},translate('retryNote'))),
-         !error&&!state&&!components&&!upgrade&&h('div',{'data-testid':'suite-read-pending'},h(StatusLine,{tone:'ok'},translate('waitingHost'))),
-         // The Host owns the operation phase; this page owns the sentence and the tone. The raw reason is not
-         // a user-facing message -- it stays in the technical disclosure below.
-         !error&&operationText&&h('div',{'data-testid':'suite-operation-status'},h(StatusLine,{tone:op?.phase==='failed'?'warn':'ok'},operationText)),
-         // ADR-048 D1: no information block sits bare on the page root. The component summary is one titled
-         // card, the transient notices are one titled card, and the update block stays its own titled card.
-         upgradeCard,componentsCard,noticesCard,
-         // ADR-043: between installing an update and restarting, the running Host still answers with the
-         // previous descriptor. The read below falls back to the older arity, and this is the one sentence
-         // that tells the user what to do about it — plain words, no control-plane vocabulary.
-         isStaleHost()&&h('p',{className:'omni-ui-hint','data-testid':'suite-needs-restart'},translate('needsRestartAfterUpdate')),
-         h(Checkbox,{'data-testid':'suite-developer-toggle',checked:developer,label:translate('developerOptions'),description:translate('developerHint'),onChange:event=>toggleDeveloper(event.target.checked)}),
-         developerPanel);
+           upgradeReceipt.diagnostic&&h('p',null,upgradeReceipt.diagnostic));
+         })(),
+         actionableCount>0&&h('div',{'data-testid':'suite-upgrade-refusal-paths','className':'omni-ui-stack'},
+          actionableRefusals.map(group=>h('div',{key:group.code},
+           h('p',null,group.code),
+           h('ul',null,group.items.map(item=>h('li',{key:item.directory},item.directory)))))),
+         checkReceipt&&h('p',{'data-testid':'suite-upgrade-fetch'},checkReceipt.code+(checkReceipt.directory?' \u2192 '+checkReceipt.directory:'')),
+         checkFailure&&h('p',{'data-testid':'suite-upgrade-check-code'},'SUITE_CHECK_REFUSED \u2192 '+String(checkFailure.code)),
+         upgradeError&&h('div',{'data-testid':'suite-upgrade-error'},h(StatusLine,{tone:'error'},upgradeError)),
+         h('p',{className:'omni-ui-label'},translate('technicalRawLabel')),
+         h('pre',{'data-testid':'suite-raw-state',className:'omni-ui-codeBlock'},redactedDiagnostics),
+         h(ActionGroup,{align:'start'},
+          h(Button,{'data-testid':'suite-copy-diagnostics',variant:'default',size:'sm',onClick:()=>void copyText(redactedDiagnostics,translate('copiedDiagnostics'))},translate('copyDiagnostics')))));
+       // ── PANEL-03 Developer Card ────────────────────────────────────────────────────────────────────
+       const developerPanel=!developer?null:h('div',{'data-testid':'suite-developer-options','className':'omni-ui-stack'},
+        error&&!state&&h(Banner,{tone:'err',role:'alert','data-testid':'suite-developer-read-error'},
+         h('div',{'className':'omni-ui-stack'},
+          h('span',null,translate('devReadError')),
+          h(ActionGroup,{align:'start'},
+           h(Button,{'data-testid':'suite-developer-retry',variant:'default',size:'sm',busy:retryBusy,onClick:()=>void retryRead()},retryBusy?translate('retryingRead'):translate('retryRead'))),
+          h(DiagnosticDisclosure,{title:translate('technicalDetails'),text:String(error),testId:'suite-developer-error-details',preTestId:'suite-developer-error-raw'}))),
+        updateSourceBlock(),
+        identityCard,
+        devActionsCard,
+        technicalDetailsSection);
+       const developerCard=h(SettingsCard,{
+        collapsible:true,
+        open:developer,
+        defaultOpen:developer,
+        onToggle:toggleDeveloper,
+        'data-testid':'suite-developer-card',
+        toggleTestId:'suite-developer-toggle',
+        title:translate('developerOptions'),
+        description:translate('developerHint')
+       },developerPanel);
+       return h('div',{'data-testid':'suite-development-manager','className':'omni-ui-tokens omni-ui-pageContent'},
+        statusCard,upgradeCard,noticesCard,componentsCard,developerCard);
       }
       ctx.slots.inject('plugins.bundle.config',()=>ctx.slots.register({name:'plugins.bundle.config',key:'@omnisurge/dsh-suite',locale:NS},Manager));
      });

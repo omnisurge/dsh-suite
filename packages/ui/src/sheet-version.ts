@@ -1,5 +1,5 @@
 /** Must match package.json version. Shared sheet is last-writer; never let an older bundle downgrade it. */
-export const UI_SHEET_VERSION = "0.1.52";
+export const UI_SHEET_VERSION = "0.2.2";
 
 function parseUiSheetVersion(value: string): readonly [number, number, number] | null {
   const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value.trim());

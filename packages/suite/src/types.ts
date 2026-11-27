@@ -171,7 +171,7 @@ export interface McpServerDraft {
  enabled?:boolean;
 }
 /** 写入结果：'live' 表示重载后已在 loader 里看到该行；'pending' 表示已写盘但运行时尚未重载。 */
-export interface McpServerMutation {mode:'added'|'updated'|'removed';rowId:string;name:string;applied:'live'|'pending';}
+export interface McpServerMutation {mode:'added'|'updated'|'removed'|'enabled'|'disabled';rowId:string;name:string;applied:'live'|'pending';}
 /** ADR-032 D5：用途编辑器看到的一行。`enabled:false` 的行页面仍可编辑，段里不显示（D3 与 D5 分开表达）。 */
 export interface McpPurposeServer {rowId:string;serverName:string;enabled:boolean;}
 /** ADR-032 D6：旁路文件读不出的原因。`raw` 是有界诊断摘录（≤2000 字符），不是给页面直接显示的用户文案。

@@ -18,12 +18,58 @@ export function Checkbox({ label, description, indeterminate = false, className 
   </label>;
 }
 
-export function Switch({ label, description, className = "", ...rest }: CheckControlProps) {
+export type SwitchAlign = "start" | "between";
+
+export interface SwitchProps extends CheckControlProps {
+  readonly align?: SwitchAlign;
+  readonly busy?: boolean;
+}
+
+export function Switch({
+  label,
+  description,
+  align = "start",
+  busy = false,
+  disabled,
+  className = "",
+  ...rest
+}: SwitchProps) {
   const hint = useId();
-  return <label className={`omni-ui-check omni-ui-switch ${className}`}>
-    <input {...rest} type="checkbox" role="switch" aria-describedby={[rest["aria-describedby"], description ? hint : null].filter(Boolean).join(" ") || undefined} />
-    <span>{label}{description && <span id={hint} className="omni-ui-hint omni-ui-controlHint">{description}</span>}</span>
-  </label>;
+  const classes = ["omni-ui-check", "omni-ui-switch"];
+  if (align === "between") classes.push("omni-ui-switch--between");
+  if (busy) classes.push("omni-ui-switch--busy");
+  if (className !== "") classes.push(className);
+  const inputEl = (
+    <input
+      {...rest}
+      type="checkbox"
+      role="switch"
+      disabled={disabled || busy}
+      aria-busy={busy ? "true" : undefined}
+      aria-describedby={[rest["aria-describedby"], description ? hint : null].filter(Boolean).join(" ") || undefined}
+    />
+  );
+  const contentEl = (
+    <span className="omni-ui-checkContent">
+      {label}
+      {description && <span id={hint} className="omni-ui-hint omni-ui-controlHint">{description}</span>}
+    </span>
+  );
+  return (
+    <label className={classes.join(" ")}>
+      {align === "between" ? (
+        <>
+          {contentEl}
+          {inputEl}
+        </>
+      ) : (
+        <>
+          {inputEl}
+          {contentEl}
+        </>
+      )}
+    </label>
+  );
 }
 
 export interface RadioGroupProps {

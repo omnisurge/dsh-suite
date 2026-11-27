@@ -431,7 +431,42 @@ body[data-omniwc="chat"] .omnieff-model-menu { display: none; }
 .omnieff-model-option-desc { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--omni-label-tertiary); font-size: 10px; }
 .omnieff-model-check { color: var(--omni-brand); font-size: 15px; text-align: center; }
 .omnieff-model-status { padding: 14px; color: var(--omni-label-tertiary); font-size: 12px; text-align: center; }
-.omnieff-model-error { margin: 8px; padding: 8px 10px; border-radius: 8px; color: var(--omni-danger); background: var(--omni-danger-soft); font-size: 11px; }
+.omnieff-model-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 6px 4px 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--omni-danger);
+  background: var(--omni-danger-soft);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.omnieff-model-retry {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.omnieff-model-retry:hover:not(:disabled) { background: var(--omni-fill); }
+.omnieff-model-retry:disabled { cursor: not-allowed; opacity: .5; }
+.omnieff-model-trigger:focus-visible,
+.omnieff-model-row:focus-visible,
+.omnieff-model-option:focus-visible,
+.omnieff-model-back:focus-visible,
+.omnieff-model-retry:focus-visible {
+  outline: 2px solid var(--omni-brand);
+  outline-offset: -2px;
+}
 .omnieff-setting-row {
   display: flex;
   align-items: center;
@@ -702,10 +737,44 @@ body[data-ds-dark-theme] .omnieff-adapt-panel {
 }
 .omnieff-adapt-apply:disabled,
 .omnieff-adapt-cancel:disabled { cursor: wait; opacity: .6; }
+@media (max-width: 520px) {
+  .omnieff-model-trigger {
+    max-width: min(180px, calc(100vw - 120px));
+  }
+  .omnieff-model-menu {
+    max-width: calc(100vw - 24px);
+  }
+}
+@media (pointer: coarse) {
+  .omnieff-model-trigger {
+    height: auto;
+    min-height: var(--omni-touch-target, 44px);
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .omnieff-model-row {
+    min-height: max(45px, var(--omni-touch-target, 44px));
+  }
+  .omnieff-model-option,
+  .omnieff-model-back,
+  .omnieff-model-retry,
+  .omnieff-team-row {
+    height: auto;
+    min-height: var(--omni-touch-target, 44px);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .omnieff-effort-slider[data-top] .omnieff-effort-track { animation: none; }
+  .omnieff-effort-slider[data-top] .omnieff-effort-track,
+  body:not([data-ds-dark-theme]) .omnieff-effort-slider[data-top] .omnieff-effort-track { animation: none; }
+  .omnieff-effort-slider,
+  .omnieff-effort-tick,
+  .omnieff-effort-canvas,
   .omnieff-effort-knob,
   .omnieff-effort-flare,
+  .omnieff-model-trigger,
+  .omnieff-model-chevron,
+  .omnieff-setting-switch,
+  .omnieff-setting-switch-knob,
   body:not([data-ds-dark-theme]) .omnieff-effort-track::before { transition: none; }
   .omnieff-model-menu { animation: none; }
   .omnieff-effort.is-chibi .omnieff-effort-knob { animation: none; }

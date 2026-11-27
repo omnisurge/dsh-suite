@@ -1,10 +1,13 @@
 export { Badge, type BadgeProps, type BadgeTone } from "./Badge.js";
-export { Banner, StatusLine, type BannerProps, type StatusLineProps, type StatusLineTone } from "./StatusLine.js";
-export { Button, type ButtonProps, type ButtonVariant } from "./Button.js";
+export { Banner, StatusLine, type BannerProps, type BannerTone, type StatusLineProps, type StatusLineTone } from "./StatusLine.js";
+export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button.js";
+export { Card, type CardProps, type CardTone, type CardVariant } from "./Card.js";
+export { Dialog, type DialogProps } from "./Dialog.js";
+export { Drawer, type DrawerProps } from "./Drawer.js";
 export { latestRefresh, watchCatalog, type CatalogEvents } from "./catalog-refresh.js";
-export { ActionGroup, FormGrid, ListRow, Disclosure, type ActionGroupProps, type ListRowProps, type DisclosureProps } from "./Layout.js";
+export { ActionGroup, FormGrid, ListRow, Disclosure, type ActionGroupAlign, type ActionGroupProps, type FormGridProps, type ListRowProps, type DisclosureProps } from "./Layout.js";
 export { KeyValueList, shortenIdentity, type KeyValueItem, type KeyValueListProps } from "./KeyValue.js";
-export { Checkbox, Switch, RadioGroup, NumberInput, SearchInput, Slider, type CheckControlProps, type CheckboxProps, type RadioGroupProps, type NumberInputProps, type SearchInputProps, type SliderProps } from "./FormControls.js";
+export { Checkbox, Switch, RadioGroup, NumberInput, SearchInput, Slider, type CheckControlProps, type CheckboxProps, type SwitchAlign, type SwitchProps, type RadioGroupProps, type NumberInputProps, type SearchInputProps, type SliderProps } from "./FormControls.js";
 export { Progress, Skeleton, type ProgressProps, type SkeletonProps } from "./Progress.js";
 export {
   CapsuleSwitch,
@@ -20,7 +23,7 @@ export {
   type DialOption,
   type DialPickerProps,
 } from "./DialPicker.js";
-export { EmptyState, type EmptyStateProps } from "./EmptyState.js";
+export { EmptyState, type EmptyStateAlign, type EmptyStateProps, type EmptyStateSurface, type EmptyStateTone } from "./EmptyState.js";
 export { Field, TextArea, TextInput, type FieldProps, type TextAreaProps, type TextInputProps } from "./Field.js";
 export { NotesPad, type NotesPadProps } from "./NotesPad.js";
 export { OrderedGrip, type OrderedGripProps } from "./OrderedGrip.js";
@@ -46,6 +49,18 @@ export {
   type SectionTabOption,
   type SectionTabsProps,
 } from "./SectionTabs.js";
+export type {
+  OverlayBaseProps,
+  OverlayCloseReason,
+  OverlaySize,
+} from "./overlay-shared.js";
+export {
+  registerOverlayDialog,
+  subscribeOverlayStack,
+  topmostDialog,
+  unregisterOverlayDialog,
+  type OverlayStackListener,
+} from "./overlay-stack.js";
 export {
   BUSY_SCRIM_CLASS,
   closeBusyOverlay,
@@ -64,10 +79,12 @@ export {
 export {
   TOAST_STACK_LIMIT,
   toastDurationMs,
+  toastToneDurationMs,
   toastEvictCount,
   toastReplaceIndex,
   trapNextIndex,
 } from "./notify-core.js";
+export { ToastItem, type ToastItemProps } from "./ToastItem.js";
 export {
   TOAST_HOST_CLASS,
   closeAllToasts,

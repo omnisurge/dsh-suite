@@ -6,9 +6,15 @@ export interface FieldProps {
   readonly hint?: string;
   /** Marks the control as required: a marker on the label plus aria-required on the control. */
   readonly required?: boolean;
+  /** Weak optional tag rendered on the label when not required (localized by caller). */
+  readonly optionalLabel?: string;
   readonly error?: string;
   /** Extra control on the label row (manual/catalog toggle, clear, …). */
   readonly action?: ReactNode;
+  /** Trailing footer metadata / character counter (tabular-nums). */
+  readonly counter?: ReactNode;
+  readonly disabled?: boolean;
+  readonly className?: string;
   readonly children?: ReactNode;
 }
 
@@ -19,7 +25,10 @@ export function Field(props: FieldProps) {
   const messageId = `${generated}-message`;
   const field = useRef<HTMLDivElement>(null);
   const hasError = props.error !== undefined && props.error !== "";
-  const hasMessage = hasError || (props.hint !== undefined && props.hint !== "");
+  const hasHint = props.hint !== undefined && props.hint !== "";
+  const hasMessage = hasError || hasHint;
+  const hasCounter = props.counter !== undefined && props.counter !== null && props.counter !== false && props.counter !== "";
+  const showOptional = props.required !== true && props.optionalLabel !== undefined && props.optionalLabel !== "";
   // Associate composite children too; their controls may appear after an async load.
   useLayoutEffect(() => {
     const root = field.current;
@@ -52,17 +61,40 @@ export function Field(props: FieldProps) {
     observer?.observe(root, { childList: true, subtree: true });
     return () => { observer?.disconnect(); while (owned.length) owned.pop()!(); };
   }, [props.id, generated, labelId, messageId, hasMessage, hasError, props.required]);
-  const label = <label id={labelId} data-field-label className="omni-ui-label" htmlFor={props.id}>{props.label}{props.required === true ? <span className="omni-ui-req" aria-hidden="true">*</span> : null}</label>;
+
+  const classes = ["omni-ui-field"];
+  if (hasError) classes.push("omni-ui-field--error");
+  if (props.disabled === true) classes.push("omni-ui-field--disabled");
+  if (props.className !== undefined && props.className !== "") classes.push(props.className);
+
+  const label = (
+    <label id={labelId} data-field-label className="omni-ui-label" htmlFor={props.id}>
+      {props.label}
+      {props.required === true ? <span className="omni-ui-req" aria-hidden="true">*</span> : null}
+    </label>
+  );
+  const labelRow = showOptional ? (
+    <span className="omni-ui-labelRow">
+      {label}
+      <span className="omni-ui-labelOpt" aria-hidden="true">{props.optionalLabel}</span>
+    </span>
+  ) : label;
+
   return (
-    <div className="omni-ui-field" ref={field}>
+    <div className={classes.join(" ")} ref={field}>
       {props.action !== undefined
-        ? <div className="omni-ui-fieldHead">{label}<span className="omni-ui-badgeRow">{props.action}</span></div>
-        : label}
+        ? <div className="omni-ui-fieldHead">{labelRow}<span className="omni-ui-badgeRow">{props.action}</span></div>
+        : labelRow}
       {props.children}
-      {props.error !== undefined && props.error !== "" ? (
-        <p id={messageId} className="omni-ui-hint omni-ui-hintError" role="alert">{props.error}</p>
-      ) : props.hint !== undefined && props.hint !== "" ? (
-        <p id={messageId} className="omni-ui-hint">{props.hint}</p>
+      {hasMessage || hasCounter ? (
+        <div className="omni-ui-fieldFoot">
+          {hasError ? (
+            <p id={messageId} className="omni-ui-hint omni-ui-hintError" role="alert">{props.error}</p>
+          ) : hasHint ? (
+            <p id={messageId} className="omni-ui-hint">{props.hint}</p>
+          ) : null}
+          {hasCounter ? <span className="omni-ui-fieldCounter">{props.counter}</span> : null}
+        </div>
       ) : null}
     </div>
   );

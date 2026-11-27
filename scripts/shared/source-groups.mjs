@@ -46,6 +46,7 @@ export const GROUP={
   'shared/client-copy.js':'shared',
   'shared/client-remote.js':'shared',
   'suite/capability-overview.js':'shared',
+  'suite/diagnostics-redact.js':'shared',
   'ambient.ts':'shared',
   'build-protocol.d.ts':'shared',
   'loopback-origin.ts':'shared',

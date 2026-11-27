@@ -1,6 +1,6 @@
 /**
  * Pure formatters, machine-code-to-locale mappers, and draft error translators
- * for the Skills & MCP panel (extracted from tools/client.js per ADR-117 D4).
+ * for the Capabilities & Connections panel (extracted from tools/client.js per ADR-117 D4).
  */
 import {fillTemplate as fill} from '../shared/client-copy.js';
 
@@ -197,3 +197,72 @@ export const skillsMutationSentence=(t,failed)=>{
 export const pairList=rows=>rows
   .filter(pair=>pair&&typeof pair.key==='string'&&pair.key.trim().length>0&&typeof pair.value==='string'&&pair.value.length>0)
   .map(pair=>({key:pair.key.trim(),value:pair.value}));
+
+const normalizePathForMatch=value=>typeof value==='string'?value.trim().replace(/\\+/gu,'/').replace(/\/+$/u,''):'';
+const withinRoot=(target,root)=>{
+  const normTarget=normalizePathForMatch(target);
+  const normRoot=normalizePathForMatch(root);
+  if(normTarget.length===0||normRoot.length===0)return false;
+  return normTarget===normRoot||normTarget.startsWith(normRoot+'/');
+};
+
+/**
+ * Pure path masking for skill deletion confirmation: replaces machine home/project roots with logical
+ * markers (`~/.dsh/skills/<name>`, `<project>/.dsh/skills/<name>`) or keeps at most two trailing segments.
+ */
+export function maskedSkillPath(scope,name,path,roots={}){
+  const rawName=typeof name==='string'?name.trim():'';
+  const rawPath=typeof path==='string'?path.trim():'';
+  let segments=rawPath.split(/[\\/]+/u).filter(Boolean).filter(part=>!/^[A-Za-z]:$/u.test(part));
+  if(segments.length>=2&&((segments[0].toLowerCase()==='users')||(segments[0].toLowerCase()==='home'))){
+    segments=segments.slice(2);
+  }
+  const leafName=rawName.length>0?rawName:(segments.at(-1)??'skill');
+  let resolvedScope=scope==='user'||scope==='project'?scope:undefined;
+  if(resolvedScope===undefined&&rawPath.length>0&&roots&&typeof roots==='object'){
+    if(withinRoot(rawPath,roots.user))resolvedScope='user';
+    else if(withinRoot(rawPath,roots.project))resolvedScope='project';
+  }
+  if(resolvedScope==='user')return `~/.dsh/skills/${leafName}`;
+  if(resolvedScope==='project')return `<project>/.dsh/skills/${leafName}`;
+  if(segments.length>=2)return segments.slice(-2).join('/');
+  return leafName;
+}
+
+/** Pick the normal-user read-only reason key for a non-writable skill row (OD-01 A / ADR-123 D4). */
+export function skillsReadOnlyReasonKey(skill){
+  const source=skill&&typeof skill.source==='string'?skill.source:'';
+  const provider=skill&&typeof skill.provider==='string'?skill.provider:'';
+  if(source==='bundled'||source==='office'||(source===''&&provider==='bundled'))return 'skillsBundled';
+  if(source==='runtime'||(source===''&&provider==='runtime'))return 'skillsRuntimeReadonly';
+  return 'skillsManagedElsewhere';
+}
+
+/** Pick the honest origin summary key for an MCP row (ADR-123 D3). */
+export function mcpSourceKey(server,loaded){
+  if(server&&server.managed===true)return 'mcpSourceOfficial';
+  if(loaded)return 'mcpSourceLoaded';
+  if(server&&server.editable!==true)return 'mcpSourceReadonly';
+  return null;
+}
+
+/** True when any editable field in the skills form differs from its initial snapshot. */
+export function skillsFormDirty(values,initial){
+  if(values===null||values===undefined||initial===null||initial===undefined)return false;
+  for(const key of ['name','description','whenToUse','body','modelInvocable','userInvocable','scope']){
+    if(values[key]!==initial[key])return true;
+  }
+  return false;
+}
+
+const pairsEqual=(left,right)=>Array.isArray(left)&&Array.isArray(right)&&left.length===right.length
+  &&left.every((pair,index)=>pair.key===right[index].key&&pair.value===right[index].value);
+
+/** True when any field or KV row in the MCP form differs from its initial snapshot. */
+export function mcpFormDirty(values,initial){
+  if(values===null||values===undefined||initial===null||initial===undefined)return false;
+  for(const key of ['name','kind','transport','url','command','args','cwd','timeoutMs','staticClientId','authTimeoutMs','endpointOpen','failOnStartupError','enabled','headersMode','envMode']){
+    if(values[key]!==initial[key])return true;
+  }
+  return !pairsEqual(values.headers,initial.headers)||!pairsEqual(values.env,initial.env);
+}

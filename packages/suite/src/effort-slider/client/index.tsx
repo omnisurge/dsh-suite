@@ -30,7 +30,7 @@ import {
   type EffortLevel,
 } from '../shared.js'
 import { remoteSelectAccepted, tryDirectoryFor, unwrapCatalog, type CatalogGroup } from '../directory-bind.js'
-import { injectStyles, showConfirm, showToast, Switch } from '@omnisurge/dsh-ui'
+import { injectStyles, showConfirm, showToast, Switch, type ConfirmHandle } from '@omnisurge/dsh-ui'
 import { fillTemplate } from '../../shared/client-copy.js'
 import { CSS } from './styles.js'
 import type { SlotEntry, SlotHost } from './slot-host.js'
@@ -66,7 +66,7 @@ export const en = {
   'effort.default': 'Default',
   'effort.error.noLevels': 'The current model does not provide thinking effort levels',
   'effort.error.notApplied': 'The thinking effort change did not take effect',
-  'effort.toast.failed': 'Could not change thinking effort: {error}. Try again later or switch models.',
+  'effort.toast.failed': 'Could not change thinking effort and restored the previous level. Try again later or switch models.',
   'chat.status.loading': 'Reading current chat model…',
   'chat.status.failed': 'Could not read current chat model',
   'chat.status.stale': 'Current chat model status has expired',
@@ -82,6 +82,8 @@ export const en = {
   'chat.unavailable': 'The conversation surface is not ready yet',
   'model.placeholder': 'Select a model',
   'model.loadFailed': 'Could not load the model list. Try again later: {error}',
+  'model.loadErrorBanner': 'Could not load the model list. Please retry.',
+  'model.retry': 'Retry',
   'model.selectFailed': 'Could not switch models. Try again later.',
   'model.selectFailedWithError': 'Could not switch models. Try again later: {error}',
   'model.ariaLabel': 'Model {model}',
@@ -90,13 +92,13 @@ export const en = {
   'model.menuAriaLabel': 'Model and thinking effort',
   'model.back': 'Select a model',
   'model.triggerAriaLabel': 'Model {model}, thinking effort {effort}',
-  'team.saveFailed': 'Could not save the agent team setting: {error}',
-  'team.confirmDisableTitle': 'Turn off agent team collaboration?',
-  'team.confirmDisableText': 'Turning off agent team collaboration during a conversation stops shared task tools and team coordination instructions.',
+  'team.saveFailed': 'Could not save the team mode setting. Please try again.',
+  'team.confirmDisableTitle': 'Turn off team mode?',
+  'team.confirmDisableText': 'This conversation is already using team mode. Turning it off stops shared task tools and team coordination for the rest of this conversation.',
   'team.cancel': 'Cancel',
   'team.confirmDisable': 'Turn off',
-  'team.switchLabel': 'Enable agent team collaboration',
-  'team.unavailable': 'The agent team collaboration channel is unavailable',
+  'team.switchLabel': 'Enable team mode',
+  'team.unavailable': 'Team mode is currently unavailable.',
   'team.saveFailedShort': 'Save failed',
   'catalog.unavailable': 'The model list is unavailable',
   'model.channelUnavailable': 'The model channel is unavailable',
@@ -120,7 +122,7 @@ export const zh = {
   'effort.default': '默认',
   'effort.error.noLevels': '当前模型未提供思考强度档位',
   'effort.error.notApplied': '思考强度切换未生效',
-  'effort.toast.failed': '思考强度切换未成功：{error}。请稍后重试，或换用其他模型。',
+  'effort.toast.failed': '思考强度切换未成功，已恢复原档位；请稍后重试，或换用其他模型。',
   'chat.status.loading': '正在读取当前对话模型…',
   'chat.status.failed': '暂时无法获取当前对话模型',
   'chat.status.stale': '当前对话模型信息已过期',
@@ -136,6 +138,8 @@ export const zh = {
   'chat.unavailable': '会话界面尚未就绪',
   'model.placeholder': '选择模型',
   'model.loadFailed': '模型清单读取失败，请稍后重试：{error}',
+  'model.loadErrorBanner': '模型清单读取失败，请重试。',
+  'model.retry': '重试',
   'model.selectFailed': '模型切换未成功，请稍后重试。',
   'model.selectFailedWithError': '模型切换未成功，请稍后重试：{error}',
   'model.ariaLabel': '模型 {model}',
@@ -144,13 +148,13 @@ export const zh = {
   'model.menuAriaLabel': '模型与思考强度',
   'model.back': '选择模型',
   'model.triggerAriaLabel': '模型 {model}，思考强度 {effort}',
-  'team.saveFailed': '智能体团队协作设置保存失败：{error}',
-  'team.confirmDisableTitle': '确认停用智能体团队协作？',
-  'team.confirmDisableText': '对话过程中停用智能体团队协作，将停止共享任务工具和团队协调指令。',
+  'team.saveFailed': '团队模式设置未保存成功，请重试。',
+  'team.confirmDisableTitle': '停用团队模式？',
+  'team.confirmDisableText': '当前会话已使用团队模式。停用后将停止共享任务工具与团队协调说明，未完成的协作不会继续。',
   'team.cancel': '取消',
-  'team.confirmDisable': '确认停用',
-  'team.switchLabel': '启用智能体团队协作',
-  'team.unavailable': '智能体团队协作通道不可用',
+  'team.confirmDisable': '停用',
+  'team.switchLabel': '启用团队模式',
+  'team.unavailable': '团队模式通道暂不可用',
   'team.saveFailedShort': '保存失败',
   'catalog.unavailable': '模型清单不可用',
   'model.channelUnavailable': '模型通道不可用',
@@ -416,51 +420,69 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
     () => directory.store.getSnapshot(),
   )
   const levels = sliderLevels(directoryState)
-  const [effort, setEffort] = useState('')
-  const [preview, setPreview] = useState(0)
+  const available = directoryState.current !== null && levels.length >= 2
+  const storeIndex = available
+    ? Math.max(0, effectiveEffortIndex(
+      levels,
+      directoryState.current?.reasoningEffort,
+      currentModel(directoryState)?.reasoning?.defaultEffort,
+    ))
+    : 0
+  const storeEffort = available ? (levels[storeIndex]?.id ?? '') : ''
+  const [override, setOverride] = useState<{
+    readonly state: ModelDirectoryState
+    readonly effort: string
+    readonly preview: number
+  } | null>(null)
   const [committing, setCommitting] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
   const chibiThumb = useSyncExternalStore(chibiStore.subscribe, chibiStore.getSnapshot)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const committedRef = useRef('')
+  const committedRef = useRef(storeEffort)
   const committingRef = useRef(false)
-  const previewRef = useRef(0)
+  const lockedRef = useRef(locked)
+  lockedRef.current = locked
+  const previewRef = useRef(storeIndex)
   const draggingRef = useRef(false)
   const pointerActiveRef = useRef(false)
   const activePointerIdRef = useRef<number | null>(null)
   const globalPointerMoveRef = useRef<((event: PointerEvent) => void) | null>(null)
   const globalPointerEndRef = useRef<((event: PointerEvent) => void) | null>(null)
   const globalPointerCancelRef = useRef<((event: PointerEvent) => void) | null>(null)
-  const radiationRef = useRef<RadiationState>({ progress: 0.5, dragging: false, pulseAt: 0 })
+  const radiationRef = useRef<RadiationState>({
+    progress: levels.length >= 2 ? storeIndex / (levels.length - 1) : 0.5,
+    dragging: false,
+    pulseAt: 0,
+  })
   const redrawRef = useRef<(() => void) | null>(null)
 
-  const available = directoryState.current !== null && levels.length >= 2
+  const useOverride = override !== null && (dragging || committing || override.state === directoryState)
+  const effort = useOverride ? override.effort : storeEffort
+  const preview = useOverride ? override.preview : storeIndex
   const busy = locked || committing || directoryState.status === 'selecting'
   const error = localError ?? directoryState.error
 
+  if (!committingRef.current && !draggingRef.current && !useOverride) {
+    committedRef.current = storeEffort
+    previewRef.current = storeIndex
+  }
+  radiationRef.current.progress = levels.length >= 2 ? preview / (levels.length - 1) : 0.5
+
   useEffect(() => {
-    if (!available || committingRef.current || draggingRef.current) return
-    const index = effectiveEffortIndex(
-      levels,
-      directoryState.current?.reasoningEffort,
-      currentModel(directoryState)?.reasoning?.defaultEffort,
-    )
-    const next = levels[index]?.id ?? ''
-    committedRef.current = next
-    previewRef.current = index
-    setEffort(next)
-    setPreview(index)
-    setLocalError(null)
-  }, [available, levels, directoryState])
+    if (committingRef.current || draggingRef.current) return
+    if (override !== null && override.state !== directoryState) {
+      setOverride(null)
+      setLocalError(null)
+    }
+  }, [available, directoryState, storeEffort, storeIndex])
 
   useEffect(() => {
     directory.load().catch(() => undefined)
   }, [directory])
 
   useEffect(() => {
-    previewRef.current = preview
     radiationRef.current.progress = levels.length >= 2 ? preview / (levels.length - 1) : 0.5
     redrawRef.current?.()
   }, [preview, levels.length])
@@ -531,15 +553,21 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
     activePointerIdRef.current = null
     draggingRef.current = false
     previewRef.current = index
-    setEffort(previous)
-    setPreview(index)
+    setOverride({ state: directory.store.getSnapshot(), effort: previous, preview: index })
     setDragging(false)
-  }, [levels])
+  }, [directory, levels])
 
   const commit = useCallback(
     async (raw: number) => {
-      if (committingRef.current || locked) return
+      if (committingRef.current) return
+      if (lockedRef.current) {
+        rollback()
+        return
+      }
       committingRef.current = true
+      const startSnapshot = directory.store.getSnapshot()
+      const startedProvider = startSnapshot.current?.provider
+      const startedModel = startSnapshot.current?.model
       const previous = committedRef.current
 
       setDragging(false)
@@ -551,12 +579,43 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
       const optimistic = levels[optimisticIndex]?.id
       if (optimistic !== undefined) {
         previewRef.current = optimisticIndex
-        setPreview(optimisticIndex)
-        setEffort(optimistic)
+        setOverride({ state: startSnapshot, effort: optimistic, preview: optimisticIndex })
       }
 
       try {
         const models = await directory.load()
+        // A lock can arrive while the directory round-trip is in flight. The callback closure still sees the
+        // old `locked` value; read the live ref before selecting so a late lock cannot start a write.
+        if (lockedRef.current) {
+          const restore = Math.max(0, effortIndex(levels, previous))
+          committedRef.current = previous
+          previewRef.current = restore
+          setOverride({ state: directory.store.getSnapshot(), effort: previous, preview: restore })
+          return
+        }
+        const latest = directory.store.getSnapshot()
+        const modelChanged = startedProvider !== undefined && startedModel !== undefined && (
+          models.current?.provider !== startedProvider ||
+          models.current?.model !== startedModel ||
+          latest.current?.provider !== startedProvider ||
+          latest.current?.model !== startedModel
+        )
+        if (modelChanged) {
+          // The raw index belongs to the model that was visible when the commit began. If another surface
+          // switched the conversation to a different model while the directory request was in flight, that
+          // index is not the new model's effort: restore the latest model's own level and do not select.
+          const latestLevels = sliderLevels(latest)
+          const latestIndex = Math.max(0, effectiveEffortIndex(
+            latestLevels,
+            latest.current?.reasoningEffort,
+            currentModel(latest)?.reasoning?.defaultEffort,
+          ))
+          const latestId = latestLevels[latestIndex]?.id ?? ''
+          committedRef.current = latestId
+          previewRef.current = latestIndex
+          setOverride({ state: latest, effort: latestId, preview: latestIndex })
+          return
+        }
         const fresh: ModelDirectoryState = {
           current: models.current,
           routable: models.routable,
@@ -571,9 +630,9 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
         if (next === undefined) throw new Error(tr('effort.error.noLevels'))
 
         previewRef.current = index
-        setPreview(index)
-        setEffort(next)
+        setOverride({ state: latest, effort: next, preview: index })
 
+        const beforeSelectEffort = latest.current?.reasoningEffort
         const selected = await directory.select({
           provider: models.current.provider,
           model: models.current.model,
@@ -583,13 +642,15 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
         if (!acceptedSelection.ok) throw new Error(acceptedSelection.error ?? tr('effort.error.notApplied'))
 
         const snapshot = directory.store.getSnapshot()
-        const accepted = effortIndex(freshLevels, snapshot.current?.reasoningEffort)
+        const observedEffort = snapshot.current?.reasoningEffort
+        const accepted = observedEffort !== beforeSelectEffort
+          ? effortIndex(freshLevels, observedEffort)
+          : -1
         const settled = accepted >= 0 ? accepted : index
         const settledId = freshLevels[settled]?.id ?? next
         committedRef.current = settledId
         previewRef.current = settled
-        setEffort(settledId)
-        setPreview(settled)
+        setOverride({ state: snapshot, effort: settledId, preview: settled })
         // 换档成功脉冲（能量波扩散）。
         radiationRef.current.pulseAt = performance.now()
         redrawRef.current?.()
@@ -597,21 +658,23 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
         const restore = Math.max(0, effortIndex(levels, previous))
         committedRef.current = previous
         previewRef.current = restore
-        setEffort(previous)
-        setPreview(restore)
+        setOverride({ state: directory.store.getSnapshot(), effort: previous, preview: restore })
         setLocalError(cause instanceof Error ? cause.message : String(cause))
       } finally {
         committingRef.current = false
         setCommitting(false)
       }
     },
-    [directory, levels],
+    [directory, levels, locked, tr, rollback],
   )
 
   const showPointerPreview = (raw: number) => {
     previewRef.current = raw
-    setPreview(raw)
-    setEffort(levels[clampIndex(raw, levels.length)]?.id ?? '')
+    setOverride({
+      state: directory.store.getSnapshot(),
+      effort: levels[clampIndex(raw, levels.length)]?.id ?? '',
+      preview: raw,
+    })
   }
 
   const rawFromPointer = (input: HTMLInputElement, clientX: number) => {
@@ -648,6 +711,10 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
     if (pointerId !== undefined && input.hasPointerCapture(pointerId)) {
       input.releasePointerCapture(pointerId)
     }
+    if (lockedRef.current) {
+      rollback()
+      return
+    }
     showPointerPreview(raw)
     void commit(raw)
   }
@@ -681,12 +748,12 @@ function EffortSlider({ directory, locked = false, t }: { directory: ModelDirect
 
   useEffect(() => {
     if (!available || error === null) return
-    toastPluginError(tr, tr('effort.toast.failed', { error }))
+    toastPluginError(tr, tr('effort.toast.failed'))
   }, [available, error, tr])
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
     if (locked || committingRef.current) return
-    const current = clampIndex(Number(event.currentTarget.value), levels.length)
+    const current = clampIndex(previewRef.current, levels.length)
     let target: number | undefined
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown' || event.key === 'PageDown') {
       target = Math.max(0, current - 1)
@@ -1063,6 +1130,148 @@ function ModelSeat(props: ModelSeatProps) {
     : <WorkModelSeat key={props.sessionId} {...props} t={t} />
 }
 
+export interface FallbackMenuPlacement {
+  readonly left: number
+  readonly right: number
+  readonly width: number
+  readonly bottom?: number
+  readonly top?: number
+}
+
+/** Compute viewport-clamped fixed positioning for the fallback model menu on narrow viewports (<= 520px). */
+export function computeFallbackMenuPlacement(
+  triggerRect: { readonly left: number; readonly top?: number; readonly bottom?: number } | null | undefined,
+  viewportWidth: number,
+  viewportHeight?: number,
+): FallbackMenuPlacement | null {
+  if (!Number.isFinite(viewportWidth) || viewportWidth <= 0 || viewportWidth > 520) return null
+  const gutter = 12
+  const flooredWidth = Math.floor(viewportWidth)
+  const width = Math.min(312, Math.max(0, flooredWidth - gutter * 2))
+  const maxLeft = Math.max(gutter, flooredWidth - gutter - width)
+  const rawLeft = triggerRect !== null && triggerRect !== undefined && Number.isFinite(triggerRect.left) ? triggerRect.left : gutter
+  const left = Math.min(Math.max(gutter, Math.round(rawLeft)), maxLeft)
+  const right = left + width
+  if (
+    triggerRect !== null
+    && triggerRect !== undefined
+    && Number.isFinite(viewportHeight)
+    && (viewportHeight as number) > 0
+    && Number.isFinite(triggerRect.top)
+    && Number.isFinite(triggerRect.bottom)
+  ) {
+    const vh = viewportHeight as number
+    const topVal = triggerRect.top as number
+    const bottomVal = triggerRect.bottom as number
+    if (topVal === 0 && bottomVal === 0) {
+      return { left, right, width, bottom: gutter }
+    }
+    if (topVal >= vh - bottomVal) {
+      return { left, right, width, bottom: Math.max(gutter, Math.round(vh - topVal + 8)) }
+    }
+    return { left, right, width, top: Math.max(gutter, Math.round(bottomVal + 8)) }
+  }
+  return { left, right, width, bottom: gutter }
+}
+
+function useFallbackMenuStyle(open: boolean, triggerRef: RefObject<HTMLButtonElement | null>): CSSProperties | undefined {
+  const [placement, setPlacement] = useState<FallbackMenuPlacement | null>(null)
+  useEffect(() => {
+    if (!open) {
+      setPlacement(null)
+      return
+    }
+    const measure = () => {
+      const rect = triggerRef.current?.getBoundingClientRect() ?? null
+      setPlacement(computeFallbackMenuPlacement(rect, window.innerWidth, window.innerHeight))
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [open, triggerRef])
+  if (placement === null) return undefined
+  return {
+    position: 'fixed',
+    left: `${placement.left}px`,
+    right: 'auto',
+    width: `${placement.width}px`,
+    ...(placement.bottom === undefined ? {} : { bottom: `${placement.bottom}px`, top: 'auto' }),
+    ...(placement.top === undefined ? {} : { top: `${placement.top}px`, bottom: 'auto' }),
+  }
+}
+
+function getMenuFocusables(menu: HTMLElement | null): HTMLElement[] {
+  if (menu === null) return []
+  return Array.from(menu.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'))
+}
+
+function useRestoreMenuFocusAfterLoadError(open: boolean, modelsOpen: boolean, loadError: string | null, menuRef: RefObject<HTMLDivElement | null>): void {
+  const previousError = useRef<string | null>(null)
+  useEffect(() => {
+    const wasError = previousError.current !== null
+    previousError.current = loadError
+    if (!open || !modelsOpen || !wasError || loadError !== null) return
+    const menu = menuRef.current
+    if (menu === null) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement && menu.contains(active)) return
+    // Only recover focus when it was actually lost (body/null) or the old Retry button was detached. If the
+    // user has deliberately tabbed to another live control outside the menu, do not pull focus back.
+    if (active instanceof HTMLElement && active !== document.body && active.isConnected) return
+    // The retry button that owned focus disappears on a successful load. Put focus back in the still-open
+    // menu so Esc and the menu's arrow-key navigation keep working; do not send it to the body.
+    getMenuFocusables(menu)[0]?.focus({ preventScroll: true })
+  }, [open, modelsOpen, loadError, menuRef])
+}
+
+function useMenuFocusManagement(open: boolean, modelsOpen: boolean, menuRef: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    if (!open) return
+    const focusables = getMenuFocusables(menuRef.current)
+    if (focusables.length === 0) return
+    if (!menuRef.current?.contains(document.activeElement) || modelsOpen) {
+      focusables[0]?.focus({ preventScroll: true })
+    }
+  }, [open, modelsOpen, menuRef])
+}
+
+function handleMenuKeyDown(
+  event: ReactKeyboardEvent<HTMLDivElement>,
+  menuRef: RefObject<HTMLDivElement | null>,
+  onClose: (restoreFocus: boolean) => void,
+): void {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    onClose(true)
+    return
+  }
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return
+  const focusables = getMenuFocusables(menuRef.current)
+  if (focusables.length === 0) return
+  event.preventDefault()
+  event.stopPropagation()
+  if (event.key === 'Home') {
+    focusables[0]?.focus({ preventScroll: true })
+    return
+  }
+  if (event.key === 'End') {
+    focusables[focusables.length - 1]?.focus({ preventScroll: true })
+    return
+  }
+  const active = document.activeElement
+  const currentIndex = active instanceof HTMLElement ? focusables.indexOf(active) : -1
+  const step = event.key === 'ArrowDown' ? 1 : -1
+  const nextIndex = currentIndex < 0
+    ? (step > 0 ? 0 : focusables.length - 1)
+    : (currentIndex + step + focusables.length) % focusables.length
+  focusables[nextIndex]?.focus({ preventScroll: true })
+}
+
 function WorkModelSeat({ sessionId, locked, bind, loadCatalog, selectRemote, ...rest }: ModelSeatProps) {
   const [controller, setController] = useState<ModelDirectory | undefined>(() => bind())
 
@@ -1078,48 +1287,108 @@ function WorkModelSeat({ sessionId, locked, bind, loadCatalog, selectRemote, ...
   }, [bind, controller])
 
   if (controller !== undefined) return <WorkModelReady controller={controller} sessionId={sessionId} locked={locked} {...rest} />
-  return <WorkModelRemoteSeat locked={locked} loadCatalog={loadCatalog} selectRemote={selectRemote} t={rest.t} />
+  return <WorkModelRemoteSeat sessionId={sessionId} locked={locked} loadCatalog={loadCatalog} selectRemote={selectRemote} {...rest} />
 }
 
 function useMenuDismiss(open: boolean, rootRef: RefObject<HTMLDivElement | null>, close: () => void) {
   useEffect(() => {
     if (!open) return
     const closeOutside = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) close()
+      const target = event.target
+      if (target instanceof Element && target.closest('dialog[open], dialog[data-open="true"], .omni-ui-confirmScrim') !== null) {
+        return
+      }
+      if (!rootRef.current?.contains(target as Node)) close()
     }
     document.addEventListener('mousedown', closeOutside)
     return () => document.removeEventListener('mousedown', closeOutside)
   }, [close, open, rootRef])
 }
 
-function WorkModelRemoteSeat({
-  locked,
-  loadCatalog,
-  selectRemote,
-  t,
-}: {
+type WorkModelRemoteSeatProps = {
   readonly locked: boolean
+  readonly sessionId?: SessionId
   readonly loadCatalog: () => Promise<{ groups: readonly CatalogGroup[]; error?: string }>
   readonly selectRemote: (selection: ModelSelection) => Promise<{ ok: boolean; error?: string }>
   readonly t?: EffortSliderTranslate
-}) {
+} & Partial<Pick<ModelSeatProps, 'useProjection' | 'useSession' | 'useSessions' | 'teamMode' | 'selectTeamMode'>>
+
+function WorkModelRemoteSeat({
+  locked,
+  sessionId,
+  loadCatalog,
+  selectRemote,
+  useProjection,
+  useSession,
+  useSessions,
+  teamMode,
+  selectTeamMode,
+  t,
+}: WorkModelRemoteSeatProps) {
   const tr = t ?? defaultEffortSliderTranslate
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [modelsOpen, setModelsOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [selecting, setSelecting] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [groups, setGroups] = useState<readonly CatalogGroup[]>([])
   const [current, setCurrent] = useState<ModelSelection | undefined>(undefined)
   const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const close = useCallback(() => setOpen(false), [])
-  useMenuDismiss(open, rootRef, close)
-  const modelLabel = current?.model ?? tr('model.placeholder')
+  const loadSeq = useRef(0)
+  const close = useCallback((restoreFocus = false) => {
+    setOpen(false)
+    setModelsOpen(false)
+    if (restoreFocus) {
+      queueMicrotask(() => {
+        const trigger = triggerRef.current
+        if (trigger !== null && trigger.isConnected && !trigger.disabled) {
+          trigger.focus({ preventScroll: true })
+        }
+      })
+    }
+  }, [])
+  const dismiss = useCallback(() => close(false), [close])
+  useMenuDismiss(open, rootRef, dismiss)
+  useMenuFocusManagement(open, modelsOpen, menuRef)
+  useRestoreMenuFocusAfterLoadError(open, modelsOpen, loadError, menuRef)
+  const menuStyle = useFallbackMenuStyle(open, triggerRef)
+  const busy = loading || selecting
+  const selectedGroup = current === undefined ? undefined : groups.find((group) => group.id === current.provider)
+  const selectedModel = selectedGroup?.models.find((model) => model.id === current?.model)
+  const modelLabel = selectedModel?.name ?? current?.model ?? tr('model.placeholder')
+  const effortLabel = (() => {
+    if (current?.reasoningEffort !== undefined) {
+      const matched = selectedModel?.reasoning?.efforts?.find((level) => level.id === current.reasoningEffort)
+      return matched?.name ?? levelName(current.reasoningEffort, tr)
+    }
+    return selectedModel === undefined ? null : tr('effort.default')
+  })()
+  const hasTeamBinding = teamMode !== undefined || selectTeamMode !== undefined
 
   const load = useCallback(async () => {
-    setBusy(true)
-    const loaded = await loadCatalog()
-    setBusy(false)
-    setGroups(loaded.groups)
-    if (loaded.error !== undefined) toastPluginError(tr, tr('model.loadFailed', { error: loaded.error }))
+    const seq = ++loadSeq.current
+    setLoading(true)
+    try {
+      const loaded = await loadCatalog()
+      // Opening, closing and opening again can leave two requests in flight. Only the newest answer may
+      // update the menu; an older failure must not overwrite a newer success.
+      if (seq !== loadSeq.current) return
+      if (loaded.groups.length > 0 || loaded.error === undefined) {
+        setGroups(loaded.groups)
+      }
+      if (typeof loaded.error === 'string' && loaded.error.length > 0) {
+        setLoadError(loaded.error)
+      } else {
+        setLoadError(null)
+      }
+    } catch (cause) {
+      if (seq !== loadSeq.current) return
+      setLoadError(cause instanceof Error ? cause.message : tr('catalog.unavailable'))
+    } finally {
+      if (seq === loadSeq.current) setLoading(false)
+    }
   }, [loadCatalog, tr])
 
   const choose = async (provider: string, model: string, defaultEffort?: string) => {
@@ -1128,15 +1397,21 @@ function WorkModelRemoteSeat({
       model,
       ...(defaultEffort === undefined ? {} : { reasoningEffort: defaultEffort }),
     }
-    setBusy(true)
-    const accepted = await selectRemote(selection)
-    setBusy(false)
-    if (accepted.ok) {
-      setCurrent(selection)
-      setOpen(false)
-      return
+    setSelecting(true)
+    try {
+      const accepted = await selectRemote(selection)
+      if (accepted.ok) {
+        setCurrent(selection)
+        close(false)
+        return
+      }
+      toastPluginError(tr, accepted.error === undefined ? tr('model.selectFailed') : tr('model.selectFailedWithError', { error: accepted.error }))
+    } catch (cause) {
+      const message = cause instanceof Error ? cause.message : String(cause)
+      toastPluginError(tr, message ? tr('model.selectFailedWithError', { error: message }) : tr('model.selectFailed'))
+    } finally {
+      setSelecting(false)
     }
-    toastPluginError(tr, accepted.error === undefined ? tr('model.selectFailed') : tr('model.selectFailedWithError', { error: accepted.error }))
   }
 
   return (
@@ -1152,10 +1427,11 @@ function WorkModelRemoteSeat({
         disabled={locked}
         onClick={() => {
           if (open) {
-            close()
+            close(false)
             return
           }
           setOpen(true)
+          setModelsOpen(false)
           void load()
         }}
       >
@@ -1163,45 +1439,97 @@ function WorkModelRemoteSeat({
         <span className="omnieff-model-chevron" aria-hidden="true" />
       </button>
       {open ? (
-        <div className="omnieff-model-menu" role="menu" aria-label={tr('model.menuAriaLabel')} aria-busy={busy}>
-          <div className="omnieff-model-pane">
-            {busy && groups.length === 0 ? <div className="omnieff-model-status">{tr('model.loading')}</div> : null}
-            {groups.map((group) => (
-              <section key={group.id}>
-                <div className="omnieff-model-group-title">{group.name}</div>
-                {group.models.map((model) => {
-                  const selected = current?.provider === group.id && current.model === model.id
-                  return (
-                    <button
-                      key={model.id}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={selected}
-                      className="omnieff-model-option"
-                      disabled={busy || locked}
-                      onClick={() => void choose(group.id, model.id, model.reasoning?.defaultEffort)}
-                    >
-                      <span className="omnieff-model-option-copy">
-                        <span className="omnieff-model-option-name">{model.name}</span>
-                        {model.description === undefined ? null : (
-                          <span className="omnieff-model-option-desc">{model.description}</span>
-                        )}
-                      </span>
-                      <span className="omnieff-model-check" aria-hidden="true">{selected ? '✓' : ''}</span>
-                    </button>
-                  )
-                })}
-              </section>
-            ))}
-            {!busy && groups.length === 0 ? <div className="omnieff-model-status">{tr('model.empty')}</div> : null}
-          </div>
+        <div
+          ref={menuRef}
+          className="omnieff-model-menu"
+          role="menu"
+          aria-label={tr('model.menuAriaLabel')}
+          aria-busy={busy}
+          style={menuStyle}
+          onKeyDown={(event) => handleMenuKeyDown(event, menuRef, close)}
+        >
+          {modelsOpen ? (
+            <div className="omnieff-model-pane">
+              <button type="button" className="omnieff-model-back" onClick={() => setModelsOpen(false)}>
+                <span aria-hidden="true">‹</span>
+                <span>{tr('model.back')}</span>
+              </button>
+              {loadError === null ? null : (
+                <div role="alert" className="omnieff-model-error">
+                  <span>{tr('model.loadErrorBanner')}</span>
+                  <button type="button" className="omnieff-model-retry" disabled={busy || locked} onClick={() => void load()}>
+                    {tr('model.retry')}
+                  </button>
+                </div>
+              )}
+              {loading && groups.every((group) => group.models.length === 0) ? <div className="omnieff-model-status">{tr('model.loading')}</div> : null}
+              {groups.map((group) => (
+                <section key={group.id}>
+                  <div className="omnieff-model-group-title">{group.name}</div>
+                  {group.models.map((model) => {
+                    const selected = current?.provider === group.id && current.model === model.id
+                    return (
+                      <button
+                        key={model.id}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={selected}
+                        className="omnieff-model-option"
+                        disabled={busy || locked}
+                        onClick={() => void choose(group.id, model.id, model.reasoning?.defaultEffort)}
+                      >
+                        <span className="omnieff-model-option-copy">
+                          <span className="omnieff-model-option-name">{model.name}</span>
+                          {model.description === undefined ? null : (
+                            <span className="omnieff-model-option-desc">{model.description}</span>
+                          )}
+                        </span>
+                        <span className="omnieff-model-check" aria-hidden="true">{selected ? '✓' : ''}</span>
+                      </button>
+                    )
+                  })}
+                </section>
+              ))}
+              {!loading && loadError === null && groups.every((group) => group.models.length === 0) ? (
+                <div className="omnieff-model-status">{tr('model.empty')}</div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className="omnieff-model-row"
+                disabled={locked || selecting}
+                onClick={() => setModelsOpen(true)}
+              >
+                <span className="omnieff-model-row-name">{modelLabel}</span>
+                {effortLabel === null ? null : <span className="omnieff-model-row-effort">{effortLabel}</span>}
+                <span className="omnieff-row-chevron" aria-hidden="true">›</span>
+              </button>
+              {hasTeamBinding ? (
+                <TeamModeRow
+                  sessionId={sessionId ?? ''}
+                  locked={locked || selecting}
+                  onDismiss={dismiss}
+                  returnFocusTo={triggerRef}
+                  useProjection={useProjection}
+                  useSession={useSession}
+                  useSessions={useSessions}
+                  teamMode={teamMode}
+                  selectTeamMode={selectTeamMode}
+                  t={tr}
+                />
+              ) : null}
+            </>
+          )}
         </div>
       ) : null}
     </div>
   )
 }
 
-function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: Pick<ModelSeatProps, 'sessionId' | 't' | 'useProjection' | 'useSession' | 'useSessions' | 'teamMode' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void }) {
+function TeamModeRow({ sessionId, locked, onDismiss, returnFocusTo, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: Pick<ModelSeatProps, 'sessionId' | 't' | 'useProjection' | 'useSession' | 'useSessions' | 'teamMode' | 'selectTeamMode'> & { readonly locked: boolean; readonly onDismiss: () => void; readonly returnFocusTo?: RefObject<HTMLButtonElement | null> }) {
   const tr = t ?? defaultEffortSliderTranslate
   const addressed = useSession === undefined ? false : useSession(snapshot => snapshot.subagent !== null && snapshot.subagent !== undefined) === true
   const listed = useSessions === undefined ? false : useSessions(state => state.byId?.[sessionId]?.origin === 'subagent') === true
@@ -1211,6 +1539,7 @@ function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, 
   const teamModeAvailable = useSyncExternalStore(binding.subscribe, binding.available)
   const select = teamMode === undefined ? selectTeamMode : binding.select
   const [pending, setPending] = useState(false)
+  const confirmRef = useRef<ConfirmHandle | null>(null)
   // The idle cache may only evict bindings nobody is using. This row owns its binding for as long as it
   // is mounted; closing the menu (or losing the seat) releases it back to the idle LRU. Hooks run before
   // the early return below so a hidden switch keeps a stable hook order.
@@ -1218,29 +1547,43 @@ function TeamModeRow({ sessionId, locked, onDismiss, useProjection, useSession, 
     teamMode?.retain?.()
     return () => { teamMode?.release?.() }
   }, [teamMode])
+  useEffect(() => () => {
+    confirmRef.current?.close()
+    confirmRef.current = null
+  }, [])
   if (addressed || listed || mode === undefined || !teamModeAvailable || select === undefined) return null
-  const change = (enabled: boolean) => {
+  const change = (enabled: boolean): Promise<void> => {
     setPending(true)
-    void select(enabled).then(failure => {
-      if (failure !== null) toastPluginError(tr, tr('team.saveFailed', { error: failure }))
-    }, error => {
-      toastPluginError(tr, tr('team.saveFailed', { error: error instanceof Error ? error.message : String(error) }))
+    return select(enabled).then(failure => {
+      if (failure !== null) toastPluginError(tr, tr('team.saveFailed'))
+    }, () => {
+      toastPluginError(tr, tr('team.saveFailed'))
     }).finally(() => setPending(false))
   }
   const choose = (enabled: boolean) => {
     if (!enabled && selection !== undefined && (selection.lastUsed ?? null) !== null) {
-      onDismiss()
-      showConfirm({
+      confirmRef.current?.close()
+      confirmRef.current = showConfirm({
         title: tr('team.confirmDisableTitle'),
         text: tr('team.confirmDisableText'),
         cancelLabel: tr('team.cancel'),
         confirmLabel: tr('team.confirmDisable'),
         tone: 'danger',
-        onConfirm: () => change(false),
+        returnFocusTo: returnFocusTo?.current ?? null,
+        onCancel: () => {
+          confirmRef.current = null
+          onDismiss()
+        },
+        onConfirm: () => {
+          confirmRef.current = null
+          // Keep the row mounted until the switch request settles; otherwise a failed team change loses
+          // its pending state and the parent menu closes over a still-running write.
+          void change(false).finally(onDismiss)
+        },
       })
       return
     }
-    change(enabled)
+    void change(enabled)
   }
   return (
     <>
@@ -1522,9 +1865,43 @@ export function WorkModelReady(props: WorkModelReadyProps) {
 function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, useSession, useSessions, teamMode, selectTeamMode, t }: WorkModelReadyProps) {
   const tr = t ?? defaultEffortSliderTranslate
   const directory = controller.store
-  const load = useCallback(() => {
-    void controller.load().then(() => undefined, () => undefined)
-  }, [controller])
+  const state = useSyncExternalStore(
+    (notify) => directory.subscribe(notify),
+    () => directory.getSnapshot(),
+  )
+  const [open, setOpen] = useState(false)
+  const [modelsOpen, setModelsOpen] = useState(false)
+  const [loadBusy, setLoadBusy] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [cachedGroups, setCachedGroups] = useState<readonly CatalogGroup[]>(() => state.groups)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const loadSeq = useRef(0)
+  const load = useCallback(async () => {
+    const seq = ++loadSeq.current
+    setLoadBusy(true)
+    try {
+      const result = await controller.load() as Partial<ModelDirectoryState> | undefined
+      // Same newest-request-wins rule as the remote menu: a stale rejected load must not put an old error
+      // banner over a newer successful answer.
+      if (seq !== loadSeq.current) return
+      const snapshot = controller.store.getSnapshot()
+      const nextGroups = Array.isArray(result?.groups) ? result.groups : snapshot.groups
+      // `snapshot.error` can be a failed model *selection*, not a catalog read. Only the load answer
+      // carries load semantics here; a rejected load is handled by the catch below.
+      const nextError = typeof result?.error === 'string' && result.error.length > 0 ? result.error : null
+      if (nextGroups.length > 0 || nextError === null || nextError === undefined) {
+        setCachedGroups(nextGroups)
+      }
+      setLoadError(nextError ?? null)
+    } catch (cause) {
+      if (seq !== loadSeq.current) return
+      setLoadError(cause instanceof Error ? cause.message : tr('catalog.unavailable'))
+    } finally {
+      if (seq === loadSeq.current) setLoadBusy(false)
+    }
+  }, [controller, tr])
   const select = useCallback(
     async (selection: ModelSelection) => {
       try {
@@ -1535,14 +1912,6 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
     },
     [controller],
   )
-  const state = useSyncExternalStore(
-    (notify) => directory.subscribe(notify),
-    () => directory.getSnapshot(),
-  )
-  const [open, setOpen] = useState(false)
-  const [modelsOpen, setModelsOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
   const choice = currentModel(state)
   const levels = sliderLevels(state)
   const effortName = (() => {
@@ -1551,34 +1920,38 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
     return level === undefined ? tr('effort.default') : (level.name ?? levelName(level.id, tr))
   })()
   const modelLabel = choice?.name ?? state.current?.model ?? tr('model.placeholder')
-  const busy = state.status === 'loading' || state.status === 'selecting'
+  const selecting = state.status === 'selecting'
+  const busy = loadBusy || state.status === 'loading' || selecting
+  // A failed load may still have a usable last-good list; a successful empty load must show empty instead
+  // of resurrecting that cache. `state.error` is also set by a failed model *selection*, so it must never
+  // be treated as a catalog-load failure here.
+  const displayGroups = loadError === null ? state.groups : state.groups.length > 0 ? state.groups : cachedGroups
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
   useEffect(() => {
-    if (state.error === null) return
-    toastPluginError(tr, tr('model.selectFailedWithError', { error: state.error }))
-  }, [state.error, tr])
+    if (state.groups.length > 0) setCachedGroups(state.groups)
+  }, [state.groups])
 
-  useEffect(() => {
-    if (!open) return
-    const closeOutside = (event: MouseEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setOpen(false)
-        setModelsOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', closeOutside)
-    return () => document.removeEventListener('mousedown', closeOutside)
-  }, [open])
-
-  const close = (restoreFocus = false) => {
+  const close = useCallback((restoreFocus = false) => {
     setOpen(false)
     setModelsOpen(false)
-    if (restoreFocus) queueMicrotask(() => triggerRef.current?.focus())
-  }
+    if (restoreFocus) {
+      queueMicrotask(() => {
+        const trigger = triggerRef.current
+        if (trigger !== null && trigger.isConnected && !trigger.disabled) {
+          trigger.focus({ preventScroll: true })
+        }
+      })
+    }
+  }, [])
+  const dismiss = useCallback(() => close(false), [close])
+  useMenuDismiss(open, rootRef, dismiss)
+  useMenuFocusManagement(open, modelsOpen, menuRef)
+  useRestoreMenuFocusAfterLoadError(open, modelsOpen, loadError, menuRef)
+  const menuStyle = useFallbackMenuStyle(open, triggerRef)
 
   const chooseModel = async (provider: string, model: string, defaultEffort?: string) => {
     if (state.current?.provider === provider && state.current.model === model) {
@@ -1609,11 +1982,11 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
         title={modelLabel + ' · ' + effortName}
         disabled={locked}
         onClick={() => {
-          if (open) close()
+          if (open) close(false)
           else {
             setOpen(true)
             setModelsOpen(false)
-            load()
+            void load()
           }
         }}
       >
@@ -1623,17 +1996,33 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
       </button>
 
       {open ? (
-        <div className="omnieff-model-menu" role="menu" aria-label={tr('model.menuAriaLabel')} aria-busy={busy}>
+        <div
+          ref={menuRef}
+          className="omnieff-model-menu"
+          role="menu"
+          aria-label={tr('model.menuAriaLabel')}
+          aria-busy={busy}
+          style={menuStyle}
+          onKeyDown={(event) => handleMenuKeyDown(event, menuRef, close)}
+        >
           {modelsOpen ? (
             <div className="omnieff-model-pane">
               <button type="button" className="omnieff-model-back" onClick={() => setModelsOpen(false)}>
                 <span aria-hidden="true">‹</span>
                 <span>{tr('model.back')}</span>
               </button>
-              {state.status === 'loading' && state.groups.length === 0 ? (
+              {loadError === null ? null : (
+                <div role="alert" className="omnieff-model-error">
+                  <span>{tr('model.loadErrorBanner')}</span>
+                  <button type="button" className="omnieff-model-retry" disabled={busy || locked} onClick={() => void load()}>
+                    {tr('model.retry')}
+                  </button>
+                </div>
+              )}
+              {(loadBusy || state.status === 'loading') && displayGroups.every((group) => group.models.length === 0) ? (
                 <div className="omnieff-model-status">{tr('model.loading')}</div>
               ) : null}
-              {state.groups.map((group) => (
+              {displayGroups.map((group) => (
                 <section key={group.id}>
                   <div className="omnieff-model-group-title">{group.name}</div>
                   {group.models.map((model) => {
@@ -1645,7 +2034,7 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
                         role="menuitemradio"
                         aria-checked={selected}
                         className="omnieff-model-option"
-                        disabled={busy}
+                        disabled={busy || locked}
                         onClick={() => void chooseModel(group.id, model.id, model.reasoning?.defaultEffort)}
                       >
                         <span className="omnieff-model-option-copy">
@@ -1660,30 +2049,32 @@ function FallbackWorkModelReady({ controller, sessionId, locked, useProjection, 
                   })}
                 </section>
               ))}
-              {state.status === 'ready' && state.groups.every((group) => group.models.length === 0) ? (
+              {!loadBusy && state.status !== 'loading' && loadError === null && displayGroups.every((group) => group.models.length === 0) ? (
                 <div className="omnieff-model-status">{tr('model.empty')}</div>
               ) : null}
             </div>
           ) : (
             <>
               {levels.length >= 2 ? (
-                <div className="omnieff-advanced">
-                  <EffortSlider directory={controller} locked={locked || busy} t={tr} />
-                </div>
+                <>
+                  <div className="omnieff-advanced">
+                    <EffortSlider directory={controller} locked={locked || busy} t={tr} />
+                  </div>
+                  <div className="omnieff-menu-separator" />
+                </>
               ) : null}
-              <div className="omnieff-menu-separator" />
               <button
                 type="button"
                 role="menuitem"
                 className={'omnieff-model-row' + (levels.length >= 2 ? ' has-slider' : '')}
-                disabled={busy}
+                disabled={locked || selecting}
                 onClick={() => setModelsOpen(true)}
               >
                 <span className="omnieff-model-row-name">{modelLabel}</span>
                 {levels.length >= 2 ? null : <span className="omnieff-model-row-effort">{effortName}</span>}
                 <span className="omnieff-row-chevron" aria-hidden="true">›</span>
               </button>
-              <TeamModeRow sessionId={sessionId} locked={locked || busy} onDismiss={() => close(false)} useProjection={useProjection} useSession={useSession} useSessions={useSessions} teamMode={teamMode} selectTeamMode={selectTeamMode} t={tr} />
+              <TeamModeRow sessionId={sessionId} locked={locked || selecting} onDismiss={dismiss} returnFocusTo={triggerRef} useProjection={useProjection} useSession={useSession} useSessions={useSessions} teamMode={teamMode} selectTeamMode={selectTeamMode} t={tr} />
             </>
           )}
         </div>

@@ -24,6 +24,7 @@ export const AFFECTED_CHECKS = {
   'test:team-mode': { label: 'test:team-mode', command: ['node', '--test', 'test/team-mode.test.mjs', 'test-development/manager-lifecycle.test.mjs'] },
   'test:effort-slider': { label: 'test:effort-slider', command: ['node', '--test', 'test-development/effort-slider.test.mjs'] },
   'test:affected': { label: 'test:affected', command: ['node', '--test', 'test-development/affected-gate.test.mjs'] },
+  'check:storybook-coverage': { label: 'check:storybook-coverage', command: ['pnpm', 'run', 'check:storybook-coverage'] },
 };
 
 /** Checks that read build output rather than building it themselves. `test:unit` is `pnpm test`,
@@ -66,6 +67,7 @@ const rules = [
   { pattern: /^packages\/suite\/src\/team-mode\.ts$|^packages\/suite\/src\/teams\//, checks: ['test:team-mode'] },
   { pattern: /^packages\/suite\/src\//, checks: ['test:unit', 'check:layering'] },
   { pattern: /^packages\/ui\//, checks: ['test:ui', 'check:client-ui'] },
+  { pattern: /^packages\/ui-storybook\//, checks: ['check:storybook-coverage'] },
   { pattern: /^scripts\/gates\/official-|^scripts\/gates\/verify-candidate-gui/, checks: ['check:official-model-selection'] },
   { pattern: /^scripts\/build\//, checks: ['build', 'test:development'] },
   { pattern: /^scripts\/tools\/extract-copy\.mjs$/, checks: ['check:copy', 'build', 'test:development'] },

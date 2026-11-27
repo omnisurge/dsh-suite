@@ -3,8 +3,9 @@
  * Two facts decide the design. (1) The write target depends on the runtime: rc.2+ delegates generic static
  * servers to the official `mcp-manager` (`mcp-managed.ts`); the Suite's own OAuth/dual clients still write
  * the profile patch. On old runtimes without that manager the page is read-only and no write path exists
- * (ADR-095 D3: 0.3.0 retires the rc.1 generic patch path). The capability check picks exactly one owner;
- * there is no second write path.
+ * (ADR-095 D3: 0.3.0 retires the rc.1 generic patch path). The capability check picks exactly one config
+ * owner; ADR-122 adds only a row-level enabled toggle for bundle rows through the same profile patch, not
+ * a second config owner or a bundle payload editor.
  * (2) The Loader and the tool table know `running`/`failed`/`disabled`/`pending` plus a tool count. Client
  * plugins that DO publish a loopback control plane (the dual v2 client and the OAuth client) add the kind and
  * the negotiated protocol era, read from their own `status`/`probe` endpoints (ADR-030).
@@ -238,17 +239,36 @@ export function mcpRowsOf(loader:LoaderLike|undefined):{rowId:string;serverName:
   if(rowId===null)continue;
   const serverName=serverNameOf(entry);
   if(serverName===null)continue;
-  rows.push({rowId,serverName,enabled:stateOf(entry)!=='disabled'});
+  rows.push({rowId,serverName,enabled:entry.options.disabled!==true&&stateOf(entry)!=='disabled'});
  }
  return rows;
 }
 function stateOf(entry:LoaderEntryLike):McpServerState {
- if(entry.options.disabled===true)return 'disabled';
  const state=entry.fiber?.state;
- if(state===FIBER_DISPOSED||state===FIBER_UNLOADING)return 'disabled';
+ if(state===FIBER_DISPOSED)return 'disabled';
+ if(state===FIBER_UNLOADING)return 'pending';
+ if(state===FIBER_ACTIVE)return entry.options.disabled===true?'pending':'running';
  if(state===FIBER_FAILED)return 'failed';
- if(state===FIBER_ACTIVE)return 'running';
- return 'pending';
+ return entry.options.disabled===true?'disabled':'pending';
+}
+
+/** A row-level mutation receipt may say live only after the Loader has actually settled. `stateOf` is the
+ * catalog projection: a raw `disabled: true` on an entry whose fiber is still active/unloading is not proof
+ * that the row's tools have been torn down. Keep the mutation predicate separate so the page does not lie
+ * about a transition and the write path does not return early on `pending`. */
+function mutationSettled(entry:LoaderEntryLike|undefined,targetDisabled:boolean):boolean {
+ if(targetDisabled){
+  // A vanished row is not proof that the old fiber and its tools have been disposed; keep the receipt
+  // pending until a concrete disabled entry is observed. This also avoids mistaking a same-id replacement
+  // or a loader race for a successful disable.
+  if(entry===undefined)return false;
+  if(entry.options.disabled!==true)return false;
+  const state=entry.fiber?.state;
+  return state===undefined||state===FIBER_DISPOSED||state===FIBER_FAILED;
+ }
+ if(entry===undefined||entry.options.disabled===true)return false;
+ const state=entry.fiber?.state;
+ return state===FIBER_ACTIVE||state===FIBER_FAILED;
 }
 
 function toolCountOf(toolNames:readonly string[],serverName:string):number {
@@ -372,7 +392,8 @@ export async function readMcpServers(ctx:McpServerContext):Promise<McpServerCata
   const env=config.env;
   const state=stateOf(entry);
   // F2a: on rc.2 only the Suite's own clients still own a profile-patch row. Historical official-client
-  // static rows and bundle-provided rows are listed read-only; the Host write path enforces the same rule.
+  // static rows and bundle-provided rows are listed read-only for config; ADR-122's row-level enable toggle
+  // is separate from `editable` and is enforced by setMcpServerEnabled.
   const editable=authority==='official'&&profileRowIds.has(entry.options.id)&&clientSource==='suite';
   servers.push({
    name,
@@ -1060,6 +1081,76 @@ export async function updateMcpServer(ctx:McpServerContext,rowId:string,draft:Mc
   // settled facts — a failed start is still an applied reload, and the list shows that state).
   const applied=await waitFor(ctx.loader,list=>list.some(entry=>entry.options.id===rowId&&serverNameOf(entry)===name&&stateOf(entry)!=='pending'),ctx.reloadWaitMs);
   return {mode:'updated',rowId,name,applied:applied?'live':'pending'};
+ });
+}
+
+/** ADR-122: bundle-provided (origin:'loaded') rows get a row-level enabled toggle through the
+ * profile patch's documented disabled override. This never edits the bundle payload and never removes
+ * the package; profile rows keep the delete path and managed rows keep the official manager path. */
+export async function setMcpServerEnabled(ctx:McpServerContext,rowId:string,enabled:boolean):Promise<McpServerMutation> {
+ if(managedNameOf(rowId)!==null)throw managedMissing();
+ if(!ctx.managed)throw unsupportedRuntime();
+ const path=ctx.patchPath;
+ if(!path)throw unavailable();
+ return withPatchLock(path,async()=>{
+  const text=await readPatchText(path);
+  const doc=parsePatch(text);
+  const contents=doc.contents;
+  if(!isSeq(contents))throw unreadable();
+  if(insertRows(doc).some(row=>row.rowId===rowId)){
+   throw new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this row is owned by the profile patch; use the delete path',{});
+  }
+  const entry=loadedEntries(ctx.loader).find(item=>item.options.id===rowId);
+  if(entry===undefined){
+   throw new RemoteError('mcp/server-missing','MCP_SERVER_MISSING: no such bundle-provided server is loaded',{});
+  }
+  // ADR-122 D2: the official manager and profile rows keep their own ownership; a Loader entry is not
+  // proof that it is an MCP server, so the row name must resolve from a real MCP config. Never fall back to
+  // the row id: that would let a non-MCP plugin row be written as disabled. A loaded non-official MCP client
+  // row is bundle-provided and may use the row-level override; its config remains read-only elsewhere.
+  const clientPackage=typeof entry.options.name==='string'?entry.options.name:'';
+  if(clientPackage===OFFICIAL_CLIENT)throw managedMissing();
+  if(clientSourceOf(clientPackage)!=='suite')throw externalRow();
+  const name=serverNameOf(entry);
+  if(name===null)throw new RemoteError('mcp/server-not-editable','MCP_SERVER_NOT_EDITABLE: this loaded row is not an MCP server',{});
+  const target=!enabled;
+  const current=stateOf(entry)==='disabled';
+  // `dsh-app-boot` applies top-level overrides in array order; the last applicable override for an id wins,
+  // while an override whose `name` does not match the loaded package is skipped. Mutating the first match can
+  // therefore write a value the loader immediately overrides, or leave the last entry untouched forever.
+  let overrideNode: unknown;
+  for(const item of contents.items){
+   if(!isMap(item)||item.get('insert')!==undefined)continue;
+   if(toPlain(item.get('id'))!==rowId)continue;
+   const itemName=toPlain(item.get('name'));
+   if(typeof itemName==='string'&&itemName.length>0&&itemName!==clientPackage)continue;
+   // A later override with unrelated keys does not erase an earlier disabled value: dsh-app-boot assigns
+   // only the keys present on each entry. Follow the last applicable entry that actually defines
+   // `disabled`; only append a new override when none does.
+   if(item.get('disabled')===undefined)continue;
+   overrideNode=item;
+  }
+  const stored=isMap(overrideNode)?toPlain(overrideNode.get('disabled')):undefined;
+  const waitForSettled=async()=>waitFor(ctx.loader,list=>{
+   const currentEntry=loadedEntries({entries:()=>list}).find(item=>item.options.id===rowId);
+   return mutationSettled(currentEntry,target);
+  },ctx.reloadWaitMs);
+  const alreadyPersisted=isMap(overrideNode)&&stored===target;
+  if(alreadyPersisted){
+   if(mutationSettled(entry,target))return {mode:enabled?'enabled':'disabled',rowId,name,applied:'live'};
+   const settled=await waitForSettled();
+   return {mode:enabled?'enabled':'disabled',rowId,name,applied:settled?'live':'pending'};
+  }
+  if(current===target&&stored===undefined){
+   if(mutationSettled(entry,target))return {mode:enabled?'enabled':'disabled',rowId,name,applied:'live'};
+   const settled=await waitForSettled();
+   return {mode:enabled?'enabled':'disabled',rowId,name,applied:settled?'live':'pending'};
+  }
+  if(isMap(overrideNode))setMapValue(overrideNode,'disabled',target);
+  else(contents as {add:(value:unknown)=>void}).add({id:rowId,disabled:target});
+  await writePatchAtomic(path,String(doc));
+  const applied=await waitForSettled();
+  return {mode:enabled?'enabled':'disabled',rowId,name,applied:applied?'live':'pending'};
  });
 }
 

@@ -1,19 +1,26 @@
 import * as React from 'react';
-import { ActionGroup, Button, Disclosure, Field, NumberInput, ConfigPage, injectStyles, registerSettingsPluginCard, showToast } from '@omnisurge/dsh-ui';
+import { ActionGroup, Banner, Button, ConfigPage, Disclosure, Field, NumberInput, StatusLine, injectStyles, registerSettingsPluginCard, showToast } from '@omnisurge/dsh-ui';
 import { withTimeout } from '../remote-timeout.js';
 import { assertRemoteEnvelope } from '../shared/client-remote.js';
 
 const NS = 'omnisurge-compaction-budget';
 const FIELDS = ['checkpointTokens', 'safetyTokens', 'timeoutMs'];
+const DEFAULT_DRAFT = { checkpointTokens: '2048', safetyTokens: '1024', timeoutMs: '60' };
 export const BUDGET_CARD_INJECT = ['slots', 'locale', 'configForms', 'settingsSchema'];
 const h = React.createElement;
 const en = {
   title: 'Summary compaction', summary: 'Defaults are usually sufficient. Use the switch on the official Plugins page to enable or disable.',
   description: 'Adjust summary parameters only; the model and output allowance are unchanged.',
+  statusDefault: 'Using default summary strategy',
+  statusCustom: 'Custom summary parameters applied',
   disabled: 'Disabled in advanced configuration. Saving parameters will not enable it.', advanced: 'Advanced settings (optional)',
   checkpointTokens: 'Summary size limit (estimated tokens)', checkpointTokensHint: 'Includes summary framing; not the model output allowance. Default: 2048.',
   safetyTokens: 'Capacity margin (estimated tokens)', safetyTokensHint: 'Extra input capacity reserved for a summary request. Default: 1024.',
   timeoutMs: 'Generation timeout (seconds)', timeoutMsHint: 'Default: 60 seconds (60000 milliseconds). Range: 0.001–300 seconds.',
+  resetDefaults: 'Reset to defaults',
+  footerSaved: 'Using saved parameters',
+  footerDirty: 'Unsaved changes',
+  footerBlocked: 'Unsaved changes; reload before saving',
   cancel: 'Cancel', save: 'Save', saved: 'Parameters saved.',
   checkpointTokensInvalid: 'Not saved: the summary size limit must be an integer from 160 to 32768. Correct it and try again.',
   safetyTokensInvalid: 'Not saved: the capacity margin must be an integer from 0 to 65536. Correct it and try again.',
@@ -25,10 +32,17 @@ const en = {
 };
 const zh = {
   title: '摘要压缩', summary: '一般保持默认即可；启停请用官方插件页开关。',
-  description: '仅调整摘要参数，不修改模型或输出额度。', disabled: '已在高级配置中关闭；保存参数不会开启。', advanced: '高级设置（可选）',
+  description: '仅调整摘要参数，不修改模型或输出额度。',
+  statusDefault: '当前使用默认摘要策略',
+  statusCustom: '已应用自定义摘要参数',
+  disabled: '已在高级配置中关闭；保存参数不会开启。', advanced: '高级设置（可选）',
   checkpointTokens: '摘要长度上限（估算 token）', checkpointTokensHint: '包含摘要外层说明；不是模型输出额度。默认 2048。',
   safetyTokens: '容量余量（估算 token）', safetyTokensHint: '为摘要请求额外预留输入空间。默认 1024。',
   timeoutMs: '生成超时（秒）', timeoutMsHint: '默认 60 秒（60000 毫秒）；范围 0.001–300 秒。',
+  resetDefaults: '恢复默认数值',
+  footerSaved: '当前为已保存参数',
+  footerDirty: '有未保存修改',
+  footerBlocked: '有未保存的更改，请先重新载入',
   cancel: '取消', save: '保存', saved: '参数已保存。',
   checkpointTokensInvalid: '未保存：摘要长度上限须为 160–32768 的整数。请修改后重试。',
   safetyTokensInvalid: '未保存：容量余量须为 0–65536 的整数。请修改后重试。',
@@ -65,7 +79,7 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
     return withTimeout(promise, 15000, { signal: controller.signal, code: 'SETTINGS_UNCONFIRMED', message: 'SETTINGS_UNCONFIRMED' })
       .finally(() => pending.delete(controller));
   };
-  let state = { draft: null, ready: false, writable: false, busy: false, blocked: false, enabled: undefined, hints: {} };
+  let state = { draft: null, savedDraft: null, ready: false, writable: false, busy: false, blocked: false, blockedReason: null, enabled: undefined, hints: {} };
   const listeners = new Set();
   const publish = patch => { if (disposed) return; state = { ...state, ...patch }; for (const listener of listeners) listener(); };
   const describe = () => mirror.getSnapshot().view?.namespaces.find(row => row.ns === NS);
@@ -89,7 +103,7 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
   }
   function accept(next) {
     base = next;
-    publish({ draft: draftOf(next.value), savedDraft: draftOf(next.value), ready: true, writable: next.writable, enabled: next.value.enabled, hints: next.hints, blocked: false });
+    publish({ draft: draftOf(next.value), savedDraft: draftOf(next.value), ready: true, writable: next.writable, enabled: next.value.enabled, hints: next.hints, blocked: false, blockedReason: null });
   }
   function sync() {
     const next = read();
@@ -104,6 +118,7 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
     subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
     start() { if (off.length) return; disposed = false; lock = false; state = { ...state, busy: false }; off = [form.subscribe(sync), mirror.subscribe(sync)]; sync(); },
     change(field, text) { if (!FIELDS.includes(field) || lock || !state.ready || !state.writable || state.blocked) return; publish({ draft: { ...state.draft, [field]: text } }); },
+    resetDefaults() { if (lock || !state.ready || !state.writable || state.blocked) return; publish({ draft: { ...DEFAULT_DRAFT } }); },
     cancel() { if (!lock && base) publish({ draft: draftOf(base.value) }); },
     async reload() {
       if (lock || disposed) return;
@@ -115,18 +130,18 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
         // A refused/invalid reply blocks stale writes; a thrown carrier error follows the outer catch.
         let view;
         try { view = assertRemoteEnvelope(result, 'describe'); } catch { view = null; }
-        if (!Array.isArray(view?.namespaces)) { publish({ blocked: true }); announce('unavailable'); return; }
+        if (!Array.isArray(view?.namespaces)) { publish({ blocked: true, blockedReason: 'unavailable' }); announce('unavailable'); return; }
         // acceptView folds one namespace, not document permissions. Compare the current official cut;
         // neither a fresh reply nor local state may become a second writable authority (ADR-106).
         const documentWritable = mirror.getSnapshot().view?.writable;
         if (typeof view.writable !== 'boolean' || typeof documentWritable !== 'boolean' || view.writable !== documentWritable) {
-          publish({ blocked: true }); announce('unavailable'); return;
+          publish({ blocked: true, blockedReason: 'unavailable' }); announce('unavailable'); return;
         }
-        if (!documentWritable) { publish({ blocked: true }); announce('refused'); return; }
+        if (!documentWritable) { publish({ blocked: true, blockedReason: 'refused' }); announce('refused'); return; }
         const row = view.namespaces.find(item => item.ns === NS);
         if (!row) { publish({ ready: false, writable: false }); announce('unavailable'); return; }
         const latest = form.getSnapshot();
-        if (Number.isSafeInteger(latest.revision) && latest.revision > row.revision) { publish({ blocked: true }); announce('unavailable'); return; }
+        if (Number.isSafeInteger(latest.revision) && latest.revision > row.revision) { publish({ blocked: true, blockedReason: 'unavailable' }); announce('unavailable'); return; }
         mirror.acceptView(row);
         const next = read();
         if (!next) { publish({ ready: false, writable: false }); announce('unavailable'); return; }
@@ -138,7 +153,7 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
       if (disposed || lock || !base || !state.ready || !state.writable || state.blocked || sameDraft(state.draft, draftOf(base.value))) return;
       const currentView = form.getSnapshot();
       if (currentView.status !== 'ready' || currentView.writable !== true) { announce('refused'); return; }
-      if (currentView.revision !== base.revision) { publish({ blocked: true }); announce('stale', true); return; }
+      if (currentView.revision !== base.revision) { publish({ blocked: true, blockedReason: 'stale' }); announce('stale', true); return; }
       const next = { ...base.value }, ops = [];
       for (const field of FIELDS) {
         const value = decimalUnits(state.draft[field], field === 'timeoutMs' ? 3 : 0);
@@ -155,16 +170,17 @@ export function createBudgetEditor({ form, mirror, schema, refresh, notify }) {
         if (disposed || current !== generation) return;
         const after = read();
         if (accepted !== true) {
-          publish({ blocked: true });
-          announce(after && after.revision !== base.revision ? 'stale' : 'refused', true);
+          const reason = after && after.revision !== base.revision ? 'stale' : 'refused';
+          publish({ blocked: true, blockedReason: reason });
+          announce(reason, true);
           return;
         }
         // A true acceptance is not enough: require the same official form's confirmed values.
         if (!after || after.revision <= base.revision || !FIELDS.every(field => after.value[field] === next[field]) || after.value.enabled !== base.value.enabled) {
-          publish({ blocked: true }); announce('unknown', true); return;
+          publish({ blocked: true, blockedReason: 'unknown' }); announce('unknown', true); return;
         }
         accept(after); announce('saved');
-      } catch { if (!disposed && current === generation) { publish({ blocked: true }); announce('unknown', true); } }
+      } catch { if (!disposed && current === generation) { publish({ blocked: true, blockedReason: 'unknown' }); announce('unknown', true); } }
       finally { if (!disposed && current === generation) { lock = false; publish({ busy: false }); } }
     },
     dispose() { disposed = true; generation++; for (const controller of pending) controller.abort(); pending.clear(); for (const dispose of off) dispose(); off = []; listeners.clear(); },
@@ -183,7 +199,7 @@ function BudgetPage({ t, budgetForm: form, mirror, schema, refresh, owner }) {
   const toast = React.useRef(null);
   const editor = React.useMemo(() => createBudgetEditor({ form, mirror, schema, refresh, notify: (key, reload) => {
     toast.current?.close();
-    toast.current = showToast({ kind: NS, text: t(key), tone: key === 'saved' ? 'neutral' : 'warn', showClose: false,
+    toast.current = showToast({ kind: NS, text: t(key), tone: key === 'saved' ? 'ok' : 'warn', showClose: false,
       ...(reload ? { action: { label: t('reload'), run: reload } } : {}) });
   } }), [form, mirror, schema, refresh, t]);
   React.useEffect(() => {
@@ -194,19 +210,34 @@ function BudgetPage({ t, budgetForm: form, mirror, schema, refresh, owner }) {
   }, [editor, owner]);
   const state = React.useSyncExternalStore(editor.subscribe, editor.getSnapshot, editor.getSnapshot);
   const disabled = !state.ready || !state.writable || state.busy || state.blocked;
-  const dirty = state.draft && FIELDS.some(field => state.draft[field] !== state.savedDraft?.[field]);
+  const dirty = Boolean(state.draft && FIELDS.some(field => state.draft[field] !== state.savedDraft?.[field]));
+  const isDefaultPolicy = state.savedDraft ? sameDraft(state.savedDraft, DEFAULT_DRAFT) : true;
+  const atDefaults = state.draft ? sameDraft(state.draft, DEFAULT_DRAFT) : true;
+  const footerStatusText = state.blocked ? t('footerBlocked') : dirty ? t('footerDirty') : t('footerSaved');
   return h('div', { 'data-testid': 'compaction-budget-card' },
-    h(ConfigPage, { available: state.ready, writable: state.writable,
-    labels: { unavailable: t('unavailable'), readOnly: t('refused'), saveFailed: t('refused'), saving: t('save'), save: t('save') } },
+    h(ConfigPage, {
+      available: state.ready,
+      writable: state.writable,
+      labels: { unavailable: t('unavailable'), readOnly: t('refused'), saveFailed: t('refused'), saving: t('save'), save: t('save') },
+      footerLead: h(React.Fragment, null,
+        h('p', { className: 'omni-ui-hint', 'data-testid': 'compaction-budget-footer-status' }, footerStatusText),
+        h(ActionGroup, null,
+          h(Button, { variant: 'ghost', disabled: state.busy || !dirty, onClick: () => editor.cancel(), 'data-testid': 'compaction-budget-cancel' }, t('cancel')),
+          h(Button, { variant: 'primary', busy: state.busy, disabled: disabled || !dirty, onClick: () => { void editor.save(); }, 'data-testid': 'compaction-budget-save' }, t('save')))),
+    },
+    h(StatusLine, { tone: isDefaultPolicy ? 'ok' : 'neutral', 'data-testid': 'compaction-budget-status' }, isDefaultPolicy ? t('statusDefault') : t('statusCustom')),
     h('p', { className: 'omni-ui-hint', 'data-testid': 'compaction-budget-description' }, t('description')),
-    h(Disclosure, { title: t('advanced'), defaultOpen: false },
+    state.blocked && h(Banner, { tone: 'warn', role: 'status', 'data-testid': 'compaction-budget-stale' },
+      h('p', null, t(state.blockedReason ?? 'stale')),
+      h(ActionGroup, { align: 'start' },
+        h(Button, { variant: 'default', size: 'sm', busy: state.busy, onClick: () => { void editor.reload(); }, 'data-testid': 'compaction-budget-reload' }, t('reload')))),
+    h(Disclosure, { title: t('advanced'), defaultOpen: false, 'data-testid': 'compaction-budget-advanced' },
       ...FIELDS.map(field => h(Field, { key: field, label: t(field), hint: t(field + 'Hint') }, h(NumberInput, {
         name: field, value: state.draft?.[field] ?? '', ...state.hints[field], disabled,
         'data-testid': 'compaction-budget-' + field, onChange: event => editor.change(field, event.target.value),
       }))),
-      h(ActionGroup, null,
-        h(Button, { disabled: state.busy || !state.draft, onClick: () => editor.cancel(), 'data-testid': 'compaction-budget-cancel' }, t('cancel')),
-        h(Button, { variant: 'primary', busy: state.busy, disabled: disabled || !dirty, onClick: () => { void editor.save(); }, 'data-testid': 'compaction-budget-save' }, t('save'))))));
+      h(ActionGroup, { align: 'start' },
+        h(Button, { variant: 'ghost', size: 'sm', disabled: disabled || atDefaults, onClick: () => editor.resetDefaults(), 'data-testid': 'compaction-budget-reset-defaults' }, t('resetDefaults'))))));
 }
 
 export function applyCompactionBudgetCard(ctx) {

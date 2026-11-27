@@ -38,6 +38,8 @@ export interface ConfigPageLabels {
   saving: string;
   /** 保存按钮：常态。 */
   save: string;
+  /** 取消按钮文案（传 onCancel 时使用）。 */
+  cancel?: string;
 }
 
 export interface ConfigPageProps {
@@ -59,6 +61,8 @@ export interface ConfigPageProps {
    * 这回事；给它们画一个保存按钮是错的。
    */
   readonly onSave?: () => void;
+  /** 取消/还原未保存改动。 */
+  readonly onCancel?: () => void;
   /** 离开页面时调用（官方行为）。 */
   readonly onDiscard?: () => void;
   /** 卡内正文（字段、列表…）。 */
@@ -78,23 +82,39 @@ export function ConfigPage(props: ConfigPageProps) {
     return <p className="omni-ui-tokens omni-ui-hint" role="status">{props.labels.unavailable}</p>;
   }
   const blocked = props.dirty !== true || props.invalid === true || props.saving === true;
+  const hasFooterLead = props.footerLead !== undefined && props.footerLead !== null && props.footerLead !== false;
+  const hasFailed = props.failed === true;
+  const hasCancel = props.onCancel !== undefined;
+  const hasSave = props.onSave !== undefined;
+  const hasFooter = hasFooterLead || hasFailed || hasCancel || hasSave;
   return (
     <div className="omni-ui-configPage omni-ui-tokens">
       {props.writable ? null : (
         <p className="omni-ui-hint" role="status">{props.labels.readOnly}</p>
       )}
       <div className="omni-ui-stack">{props.children}</div>
-      <div className="omni-ui-cardFooter">
-        {props.footerLead}
-        {props.failed === true ? (
-          <p className="omni-ui-hint" role="status">{props.labels.saveFailed}</p>
-        ) : null}
-        {props.onSave === undefined ? null : (
-          <Button variant="primary" disabled={blocked} onClick={props.onSave}>
-            {props.saving === true ? props.labels.saving : props.labels.save}
-          </Button>
-        )}
-      </div>
+      {hasFooter ? (
+        <div className="omni-ui-cardFooter">
+          {props.footerLead}
+          {hasFailed ? (
+            <p className="omni-ui-hint" role="status">{props.labels.saveFailed}</p>
+          ) : null}
+          {hasCancel ? (
+            <Button
+              variant="ghost"
+              disabled={props.saving === true || props.dirty !== true}
+              onClick={props.onCancel}
+            >
+              {props.labels.cancel ?? "Cancel"}
+            </Button>
+          ) : null}
+          {hasSave ? (
+            <Button variant="primary" disabled={blocked} busy={props.saving === true} onClick={props.onSave}>
+              {props.saving === true ? props.labels.saving : props.labels.save}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

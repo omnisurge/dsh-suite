@@ -233,7 +233,7 @@ function openLightbox(spec: LightboxSpec): LightboxHandle {
     window.removeEventListener("resize", onResize);
     if (previousFocus !== null && previousFocus.isConnected) {
       try {
-        previousFocus.focus();
+        previousFocus.focus({ preventScroll: true });
       } catch {
         // 原焦点元素已经不可聚焦——不打扰用户。
       }
@@ -302,7 +302,7 @@ function openLightbox(spec: LightboxSpec): LightboxHandle {
   document.addEventListener("keydown", onKeydown, true);
   window.addEventListener("resize", onResize);
   document.body.appendChild(root);
-  closeBtn.focus();
+  closeBtn.focus({ preventScroll: true });
   fit();
   fitted = true;
 

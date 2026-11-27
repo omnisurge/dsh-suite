@@ -1,9 +1,11 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 export type ButtonVariant = "default" | "primary" | "danger" | "ghost" | "danger-ghost" | "link";
+export type ButtonSize = "sm" | "md";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly variant?: ButtonVariant;
+  readonly size?: ButtonSize;
   readonly children: ReactNode;
   readonly busy?: boolean;
 }
@@ -19,10 +21,17 @@ function variantClass(variant: ButtonVariant | undefined): string {
 
 /** Host-token button. */
 export function Button(props: ButtonProps) {
-  const { variant, className, type, children, busy = false, disabled, ...rest } = props;
+  const { variant, size = "md", className, type, children, busy = false, disabled, ...rest } = props;
+  const sizeClass = size === "sm" ? " omni-ui-btnSm" : "";
   const extra = className !== undefined && className !== "" ? ` ${className}` : "";
   return (
-    <button {...rest} type={type ?? "button"} disabled={disabled || busy} aria-busy={busy || undefined} className={variantClass(variant) + extra}>
+    <button
+      {...rest}
+      type={type ?? "button"}
+      disabled={disabled || busy}
+      aria-busy={busy || undefined}
+      className={variantClass(variant) + sizeClass + extra}
+    >
       {children}
     </button>
   );
